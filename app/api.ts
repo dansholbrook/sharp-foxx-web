@@ -32,6 +32,48 @@ export interface RevenueReport {
   total: string;
 }
 
+// Mirrors the users table row returned by POST /users (users.service.ts).
+export interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  status: string;
+  phone: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Mirrors a field_reps row (field-reps.service.ts). commissionRate is numeric
+// in the DB, so it comes back as a string -- keep it a string here.
+export interface FieldRep {
+  id: string;
+  userId: string;
+  kind: 'field_rep' | 'regional_manager';
+  status: string;
+  managerId: string | null;
+  homeMarketId: string | null;
+  cohortLabel: string | null;
+  commissionRate: string;
+  onboardedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Request bodies for the two create calls (mirror the Zod schemas on the API).
+export interface CreateUserInput {
+  email: string;
+  displayName: string;
+}
+
+export interface CreateFieldRepInput {
+  userId: string;
+  kind?: 'field_rep' | 'regional_manager';
+  commissionRate?: number;
+  cohortLabel?: string;
+  managerId?: string;
+  homeMarketId?: string;
+}
+
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
 async function toError(res: Response): Promise<Error> {
   let detail = res.statusText;
@@ -64,8 +106,30 @@ async function authGet<T>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
+async function authPost<T>(path: string, token: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toError(res);
+  return res.json();
+}
+
 export const getCommissions = (token: string) =>
   authGet<CommissionsReport>('/reports/commissions', token);
 
 export const getRevenue = (token: string) =>
   authGet<RevenueReport>('/reports/revenue', token);
+
+export const getFieldReps = (token: string) =>
+  authGet<FieldRep[]>('/field-reps', token);
+
+export const createUser = (token: string, input: CreateUserInput) =>
+  authPost<User>('/users', token, input);
+
+export const createFieldRep = (token: string, input: CreateFieldRepInput) =>
+  authPost<FieldRep>('/field-reps', token, input);

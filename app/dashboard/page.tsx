@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import {
   getCommissions,
@@ -84,9 +85,14 @@ export default function DashboardPage() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
-        <button className="link-btn" onClick={onLogout}>
-          Log out
-        </button>
+        <div className="nav-links">
+          <Link href="/field-reps" className="link-btn">
+            Field reps →
+          </Link>
+          <button className="link-btn" onClick={onLogout}>
+            Log out
+          </button>
+        </div>
       </div>
 
       {loading && <div className="card muted">Loading reports…</div>}

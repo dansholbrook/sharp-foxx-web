@@ -70,9 +70,24 @@ input {
   font-size: 0.95rem;
 }
 
-input:focus {
+select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+input:focus,
+select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.field {
+  margin-bottom: 14px;
 }
 
 button {
@@ -156,4 +171,31 @@ tfoot td {
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 28px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.success {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #1d3a24;
+  border: 1px solid #2b5c37;
+  border-radius: 8px;
+  color: #b4ffc4;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: capitalize;
 }
