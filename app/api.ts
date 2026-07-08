@@ -151,6 +151,25 @@ export interface ContentItem {
   updatedAt: string;
 }
 
+// The published-content read model returned by GET /content?status=published
+// (content.service.ts). Unlike the bare ContentItem row this flattens joins for
+// display: author is a display-name string (not a UUID) and the event fields
+// come from a left join, so they're nullable. body is a non-null HTML string
+// here since only published items with a body are listed.
+export interface FeedItem {
+  id: string;
+  kind: ContentItem['kind'];
+  title: string;
+  body: string;
+  slug: string | null;
+  publishedAt: string;
+  author: string;
+  eventSport: string | null;
+  eventScheduledAt: string | null;
+  homeTeam: string | null;
+  awayTeam: string | null;
+}
+
 // Request body for POST /content/generate (mirrors generateArticleSchema). The
 // AI rewrites sourceText (the rep's notes) into a recap for the given event.
 export interface GenerateArticleInput {
@@ -238,6 +257,11 @@ export const getManagerReps = (token: string, id: string) =>
 
 export const getMyAssignments = (token: string) =>
   authGet<MyAssignment[]>('/assignments/mine', token);
+
+// The public feed: published content only, newest-first (ordering is enforced by
+// the backend). Read-only, so no author gating -- any authenticated user can read.
+export const getPublishedContent = (token: string) =>
+  authGet<FeedItem[]>('/content?status=published', token);
 
 export const updateAssignment = (
   token: string,

@@ -86,6 +86,9 @@ export default function DashboardPage() {
           </span>
         </div>
         <div className="nav-links">
+          <Link href="/feed" className="link-btn">
+            Feed →
+          </Link>
           <Link href="/my-games" className="link-btn">
             My games →
           </Link>
