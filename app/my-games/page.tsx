@@ -8,12 +8,20 @@ import {
   getMyAssignments,
   updateAssignment,
   generateArticle,
+  getEventContent,
   updateContent,
   publishContent,
   unpublishContent,
   MyAssignment,
   ContentItem,
+  EventContentItem,
 } from '../api';
+
+// The editable article state accepts either the joined listing row we load on
+// mount (EventContentItem) or the bare ContentItem returned by generate/edit/
+// publish. Only the overlapping fields (id/status/title/body/publishedAt) are
+// ever read, so the union needs no mapping.
+type EditableArticle = ContentItem | EventContentItem;
 
 // Human labels for the assignment source. 'assigned' means a manager put the
 // rep on this game; 'self_claimed' means the rep grabbed it themselves.
@@ -68,7 +76,13 @@ function GameRow({
   // it owns its own loading/error/result state. The AI call takes a few seconds.
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<ContentItem | null>(null);
+  const [draft, setDraft] = useState<EditableArticle | null>(null);
+
+  // Any article already attached to this game, loaded once on mount so a rep can
+  // edit/publish an existing draft without regenerating. A failed lookup is
+  // swallowed -- it must not break the game row -- and the Generate button stays
+  // hidden until we know whether an article exists.
+  const [loadingArticle, setLoadingArticle] = useState(true);
 
   // Once a draft exists it becomes editable: titleDraft/bodyDraft hold the
   // in-progress edits while `draft` stays the source of truth for id/status
@@ -89,6 +103,33 @@ function GameRow({
   // sourceText is required (min 1) by the API -- nothing to generate from an
   // empty notes field, so gate the button on it.
   const canGenerate = notesDraft.trim().length > 0;
+
+  // On mount, pull any content already attached to this game and adopt the first
+  // (the backend lists this non-published view newest-created first) as the
+  // editable draft, seeding the edit fields from it.
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingArticle(true);
+    (async () => {
+      try {
+        const items = await getEventContent(token, game.event.id);
+        if (cancelled) return;
+        const existing = items[0];
+        if (existing) {
+          setDraft(existing);
+          setTitleDraft(existing.title);
+          setBodyDraft(existing.body ?? '');
+        }
+      } catch {
+        /* a failed content lookup shouldn't break the row -- leave it empty */
+      } finally {
+        if (!cancelled) setLoadingArticle(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, game.event.id]);
 
   async function save(input: { status?: MyAssignment['status']; notes?: string }) {
     setSaving(true);
@@ -215,13 +256,15 @@ function GameRow({
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
-            <button
-              style={{ marginTop: 0, padding: '8px 14px' }}
-              disabled={generating || !canGenerate}
-              onClick={generate}
-            >
-              {generating ? 'Generating…' : 'Generate article'}
-            </button>
+            {!loadingArticle && !draft && (
+              <button
+                style={{ marginTop: 0, padding: '8px 14px' }}
+                disabled={generating || !canGenerate}
+                onClick={generate}
+              >
+                {generating ? 'Generating…' : 'Generate article'}
+              </button>
+            )}
           </div>
           {error && (
             <div className="error" style={{ marginTop: 8 }}>
@@ -240,7 +283,7 @@ function GameRow({
             {draft && (
               <div className="card" style={{ marginTop: 0 }}>
                 <span className="muted">
-                  Generated draft · <span className="pill">{draft.status}</span>
+                  Article · <span className="pill">{draft.status}</span>
                 </span>
 
                 <label className="muted" style={{ display: 'block', marginTop: 12 }}>

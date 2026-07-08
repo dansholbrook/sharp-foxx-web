@@ -170,6 +170,31 @@ export interface FeedItem {
   awayTeam: string | null;
 }
 
+// The joined listing row returned by GET /content (content.service.ts
+// `listContent`), e.g. GET /content?eventId=<uuid>. NOT a bare content_items
+// row: it flattens joins (author display name, event/team context) and drops
+// the FK columns, so it is intentionally distinct from ContentItem. status can
+// also be 'archived' here (the backend enum has it). Only the fields the editor
+// needs (id/status/title/body/publishedAt) overlap with ContentItem, which is
+// why the editable draft state below is typed as the union of the two.
+export interface EventContentItem {
+  id: string;
+  kind: ContentItem['kind'];
+  status: 'draft' | 'published' | 'archived';
+  title: string;
+  slug: string | null;
+  body: string | null;
+  mediaUrl: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  author: string | null;
+  eventId: string | null;
+  eventSport: string | null;
+  eventScheduledAt: string | null;
+  homeTeam: string | null;
+  awayTeam: string | null;
+}
+
 // Request body for POST /content/generate (mirrors generateArticleSchema). The
 // AI rewrites sourceText (the rep's notes) into a recap for the given event.
 export interface GenerateArticleInput {
@@ -262,6 +287,12 @@ export const getMyAssignments = (token: string) =>
 // the backend). Read-only, so no author gating -- any authenticated user can read.
 export const getPublishedContent = (token: string) =>
   authGet<FeedItem[]>('/content?status=published', token);
+
+// Any content already attached to a game, so a rep can find/edit an existing
+// article on load (not just right after generating). Returns the joined listing
+// shape, newest-created first for this non-published view.
+export const getEventContent = (token: string, eventId: string) =>
+  authGet<EventContentItem[]>(`/content?eventId=${eventId}`, token);
 
 export const updateAssignment = (
   token: string,
