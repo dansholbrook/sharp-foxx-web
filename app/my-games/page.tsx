@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { getMyAssignments, MyAssignment } from '../api';
+import { getMyAssignments, updateAssignment, MyAssignment } from '../api';
 
 // Human labels for the assignment source. 'assigned' means a manager put the
 // rep on this game; 'self_claimed' means the rep grabbed it themselves.
@@ -12,6 +12,9 @@ const SOURCE_LABELS: Record<MyAssignment['source'], string> = {
   assigned: 'Assigned',
   self_claimed: 'Self-claimed',
 };
+
+// The status values a rep can move an assignment through, in workflow order.
+const STATUSES: MyAssignment['status'][] = ['assigned', 'accepted', 'submitted'];
 
 // Format the timestamptz string the API returns; fall back to the raw value if
 // it somehow doesn't parse.
@@ -31,6 +34,89 @@ function teams(a: MyAssignment): string {
   const { homeTeamId, awayTeamId } = a.event;
   if (!homeTeamId && !awayTeamId) return '—';
   return `${homeTeamId ?? '—'} vs ${awayTeamId ?? '—'}`;
+}
+
+// One editable game row. Owns its own saving/error/notes-draft state so a save
+// on one row never blocks or clobbers another. On success it hands the changed
+// fields back up via onUpdated so the parent's row stays in sync (the PATCH
+// response has no event join, so we only ever merge status/notes).
+function GameRow({
+  game,
+  token,
+  onUpdated,
+}: {
+  game: MyAssignment;
+  token: string;
+  onUpdated: (id: string, fields: { status?: MyAssignment['status']; notes?: string | null }) => void;
+}) {
+  const [notesDraft, setNotesDraft] = useState(game.notes ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const notesDirty = notesDraft !== (game.notes ?? '');
+
+  async function save(input: { status?: MyAssignment['status']; notes?: string }) {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateAssignment(token, game.id, input);
+      onUpdated(game.id, { status: updated.status, notes: updated.notes });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td style={{ textTransform: 'capitalize' }}>{game.event.sport}</td>
+      <td>{game.event.venue ?? '—'}</td>
+      <td>{formatWhen(game.event.scheduledAt)}</td>
+      <td className="mono">{teams(game)}</td>
+      <td>
+        <span className="pill">{game.event.status}</span>
+      </td>
+      <td>
+        <select
+          value={game.status}
+          disabled={saving}
+          onChange={(e) => save({ status: e.target.value as MyAssignment['status'] })}
+        >
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td>
+        <span className="pill">{SOURCE_LABELS[game.source] ?? game.source}</span>
+      </td>
+      <td>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            value={notesDraft}
+            placeholder="Add notes…"
+            disabled={saving}
+            onChange={(e) => setNotesDraft(e.target.value)}
+          />
+          <button
+            style={{ marginTop: 0, padding: '8px 14px' }}
+            disabled={saving || !notesDirty}
+            onClick={() => save({ notes: notesDraft })}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        {error && (
+          <div className="error" style={{ marginTop: 8 }}>
+            {error}
+          </div>
+        )}
+      </td>
+    </tr>
+  );
 }
 
 export default function MyGamesPage() {
@@ -68,6 +154,19 @@ export default function MyGamesPage() {
       cancelled = true;
     };
   }, [token, router]);
+
+  // Merge a saved row's changed fields back into state so the UI reflects the
+  // server without a full refetch.
+  function onRowUpdated(
+    id: string,
+    fields: { status?: MyAssignment['status']; notes?: string | null },
+  ) {
+    setGames((prev) =>
+      prev
+        ? prev.map((g) => (g.id === id ? { ...g, ...fields } : g))
+        : prev,
+    );
+  }
 
   function onLogout() {
     logout();
@@ -111,25 +210,12 @@ export default function MyGamesPage() {
                 <th>Event</th>
                 <th>Assignment</th>
                 <th>Source</th>
+                <th>Notes</th>
               </tr>
             </thead>
             <tbody>
               {games.map((g) => (
-                <tr key={g.id}>
-                  <td style={{ textTransform: 'capitalize' }}>{g.event.sport}</td>
-                  <td>{g.event.venue ?? '—'}</td>
-                  <td>{formatWhen(g.event.scheduledAt)}</td>
-                  <td className="mono">{teams(g)}</td>
-                  <td>
-                    <span className="pill">{g.event.status}</span>
-                  </td>
-                  <td>
-                    <span className="pill">{g.status}</span>
-                  </td>
-                  <td>
-                    <span className="pill">{SOURCE_LABELS[g.source] ?? g.source}</span>
-                  </td>
-                </tr>
+                <GameRow key={g.id} game={g} token={token} onUpdated={onRowUpdated} />
               ))}
             </tbody>
           </table>

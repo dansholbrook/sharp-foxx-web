@@ -93,6 +93,20 @@ export interface MyAssignment {
   };
 }
 
+// Mirrors the bare event_assignments row returned by PATCH /assignments/:id
+// (assignments.service.ts `update()`). Note there is NO event join here, unlike
+// MyAssignment -- only merge the changed status/notes back into an existing row.
+export interface AssignmentRow {
+  id: string;
+  eventId: string;
+  repId: string;
+  status: 'assigned' | 'accepted' | 'submitted';
+  assignedBy: string | null;
+  source: 'assigned' | 'self_claimed';
+  notes: string | null;
+  assignedAt: string;
+}
+
 // Request bodies for the two create calls (mirror the Zod schemas on the API).
 export interface CreateUserInput {
   email: string;
@@ -106,6 +120,13 @@ export interface CreateFieldRepInput {
   cohortLabel?: string;
   managerId?: string;
   homeMarketId?: string;
+}
+
+// PATCH body for updating one's own assignment. The backend requires at least
+// one field (updateAssignmentSchema.refine), so send only what changed.
+export interface UpdateAssignmentInput {
+  status?: MyAssignment['status'];
+  notes?: string;
 }
 
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
@@ -153,6 +174,19 @@ async function authPost<T>(path: string, token: string, body: unknown): Promise<
   return res.json();
 }
 
+async function authPatch<T>(path: string, token: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toError(res);
+  return res.json();
+}
+
 export const getCommissions = (token: string) =>
   authGet<CommissionsReport>('/reports/commissions', token);
 
@@ -167,6 +201,12 @@ export const getManagerReps = (token: string, id: string) =>
 
 export const getMyAssignments = (token: string) =>
   authGet<MyAssignment[]>('/assignments/mine', token);
+
+export const updateAssignment = (
+  token: string,
+  id: string,
+  input: UpdateAssignmentInput,
+) => authPatch<AssignmentRow>(`/assignments/${id}`, token, input);
 
 export const createUser = (token: string, input: CreateUserInput) =>
   authPost<User>('/users', token, input);
