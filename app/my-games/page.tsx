@@ -8,6 +8,9 @@ import {
   getMyAssignments,
   updateAssignment,
   generateArticle,
+  updateContent,
+  publishContent,
+  unpublishContent,
   MyAssignment,
   ContentItem,
 } from '../api';
@@ -67,6 +70,21 @@ function GameRow({
   const [genError, setGenError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ContentItem | null>(null);
 
+  // Once a draft exists it becomes editable: titleDraft/bodyDraft hold the
+  // in-progress edits while `draft` stays the source of truth for id/status
+  // (and the last-saved title/body we diff against). Saving and publishing are
+  // independent actions, so each owns its own loading/error state.
+  const [titleDraft, setTitleDraft] = useState('');
+  const [bodyDraft, setBodyDraft] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  const draftDirty =
+    draft !== null &&
+    (titleDraft !== draft.title || bodyDraft !== (draft.body ?? ''));
+
   const notesDirty = notesDraft !== (game.notes ?? '');
   // sourceText is required (min 1) by the API -- nothing to generate from an
   // empty notes field, so gate the button on it.
@@ -91,6 +109,8 @@ function GameRow({
     setGenerating(true);
     setGenError(null);
     setDraft(null);
+    setEditError(null);
+    setPublishError(null);
     try {
       const item = await generateArticle(token, {
         eventId: game.event.id,
@@ -98,12 +118,59 @@ function GameRow({
         sourceText: notesDraft,
       });
       setDraft(item);
+      // Seed the editable fields from the freshly generated draft.
+      setTitleDraft(item.title);
+      setBodyDraft(item.body ?? '');
     } catch (err) {
       // The client formats AI failures (502/503/504) and bad ids (404) as
       // "<status> <message>".
       setGenError(err instanceof Error ? err.message : 'Failed to generate article');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  // Persist edited title/body via PATCH /content/:id. Merge the returned row
+  // back into `draft` so the dirty check and status pill track the server.
+  async function saveDraft() {
+    if (!draft) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const updated = await updateContent(token, draft.id, {
+        title: titleDraft,
+        body: bodyDraft,
+      });
+      setDraft(updated);
+      setTitleDraft(updated.title);
+      setBodyDraft(updated.body ?? '');
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Failed to save changes');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  // Flip publish state via POST /content/:id/(un)publish. Only merge the
+  // status/publishedAt back so any unsaved title/body edits stay put.
+  async function togglePublish() {
+    if (!draft) return;
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const updated =
+        draft.status === 'published'
+          ? await unpublishContent(token, draft.id)
+          : await publishContent(token, draft.id);
+      setDraft((d) =>
+        d ? { ...d, status: updated.status, publishedAt: updated.publishedAt } : updated,
+      );
+    } catch (err) {
+      setPublishError(
+        err instanceof Error ? err.message : 'Failed to update publish status',
+      );
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -175,9 +242,64 @@ function GameRow({
                 <span className="muted">
                   Generated draft · <span className="pill">{draft.status}</span>
                 </span>
-                <h3 style={{ marginTop: 8 }}>{draft.title}</h3>
-                {/* body is trusted HTML from our own /content/generate endpoint. */}
-                <div dangerouslySetInnerHTML={{ __html: draft.body ?? '' }} />
+
+                <label className="muted" style={{ display: 'block', marginTop: 12 }}>
+                  Title
+                </label>
+                <input
+                  value={titleDraft}
+                  disabled={editSaving}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+
+                <label className="muted" style={{ display: 'block', marginTop: 12 }}>
+                  Body (HTML)
+                </label>
+                <textarea
+                  value={bodyDraft}
+                  disabled={editSaving}
+                  onChange={(e) => setBodyDraft(e.target.value)}
+                  rows={10}
+                  className="mono"
+                  style={{ width: '100%' }}
+                />
+
+                <div
+                  style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}
+                >
+                  <button
+                    style={{ marginTop: 0, padding: '8px 14px' }}
+                    disabled={editSaving || !draftDirty}
+                    onClick={saveDraft}
+                  >
+                    {editSaving ? 'Saving…' : 'Save changes'}
+                  </button>
+                  <button
+                    style={{ marginTop: 0, padding: '8px 14px' }}
+                    disabled={publishing}
+                    onClick={togglePublish}
+                  >
+                    {publishing
+                      ? draft.status === 'published'
+                        ? 'Unpublishing…'
+                        : 'Publishing…'
+                      : draft.status === 'published'
+                        ? 'Unpublish'
+                        : 'Publish'}
+                  </button>
+                </div>
+
+                {editError && (
+                  <div className="error" style={{ marginTop: 8 }}>
+                    {editError}
+                  </div>
+                )}
+                {publishError && (
+                  <div className="error" style={{ marginTop: 8 }}>
+                    {publishError}
+                  </div>
+                )}
               </div>
             )}
           </td>

@@ -159,6 +159,13 @@ export interface GenerateArticleInput {
   sourceText: string;
 }
 
+// PATCH body for editing a draft's title/body (mirrors updateContentSchema).
+// The backend requires at least one field, so send only what changed.
+export interface UpdateContentInput {
+  title?: string;
+  body?: string;
+}
+
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
 async function toError(res: Response): Promise<Error> {
   let detail = res.statusText;
@@ -249,3 +256,19 @@ export const createFieldRep = (token: string, input: CreateFieldRepInput) =>
 // id; the client surfaces those as "<status> <message>".
 export const generateArticle = (token: string, input: GenerateArticleInput) =>
   authPost<ContentItem>('/content/generate', token, input);
+
+// Edit a draft's title/body. Ownership (author-or-manager) is enforced on the
+// backend; a bad id or foreign draft surfaces as "<status> <message>".
+export const updateContent = (
+  token: string,
+  id: string,
+  input: UpdateContentInput,
+) => authPatch<ContentItem>(`/content/${id}`, token, input);
+
+// Publishing/unpublishing are editorial actions (author-or-manager). Both take
+// no body and return the updated row with its new status/publishedAt.
+export const publishContent = (token: string, id: string) =>
+  authPost<ContentItem>(`/content/${id}/publish`, token, {});
+
+export const unpublishContent = (token: string, id: string) =>
+  authPost<ContentItem>(`/content/${id}/unpublish`, token, {});
