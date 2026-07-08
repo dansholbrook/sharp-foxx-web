@@ -59,6 +59,19 @@ export interface FieldRep {
   updatedAt: string;
 }
 
+// Mirrors reports.service.ts `managerReps()`. displayName/email come from a
+// leftJoin so they can be null; totalCommissions is numeric money -> a string.
+export interface ManagerRoster {
+  managerId: string;
+  reps: Array<{
+    repId: string;
+    displayName: string | null;
+    email: string | null;
+    totalCommissions: string;
+    adOrdersCount: number;
+  }>;
+}
+
 // Request bodies for the two create calls (mirror the Zod schemas on the API).
 export interface CreateUserInput {
   email: string;
@@ -127,6 +140,9 @@ export const getRevenue = (token: string) =>
 
 export const getFieldReps = (token: string) =>
   authGet<FieldRep[]>('/field-reps', token);
+
+export const getManagerReps = (token: string, id: string) =>
+  authGet<ManagerRoster>(`/reports/managers/${id}/reps`, token);
 
 export const createUser = (token: string, input: CreateUserInput) =>
   authPost<User>('/users', token, input);

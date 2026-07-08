@@ -206,6 +206,7 @@ export default function FieldRepsPage() {
                 <th>Status</th>
                 <th>Cohort</th>
                 <th className="num">Commission</th>
+                <th>Roster</th>
               </tr>
             </thead>
             <tbody>
@@ -220,6 +221,15 @@ export default function FieldRepsPage() {
                   <td>{rep.cohortLabel ?? '—'}</td>
                   <td className="num">
                     {(Number(rep.commissionRate) * 100).toFixed(2)}%
+                  </td>
+                  <td>
+                    {rep.kind === 'regional_manager' ? (
+                      <Link href={`/managers/${rep.id}`} className="link-btn">
+                        View roster →
+                      </Link>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
