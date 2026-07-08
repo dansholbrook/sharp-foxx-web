@@ -129,6 +129,36 @@ export interface UpdateAssignmentInput {
   notes?: string;
 }
 
+// Mirrors a content_items row (content.service.ts / schema.ts). Returned by
+// POST /content/generate, which AI-drafts a recap and stores it as a DRAFT
+// attached to the event -- it never auto-publishes, so status comes back
+// 'draft'. body is an HTML string (rendered at the display boundary).
+export interface ContentItem {
+  id: string;
+  kind: 'blog' | 'podcast' | 'video' | 'athlete_profile';
+  status: 'draft' | 'published';
+  authorUserId: string | null;
+  title: string;
+  slug: string | null;
+  body: string | null;
+  mediaUrl: string | null;
+  institutionId: string | null;
+  teamId: string | null;
+  athleteId: string | null;
+  eventId: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Request body for POST /content/generate (mirrors generateArticleSchema). The
+// AI rewrites sourceText (the rep's notes) into a recap for the given event.
+export interface GenerateArticleInput {
+  eventId: string;
+  authorId: string;
+  sourceText: string;
+}
+
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
 async function toError(res: Response): Promise<Error> {
   let detail = res.statusText;
@@ -213,3 +243,9 @@ export const createUser = (token: string, input: CreateUserInput) =>
 
 export const createFieldRep = (token: string, input: CreateFieldRepInput) =>
   authPost<FieldRep>('/field-reps', token, input);
+
+// AI-drafts a game recap from a rep's notes. Slow (a few seconds -- it's an AI
+// call) and can fail with 502/503/504 on AI issues or 404 for a bad event/author
+// id; the client surfaces those as "<status> <message>".
+export const generateArticle = (token: string, input: GenerateArticleInput) =>
+  authPost<ContentItem>('/content/generate', token, input);

@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { getMyAssignments, updateAssignment, MyAssignment } from '../api';
+import {
+  getMyAssignments,
+  updateAssignment,
+  generateArticle,
+  MyAssignment,
+  ContentItem,
+} from '../api';
 
 // Human labels for the assignment source. 'assigned' means a manager put the
 // rep on this game; 'self_claimed' means the rep grabbed it themselves.
@@ -43,17 +49,28 @@ function teams(a: MyAssignment): string {
 function GameRow({
   game,
   token,
+  authorId,
   onUpdated,
 }: {
   game: MyAssignment;
   token: string;
+  authorId: string;
   onUpdated: (id: string, fields: { status?: MyAssignment['status']; notes?: string | null }) => void;
 }) {
   const [notesDraft, setNotesDraft] = useState(game.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // AI recap generation is per-row and independent of the notes save above, so
+  // it owns its own loading/error/result state. The AI call takes a few seconds.
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ContentItem | null>(null);
+
   const notesDirty = notesDraft !== (game.notes ?? '');
+  // sourceText is required (min 1) by the API -- nothing to generate from an
+  // empty notes field, so gate the button on it.
+  const canGenerate = notesDraft.trim().length > 0;
 
   async function save(input: { status?: MyAssignment['status']; notes?: string }) {
     setSaving(true);
@@ -68,54 +85,105 @@ function GameRow({
     }
   }
 
+  // Draft a recap from the current notes text. Uses whatever is in the notes
+  // box right now (not just the last-saved value) as the source material.
+  async function generate() {
+    setGenerating(true);
+    setGenError(null);
+    setDraft(null);
+    try {
+      const item = await generateArticle(token, {
+        eventId: game.event.id,
+        authorId,
+        sourceText: notesDraft,
+      });
+      setDraft(item);
+    } catch (err) {
+      // The client formats AI failures (502/503/504) and bad ids (404) as
+      // "<status> <message>".
+      setGenError(err instanceof Error ? err.message : 'Failed to generate article');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
-    <tr>
-      <td style={{ textTransform: 'capitalize' }}>{game.event.sport}</td>
-      <td>{game.event.venue ?? '—'}</td>
-      <td>{formatWhen(game.event.scheduledAt)}</td>
-      <td className="mono">{teams(game)}</td>
-      <td>
-        <span className="pill">{game.event.status}</span>
-      </td>
-      <td>
-        <select
-          value={game.status}
-          disabled={saving}
-          onChange={(e) => save({ status: e.target.value as MyAssignment['status'] })}
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <span className="pill">{SOURCE_LABELS[game.source] ?? game.source}</span>
-      </td>
-      <td>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            value={notesDraft}
-            placeholder="Add notes…"
+    <>
+      <tr>
+        <td style={{ textTransform: 'capitalize' }}>{game.event.sport}</td>
+        <td>{game.event.venue ?? '—'}</td>
+        <td>{formatWhen(game.event.scheduledAt)}</td>
+        <td className="mono">{teams(game)}</td>
+        <td>
+          <span className="pill">{game.event.status}</span>
+        </td>
+        <td>
+          <select
+            value={game.status}
             disabled={saving}
-            onChange={(e) => setNotesDraft(e.target.value)}
-          />
-          <button
-            style={{ marginTop: 0, padding: '8px 14px' }}
-            disabled={saving || !notesDirty}
-            onClick={() => save({ notes: notesDraft })}
+            onChange={(e) => save({ status: e.target.value as MyAssignment['status'] })}
           >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-        {error && (
-          <div className="error" style={{ marginTop: 8 }}>
-            {error}
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td>
+          <span className="pill">{SOURCE_LABELS[game.source] ?? game.source}</span>
+        </td>
+        <td>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              value={notesDraft}
+              placeholder="Add notes…"
+              disabled={saving}
+              onChange={(e) => setNotesDraft(e.target.value)}
+            />
+            <button
+              style={{ marginTop: 0, padding: '8px 14px' }}
+              disabled={saving || !notesDirty}
+              onClick={() => save({ notes: notesDraft })}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              style={{ marginTop: 0, padding: '8px 14px' }}
+              disabled={generating || !canGenerate}
+              onClick={generate}
+            >
+              {generating ? 'Generating…' : 'Generate article'}
+            </button>
           </div>
-        )}
-      </td>
-    </tr>
+          {error && (
+            <div className="error" style={{ marginTop: 8 }}>
+              {error}
+            </div>
+          )}
+        </td>
+      </tr>
+      {(generating || genError || draft) && (
+        <tr>
+          <td colSpan={8}>
+            {generating && (
+              <p className="muted">Generating article… (this can take a few seconds)</p>
+            )}
+            {genError && <div className="error">{genError}</div>}
+            {draft && (
+              <div className="card" style={{ marginTop: 0 }}>
+                <span className="muted">
+                  Generated draft · <span className="pill">{draft.status}</span>
+                </span>
+                <h3 style={{ marginTop: 8 }}>{draft.title}</h3>
+                {/* body is trusted HTML from our own /content/generate endpoint. */}
+                <div dangerouslySetInnerHTML={{ __html: draft.body ?? '' }} />
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -215,7 +283,13 @@ export default function MyGamesPage() {
             </thead>
             <tbody>
               {games.map((g) => (
-                <GameRow key={g.id} game={g} token={token} onUpdated={onRowUpdated} />
+                <GameRow
+                  key={g.id}
+                  game={g}
+                  token={token}
+                  authorId={user?.id ?? ''}
+                  onUpdated={onRowUpdated}
+                />
               ))}
             </tbody>
           </table>
