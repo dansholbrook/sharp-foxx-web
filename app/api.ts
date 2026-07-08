@@ -72,6 +72,27 @@ export interface ManagerRoster {
   }>;
 }
 
+// Mirrors assignments.service.ts `listMine()` -- the caller's own assignments
+// joined to their events. Teams come back as raw UUIDs (no name join) and are
+// nullable; scheduledAt/assignedAt are ISO strings (timestamptz, mode 'string').
+export interface MyAssignment {
+  id: string;
+  status: 'assigned' | 'accepted' | 'submitted';
+  source: 'assigned' | 'self_claimed';
+  notes: string | null;
+  assignedBy: string | null;
+  assignedAt: string;
+  event: {
+    id: string;
+    sport: string;
+    venue: string | null;
+    status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
+    scheduledAt: string;
+    homeTeamId: string | null;
+    awayTeamId: string | null;
+  };
+}
+
 // Request bodies for the two create calls (mirror the Zod schemas on the API).
 export interface CreateUserInput {
   email: string;
@@ -143,6 +164,9 @@ export const getFieldReps = (token: string) =>
 
 export const getManagerReps = (token: string, id: string) =>
   authGet<ManagerRoster>(`/reports/managers/${id}/reps`, token);
+
+export const getMyAssignments = (token: string) =>
+  authGet<MyAssignment[]>('/assignments/mine', token);
 
 export const createUser = (token: string, input: CreateUserInput) =>
   authPost<User>('/users', token, input);
