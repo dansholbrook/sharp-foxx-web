@@ -414,7 +414,7 @@ export default function MyGamesPage() {
         <div>
           <h1>My games</h1>
           <span className="muted">
-            Signed in as <span className="mono">{user?.id}</span>
+            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>

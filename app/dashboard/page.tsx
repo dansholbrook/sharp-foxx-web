@@ -81,7 +81,7 @@ export default function DashboardPage() {
         <div>
           <h1>Reports</h1>
           <span className="muted">
-            Signed in as <span className="mono">{user?.id}</span>
+            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
@@ -125,7 +125,11 @@ export default function DashboardPage() {
                 <tbody>
                   {commissions.perRep.map((rep) => (
                     <tr key={rep.repId}>
-                      <td className="mono">{rep.repId}</td>
+                      {rep.displayName ? (
+                        <td>{rep.displayName}</td>
+                      ) : (
+                        <td className="mono">{rep.repId}</td>
+                      )}
                       {SOURCE_KEYS.map((k) => (
                         <td key={k} className="num">
                           {usd(rep.bySource[k] ?? '0')}

@@ -108,7 +108,7 @@ export default function FieldRepsPage() {
         <div>
           <h1>Field reps</h1>
           <span className="muted">
-            Signed in as <span className="mono">{user?.id}</span>
+            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
@@ -200,8 +200,8 @@ export default function FieldRepsPage() {
           <table>
             <thead>
               <tr>
+                <th>Name</th>
                 <th>Rep ID</th>
-                <th>User ID</th>
                 <th>Kind</th>
                 <th>Status</th>
                 <th>Cohort</th>
@@ -212,8 +212,8 @@ export default function FieldRepsPage() {
             <tbody>
               {reps.map((rep) => (
                 <tr key={rep.id}>
+                  <td>{rep.displayName ?? '—'}</td>
                   <td className="mono">{rep.id}</td>
-                  <td className="mono">{rep.userId}</td>
                   <td>{KIND_LABELS[rep.kind] ?? rep.kind}</td>
                   <td>
                     <span className="pill">{rep.status}</span>

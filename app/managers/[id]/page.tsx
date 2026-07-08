@@ -66,7 +66,7 @@ export default function ManagerRosterPage() {
           </span>
           <br />
           <span className="muted">
-            Signed in as <span className="mono">{user?.id}</span>
+            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>

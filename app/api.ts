@@ -10,12 +10,14 @@ export interface LoginResponse {
   accessToken: string;
   tokenType: string;
   expiresIn: string;
-  user: { id: string; roles: string[] };
+  user: { id: string; displayName: string; roles: string[] };
 }
 
 export interface CommissionsReport {
   perRep: Array<{
     repId: string;
+    // Resolved via field_reps -> users on the backend; null if unlinked.
+    displayName: string | null;
     total: string;
     bySource: Record<string, string>;
   }>;
@@ -48,6 +50,10 @@ export interface User {
 export interface FieldRep {
   id: string;
   userId: string;
+  // From a leftJoin to users on the backend list(); null if the user is
+  // unlinked (mirrors the ManagerRoster/CommissionsReport name fields).
+  displayName: string | null;
+  email: string | null;
   kind: 'field_rep' | 'regional_manager';
   status: string;
   managerId: string | null;
