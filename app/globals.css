@@ -60,7 +60,8 @@ label {
   margin-bottom: 6px;
 }
 
-input {
+input,
+textarea {
   width: 100%;
   padding: 10px 12px;
   background: var(--bg);
@@ -68,6 +69,10 @@ input {
   border-radius: 8px;
   color: var(--text);
   font-size: 0.95rem;
+}
+
+textarea {
+  resize: vertical;
 }
 
 select {
@@ -81,6 +86,7 @@ select {
 }
 
 input:focus,
+textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--accent);
