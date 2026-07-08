@@ -1,11 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 :root {
-  --bg: #0f1115;
-  --panel: #1a1d24;
-  --border: #2a2e38;
-  --text: #e6e8ec;
-  --muted: #9aa1ac;
-  --accent: #f5a623;
-  --accent-text: #1a1d24;
+  /* Warm near-black background — not pure black */
+  --bg: #13110d;
+  --panel: #1b1811;
+  --panel-raised: #211d15;
+  --border: #2e2a20;
+  --border-strong: #3b3527;
+
+  /* Muted gray body text */
+  --text: #c9c6bf;
+  --muted: #8a857b;
+
+  /* Single warm gold accent */
+  --accent: #c9a34e;
+  --accent-hover: #d9b668;
+  --accent-dim: #a9863b;
+  --accent-text: #13110d;
+
+  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+
+  /* Wide uppercase treatment for labels / nav / small caps */
+  --tracking: 0.14em;
 }
 
 * {
@@ -18,56 +36,93 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 main {
   max-width: 920px;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: 48px 24px;
 }
 
+/* ---- Headings: elegant serif in gold ---- */
 h1 {
-  font-size: 1.6rem;
-  margin: 0 0 4px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin: 0 0 6px;
 }
 
 h2 {
-  font-size: 1.1rem;
-  margin: 0 0 12px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.3rem;
+  line-height: 1.2;
+  color: var(--accent);
+  margin: 0 0 14px;
+}
+
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.05rem;
   color: var(--text);
+  margin: 0 0 10px;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 .muted {
   color: var(--muted);
 }
 
+/* ---- Card: premium panel with depth ---- */
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px 22px;
-  margin-bottom: 22px;
+  border-radius: 12px;
+  padding: 24px 26px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
+/* ---- Small labels: wide uppercase ---- */
 label {
   display: block;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--muted);
-  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  margin-bottom: 8px;
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
-  padding: 10px 12px;
+  padding: 11px 13px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
+  font-family: var(--font-sans);
   font-size: 0.95rem;
 }
 
@@ -75,14 +130,10 @@ textarea {
   resize: vertical;
 }
 
-select {
-  width: 100%;
-  padding: 10px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 0.95rem;
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 input:focus,
@@ -90,68 +141,104 @@ textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 163, 78, 0.16);
 }
 
 .field {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
+/* ---- Buttons: gold fill, dark text, uppercase ---- */
 button {
   margin-top: 14px;
-  padding: 10px 18px;
+  padding: 11px 22px;
   background: var(--accent);
   color: var(--accent-text);
-  border: none;
+  border: 1px solid var(--accent);
   border-radius: 8px;
+  font-family: var(--font-sans);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.45;
   cursor: default;
 }
 
+/* Text/link-style button — gray, gold on hover; no uppercase */
 .link-btn {
   background: none;
+  border: none;
   color: var(--muted);
   padding: 0;
   margin: 0;
+  font-size: 0.9rem;
   font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.link-btn:hover:not(:disabled) {
+  background: none;
+  color: var(--accent);
   text-decoration: underline;
 }
 
 .error {
   margin-top: 14px;
-  padding: 10px 12px;
-  background: #3a1d1d;
+  padding: 11px 13px;
+  background: #2c1714;
   border: 1px solid #5c2b2b;
   border-radius: 8px;
-  color: #ffb4b4;
+  color: #f0b4ac;
   font-size: 0.9rem;
   word-break: break-word;
 }
 
+.success {
+  margin-top: 14px;
+  padding: 11px 13px;
+  background: #17251a;
+  border: 1px solid #2f5c3a;
+  border-radius: 8px;
+  color: #b4e6c0;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
+/* ---- Tables: editorial spacing, gold-accented totals ---- */
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
 }
 
 th,
 td {
   text-align: left;
-  padding: 9px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
 }
 
 th {
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking);
 }
 
 td.num,
@@ -162,7 +249,8 @@ th.num {
 
 tfoot td {
   font-weight: 700;
-  border-top: 2px solid var(--border);
+  color: var(--accent);
+  border-top: 1px solid var(--border-strong);
   border-bottom: none;
 }
 
@@ -172,36 +260,44 @@ tfoot td {
   color: var(--muted);
 }
 
+/* ---- Header + nav: wide uppercase wordmark row ---- */
 .header-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 28px;
+  margin-bottom: 32px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
 }
 
 .nav-links {
   display: flex;
   align-items: baseline;
-  gap: 18px;
+  gap: 22px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
-.success {
-  margin-top: 14px;
-  padding: 10px 12px;
-  background: #1d3a24;
-  border: 1px solid #2b5c37;
-  border-radius: 8px;
-  color: #b4ffc4;
-  font-size: 0.9rem;
-  word-break: break-word;
+/* Nav links pick up the wide-uppercase treatment from the row */
+.nav-links .link-btn {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
 }
 
+/* ---- Pill: uppercase micro-label for status/tags ---- */
 .pill {
   display: inline-block;
-  padding: 2px 9px;
-  border: 1px solid var(--border);
+  padding: 3px 11px;
+  border: 1px solid var(--border-strong);
   border-radius: 999px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  text-transform: capitalize;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(201, 163, 78, 0.08);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
