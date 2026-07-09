@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../../auth-context';
+import { AppNav, AccessDenied } from '../../nav';
+import { canAccess } from '../../roles';
 import { getManagerReps, ManagerRoster } from '../../api';
 
 const usd = (v: string) =>
@@ -11,9 +12,11 @@ const usd = (v: string) =>
 
 export default function ManagerRosterPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const { token, user, logout } = useAuth();
+  const { token, user } = useAuth();
+  const allowed = canAccess(user?.roles ?? [], pathname);
 
   const [roster, setRoster] = useState<ManagerRoster | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +28,7 @@ export default function ManagerRosterPage() {
       router.replace('/');
       return;
     }
+    if (!allowed) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -45,14 +49,10 @@ export default function ManagerRosterPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, id, router]);
-
-  function onLogout() {
-    logout();
-    router.replace('/');
-  }
+  }, [token, id, router, allowed]);
 
   if (!token) return null;
+  if (!allowed) return <AccessDenied />;
 
   const reps = roster?.reps ?? [];
 
@@ -70,14 +70,7 @@ export default function ManagerRosterPage() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
-        <div className="nav-links">
-          <Link href="/field-reps" className="link-btn">
-            ← Field reps
-          </Link>
-          <button className="link-btn" onClick={onLogout}>
-            Log out
-          </button>
-        </div>
+        <AppNav />
       </div>
 
       <section className="card">

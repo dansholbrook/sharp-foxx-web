@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
+import { AppNav, AccessDenied } from '../nav';
+import { canAccess } from '../roles';
 import {
   getFieldReps,
   createUser,
@@ -18,7 +20,9 @@ const KIND_LABELS: Record<FieldRep['kind'], string> = {
 
 export default function FieldRepsPage() {
   const router = useRouter();
-  const { token, user, logout } = useAuth();
+  const pathname = usePathname();
+  const { token, user } = useAuth();
+  const allowed = canAccess(user?.roles ?? [], pathname);
 
   const [reps, setReps] = useState<FieldRep[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,13 +57,9 @@ export default function FieldRepsPage() {
   }
 
   useEffect(() => {
-    if (token) loadReps(token);
-  }, [token]);
-
-  function onLogout() {
-    logout();
-    router.replace('/');
-  }
+    // Skip the fetch for a role that can't use this page -- it would only 403.
+    if (token && allowed) loadReps(token);
+  }, [token, allowed]);
 
   // Two-step create: mint the user, then create the rep linked to it, then
   // refresh the list so the new rep shows up.
@@ -101,6 +101,7 @@ export default function FieldRepsPage() {
   }
 
   if (!token) return null;
+  if (!allowed) return <AccessDenied />;
 
   return (
     <main className="feed-home">
@@ -112,20 +113,7 @@ export default function FieldRepsPage() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
-        <div className="nav-links">
-          <Link href="/feed" className="link-btn">
-            Feed
-          </Link>
-          <Link href="/my-games" className="link-btn">
-            My games
-          </Link>
-          <Link href="/dashboard" className="link-btn">
-            Reports
-          </Link>
-          <button className="link-btn" onClick={onLogout}>
-            Log out
-          </button>
-        </div>
+        <AppNav />
       </div>
 
       <div className="masthead">

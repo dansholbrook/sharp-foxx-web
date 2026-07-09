@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
+import { AppNav, AccessDenied } from '../nav';
+import { canAccess } from '../roles';
 import {
   getCommissions,
   getRevenue,
@@ -32,18 +33,22 @@ const usd = (v: string) =>
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { token, user, logout } = useAuth();
+  const pathname = usePathname();
+  const { token, user } = useAuth();
+  const allowed = canAccess(user?.roles ?? [], pathname);
   const [commissions, setCommissions] = useState<CommissionsReport | null>(null);
   const [revenue, setRevenue] = useState<RevenueReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // No token in memory (e.g. after a page refresh) -> back to login.
+  // No token in memory (e.g. after a page refresh) -> back to login. Skip the
+  // fetch entirely for a role that can't use this page -- it would only 403.
   useEffect(() => {
     if (!token) {
       router.replace('/');
       return;
     }
+    if (!allowed) return;
     let cancelled = false;
     (async () => {
       try {
@@ -66,14 +71,10 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, router]);
-
-  function onLogout() {
-    logout();
-    router.replace('/');
-  }
+  }, [token, router, allowed]);
 
   if (!token) return null;
+  if (!allowed) return <AccessDenied />;
 
   return (
     <main className="feed-home">
@@ -85,20 +86,7 @@ export default function DashboardPage() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
-        <div className="nav-links">
-          <Link href="/feed" className="link-btn">
-            Feed
-          </Link>
-          <Link href="/my-games" className="link-btn">
-            My games
-          </Link>
-          <Link href="/field-reps" className="link-btn">
-            Field reps
-          </Link>
-          <button className="link-btn" onClick={onLogout}>
-            Log out
-          </button>
-        </div>
+        <AppNav />
       </div>
 
       <div className="masthead">

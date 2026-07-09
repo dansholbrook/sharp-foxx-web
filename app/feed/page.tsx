@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useAuth } from '../auth-context';
+import { AppNav } from '../nav';
 import {
   getPublishedContent,
   getEvents,
@@ -401,7 +401,7 @@ function VideoModal({
 
 export default function FeedPage() {
   const router = useRouter();
-  const { token, user, logout } = useAuth();
+  const { token, user } = useAuth();
 
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [articles, setArticles] = useState<FeedItem[] | null>(null);
@@ -454,11 +454,6 @@ export default function FeedPage() {
     };
   }, [token, router]);
 
-  function onLogout() {
-    logout();
-    router.replace('/');
-  }
-
   // Sports present across BOTH rows — the union drives which chips to show.
   // Games carry a non-null sport enum; articles carry a nullable eventSport.
   // Sorted for a stable chip order.
@@ -496,14 +491,7 @@ export default function FeedPage() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
-        <div className="nav-links">
-          <Link href="/dashboard" className="link-btn">
-            ← Reports
-          </Link>
-          <button className="link-btn" onClick={onLogout}>
-            Log out
-          </button>
-        </div>
+        <AppNav />
       </div>
 
       <SearchBar />

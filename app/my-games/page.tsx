@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
+import { AppNav, AccessDenied } from '../nav';
+import { canAccess } from '../roles';
 import {
   getMyAssignments,
   updateAssignment,
@@ -498,7 +499,9 @@ function GameRow({
 
 export default function MyGamesPage() {
   const router = useRouter();
-  const { token, user, logout } = useAuth();
+  const pathname = usePathname();
+  const { token, user } = useAuth();
+  const allowed = canAccess(user?.roles ?? [], pathname);
 
   const [games, setGames] = useState<MyAssignment[] | null>(null);
   // eventId -> current scores/replay link, used to pre-fill each row's Report
@@ -513,6 +516,7 @@ export default function MyGamesPage() {
       router.replace('/');
       return;
     }
+    if (!allowed) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -552,7 +556,7 @@ export default function MyGamesPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, router]);
+  }, [token, router, allowed]);
 
   // Merge a saved row's changed fields back into state so the UI reflects the
   // server without a full refetch.
@@ -567,12 +571,8 @@ export default function MyGamesPage() {
     );
   }
 
-  function onLogout() {
-    logout();
-    router.replace('/');
-  }
-
   if (!token) return null;
+  if (!allowed) return <AccessDenied />;
 
   return (
     <main className="feed-home">
@@ -584,17 +584,7 @@ export default function MyGamesPage() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
-        <div className="nav-links">
-          <Link href="/feed" className="link-btn">
-            Feed
-          </Link>
-          <Link href="/dashboard" className="link-btn">
-            ← Reports
-          </Link>
-          <button className="link-btn" onClick={onLogout}>
-            Log out
-          </button>
-        </div>
+        <AppNav />
       </div>
 
       <div className="masthead">

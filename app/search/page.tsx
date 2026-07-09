@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
+import { AppNav } from '../nav';
 import { getEvents, EventListItem } from '../api';
 
 // Date-only formatting for compact thumbnail metadata (mirrors the feed page).
@@ -226,7 +227,7 @@ const ALL = 'all';
 function SearchResults() {
   const router = useRouter();
   const params = useSearchParams();
-  const { token, user, logout } = useAuth();
+  const { token, user } = useAuth();
 
   const initialQ = params.get('q') ?? '';
 
@@ -306,11 +307,6 @@ function SearchResults() {
     );
   }
 
-  function onLogout() {
-    logout();
-    router.replace('/');
-  }
-
   if (!token) return null;
 
   return (
@@ -324,14 +320,7 @@ function SearchResults() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
-        <div className="nav-links">
-          <Link href="/feed" className="link-btn">
-            ← Home
-          </Link>
-          <button className="link-btn" onClick={onLogout}>
-            Log out
-          </button>
-        </div>
+        <AppNav />
       </div>
 
       <form className="feed-search" onSubmit={onSubmit} role="search">
