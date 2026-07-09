@@ -108,18 +108,44 @@ function Row({
 }
 
 // ---- Game thumbnail card: the gradient block IS the visual. Matchup front and
-// center, venue + date beneath. ----
-function GameCard({ event }: { event: EventListItem }) {
+// center, venue + date beneath. When a result is in, the score replaces the
+// "vs" and a FINAL badge shows; when a replay link is set, a watch indicator
+// appears and the whole card opens the video modal via onOpenVideo. ----
+function GameCard({
+  event,
+  onOpenVideo,
+}: {
+  event: EventListItem;
+  onOpenVideo?: () => void;
+}) {
   const home = event.homeTeam ?? 'TBD';
   const away = event.awayTeam ?? 'TBD';
+  const hasScore = event.homeScore !== null && event.awayScore !== null;
+  const isFinal = event.status === 'final';
+  const hasVideo = Boolean(event.videoUrl);
 
-  return (
-    <article className="tcard">
+  const inner = (
+    <>
       <div className={thumbClass(event.sport)}>
         <span className="thumb-tag">{event.sport ?? 'event'}</span>
+        {isFinal && <span className="thumb-final">Final</span>}
+        {hasVideo && (
+          <span className="thumb-watch">
+            <span className="thumb-watch__icon" aria-hidden="true">
+              ▶
+            </span>
+            Watch
+          </span>
+        )}
         <div className="thumb-matchup">
           <span className="thumb-team">{home}</span>
-          <span className="thumb-vs">vs</span>
+          {hasScore ? (
+            <span className="thumb-score">
+              {event.homeScore} – {event.awayScore}
+            </span>
+          ) : (
+            <span className="thumb-vs">vs</span>
+          )}
           <span className="thumb-team">{away}</span>
         </div>
       </div>
@@ -129,6 +155,22 @@ function GameCard({ event }: { event: EventListItem }) {
           <span className="tcard-meta__seg">{formatDate(event.scheduledAt)}</span>
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <article className="tcard">
+      {hasVideo && onOpenVideo ? (
+        <button
+          className="tcard-open"
+          onClick={onOpenVideo}
+          aria-label={`Watch ${home} vs ${away}`}
+        >
+          {inner}
+        </button>
+      ) : (
+        inner
+      )}
     </article>
   );
 }
@@ -249,6 +291,114 @@ function ArticleReader({
   );
 }
 
+// Convert a YouTube watch/short/youtu.be link to its /embed/ form for iframing.
+// Returns null for anything that isn't a recognizable YouTube URL, so the caller
+// can fall back to a plain external link instead of embedding.
+function toYouTubeEmbed(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, '');
+    if (host === 'youtu.be') {
+      const id = u.pathname.slice(1);
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (u.pathname === '/watch') {
+        const id = u.searchParams.get('v');
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      if (u.pathname.startsWith('/embed/')) return u.toString();
+      if (u.pathname.startsWith('/shorts/')) {
+        const id = u.pathname.split('/')[2];
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ---- Video modal: same overlay pattern as ArticleReader. Embeds a YouTube
+// replay in a 16:9 iframe; for any non-YouTube URL, shows an external link
+// instead so a stray link never renders a broken frame. ----
+function VideoModal({
+  event,
+  onClose,
+}: {
+  event: EventListItem;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const home = event.homeTeam ?? 'TBD';
+  const away = event.awayTeam ?? 'TBD';
+  const title = `${home} vs ${away}`;
+  const embed = event.videoUrl ? toYouTubeEmbed(event.videoUrl) : null;
+  const hasScore = event.homeScore !== null && event.awayScore !== null;
+  const meta = [
+    event.sport,
+    hasScore ? `${event.homeScore} – ${event.awayScore}` : null,
+    event.status === 'final' ? 'Final' : null,
+    event.venue,
+  ].filter(Boolean);
+
+  return (
+    <div className="reader-overlay" onClick={onClose}>
+      <div
+        className="reader"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button className="reader-close" onClick={onClose} aria-label="Close video">
+          ✕
+        </button>
+        <span className="story-kicker">{event.sport ?? 'Game'}</span>
+        <h1 className="reader-title">{title}</h1>
+        <div className="story-meta reader-meta">
+          {meta.map((seg, i) => (
+            <span key={i} className="story-meta__seg">
+              {seg}
+            </span>
+          ))}
+        </div>
+        {embed ? (
+          <div className="video-frame">
+            <iframe
+              src={embed}
+              title={title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+        ) : (
+          <a
+            className="video-link"
+            href={event.videoUrl ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Watch video ↗
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function FeedPage() {
   const router = useRouter();
   const { token, user, logout } = useAuth();
@@ -260,6 +410,9 @@ export default function FeedPage() {
 
   // Which article is open in the reader (null = closed).
   const [active, setActive] = useState<FeedItem | null>(null);
+
+  // Which game's video is open in the modal (null = closed).
+  const [activeVideo, setActiveVideo] = useState<EventListItem | null>(null);
 
   // Active sport filter (ALL = show everything). Client-side over fetched data.
   const [sport, setSport] = useState<string>(ALL);
@@ -378,7 +531,13 @@ export default function FeedPage() {
         <>
           <Row title="Upcoming Games">
             {visibleEvents.length > 0 ? (
-              visibleEvents.map((ev) => <GameCard key={ev.id} event={ev} />)
+              visibleEvents.map((ev) => (
+                <GameCard
+                  key={ev.id}
+                  event={ev}
+                  onOpenVideo={() => setActiveVideo(ev)}
+                />
+              ))
             ) : (
               <div className="row-empty">
                 {sport === ALL
@@ -416,6 +575,10 @@ export default function FeedPage() {
 
       {active && (
         <ArticleReader item={active} onClose={() => setActive(null)} />
+      )}
+
+      {activeVideo && (
+        <VideoModal event={activeVideo} onClose={() => setActiveVideo(null)} />
       )}
     </main>
   );

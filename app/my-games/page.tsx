@@ -12,10 +12,23 @@ import {
   updateContent,
   publishContent,
   unpublishContent,
+  getEvents,
+  updateEventResult,
   MyAssignment,
   ContentItem,
   EventContentItem,
+  UpdateEventResultInput,
 } from '../api';
+
+// The scores/replay link already on an event, used to pre-fill the Report Result
+// form. /assignments/mine doesn't carry these, so the page loads them separately
+// via GET /events and seeds each row by event id (see the events map below).
+type ResultSeed = {
+  homeScore: number | null;
+  awayScore: number | null;
+  videoUrl: string | null;
+  status: MyAssignment['event']['status'];
+};
 
 // The editable article state accepts either the joined listing row we load on
 // mount (EventContentItem) or the bare ContentItem returned by generate/edit/
@@ -62,16 +75,41 @@ function GameRow({
   game,
   token,
   authorId,
+  resultSeed,
   onUpdated,
 }: {
   game: MyAssignment;
   token: string;
   authorId: string;
+  resultSeed?: ResultSeed;
   onUpdated: (id: string, fields: { status?: MyAssignment['status']; notes?: string | null }) => void;
 }) {
   const [notesDraft, setNotesDraft] = useState(game.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Report Result: home/away scores + a video URL, PATCHed to the event.
+  // Seeded from whatever is already on the event (resultSeed); `result` is the
+  // last-known-good values we echo back in the card, updated from the PATCH
+  // response so the card reflects the save without a refetch. Independent of the
+  // notes/assignment save above -- owns its own saving/error/confirmation state.
+  const [homeScoreDraft, setHomeScoreDraft] = useState(
+    resultSeed?.homeScore != null ? String(resultSeed.homeScore) : '',
+  );
+  const [awayScoreDraft, setAwayScoreDraft] = useState(
+    resultSeed?.awayScore != null ? String(resultSeed.awayScore) : '',
+  );
+  const [videoUrlDraft, setVideoUrlDraft] = useState(resultSeed?.videoUrl ?? '');
+  const [result, setResult] = useState<ResultSeed | null>(resultSeed ?? null);
+  const [resultSaving, setResultSaving] = useState(false);
+  const [resultError, setResultError] = useState<string | null>(null);
+  const [resultSaved, setResultSaved] = useState(false);
+
+  // At least one field must be sent (empty body -> 400), so gate Save on that.
+  const resultHasInput =
+    homeScoreDraft.trim() !== '' ||
+    awayScoreDraft.trim() !== '' ||
+    videoUrlDraft.trim() !== '';
 
   // AI recap generation is per-row and independent of the notes save above, so
   // it owns its own loading/error/result state. The AI call takes a few seconds.
@@ -142,6 +180,46 @@ function GameRow({
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Report the game result. Build the body from only the filled-in fields so a
+  // rep can save just a score, just a video link, or both. Merge the returned
+  // event row back into `result`/the drafts so the card reflects the save.
+  async function saveResult() {
+    const body: UpdateEventResultInput = {};
+    if (homeScoreDraft.trim() !== '') body.homeScore = Number(homeScoreDraft);
+    if (awayScoreDraft.trim() !== '') body.awayScore = Number(awayScoreDraft);
+    if (videoUrlDraft.trim() !== '') body.videoUrl = videoUrlDraft.trim();
+    // Nothing filled in -- the backend would 400; the button is already disabled
+    // in this state, but guard anyway.
+    if (
+      body.homeScore === undefined &&
+      body.awayScore === undefined &&
+      body.videoUrl === undefined
+    ) {
+      return;
+    }
+    setResultSaving(true);
+    setResultError(null);
+    setResultSaved(false);
+    try {
+      const updated = await updateEventResult(token, game.event.id, body);
+      setResult({
+        homeScore: updated.homeScore,
+        awayScore: updated.awayScore,
+        videoUrl: updated.videoUrl,
+        status: updated.status,
+      });
+      setHomeScoreDraft(updated.homeScore != null ? String(updated.homeScore) : '');
+      setAwayScoreDraft(updated.awayScore != null ? String(updated.awayScore) : '');
+      setVideoUrlDraft(updated.videoUrl ?? '');
+      setResultSaved(true);
+    } catch (err) {
+      // 403 (not your game) / 400 (bad body) surface as "<status> <message>".
+      setResultError(err instanceof Error ? err.message : 'Failed to save result');
+    } finally {
+      setResultSaving(false);
     }
   }
 
@@ -282,6 +360,77 @@ function GameRow({
           </select>
         </div>
 
+        {/* ---- Report result: scores + replay link, PATCHed to the event ---- */}
+        <div className="game-result">
+          <label className="game-field-label">Report result</label>
+          <div className="result-row">
+            <div className="result-scores">
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                className="result-score-input"
+                aria-label={`${game.event.homeTeam ?? 'Home'} score`}
+                placeholder="Home"
+                value={homeScoreDraft}
+                disabled={resultSaving}
+                onChange={(e) => {
+                  setHomeScoreDraft(e.target.value);
+                  setResultSaved(false);
+                }}
+              />
+              <span className="result-dash" aria-hidden="true">
+                –
+              </span>
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                className="result-score-input"
+                aria-label={`${game.event.awayTeam ?? 'Away'} score`}
+                placeholder="Away"
+                value={awayScoreDraft}
+                disabled={resultSaving}
+                onChange={(e) => {
+                  setAwayScoreDraft(e.target.value);
+                  setResultSaved(false);
+                }}
+              />
+            </div>
+            <input
+              type="url"
+              className="result-video-input"
+              aria-label="Video URL"
+              placeholder="Video URL (https://…)"
+              value={videoUrlDraft}
+              disabled={resultSaving}
+              onChange={(e) => {
+                setVideoUrlDraft(e.target.value);
+                setResultSaved(false);
+              }}
+            />
+            <button
+              className="btn-inline"
+              disabled={resultSaving || !resultHasInput}
+              onClick={saveResult}
+            >
+              {resultSaving ? 'Saving…' : 'Save result'}
+            </button>
+          </div>
+          {result && result.homeScore != null && result.awayScore != null && (
+            <p className="result-current">
+              {result.status === 'final' && <span className="pill">Final</span>}
+              <span className="result-current__score">
+                {result.homeScore} – {result.awayScore}
+              </span>
+            </p>
+          )}
+          {resultSaved && !resultError && (
+            <div className="success">Result saved.</div>
+          )}
+          {resultError && <div className="error">{resultError}</div>}
+        </div>
+
         {(generating || genError || draft) && (
           <div>
             {generating && (
@@ -352,6 +501,9 @@ export default function MyGamesPage() {
   const { token, user, logout } = useAuth();
 
   const [games, setGames] = useState<MyAssignment[] | null>(null);
+  // eventId -> current scores/replay link, used to pre-fill each row's Report
+  // Result form. Loaded from GET /events since /assignments/mine omits them.
+  const [resultsByEvent, setResultsByEvent] = useState<Record<string, ResultSeed>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -366,8 +518,27 @@ export default function MyGamesPage() {
     setError(null);
     (async () => {
       try {
-        const data = await getMyAssignments(token);
-        if (!cancelled) setGames(data);
+        // Assignments are the page; the events lookup is only for pre-filling the
+        // result form, so a failure there must not break the page -> swallow it.
+        const [data, events] = await Promise.all([
+          getMyAssignments(token),
+          getEvents(token).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setGames(data);
+        setResultsByEvent(
+          Object.fromEntries(
+            events.map((e) => [
+              e.id,
+              {
+                homeScore: e.homeScore,
+                awayScore: e.awayScore,
+                videoUrl: e.videoUrl,
+                status: e.status,
+              },
+            ]),
+          ),
+        );
       } catch (err) {
         // The client turns failures into "<status> <message>", e.g. a user with
         // no rep profile gets "404 No rep profile for this user".
@@ -446,6 +617,7 @@ export default function MyGamesPage() {
               game={g}
               token={token}
               authorId={user?.id ?? ''}
+              resultSeed={resultsByEvent[g.event.id]}
               onUpdated={onRowUpdated}
             />
           ))}

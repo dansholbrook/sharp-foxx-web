@@ -156,9 +156,35 @@ export interface EventListItem {
   scheduledAt: string;
   homeScore: number | null;
   awayScore: number | null;
+  // Recap/replay link set via PATCH /events/:id/result. Nullable (or absent if a
+  // deployment's list select hasn't surfaced it yet) -- the fan-side watch UI is
+  // gated on its truthiness, so it simply stays hidden until a URL is present.
+  videoUrl: string | null;
   isLocalStream: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// PATCH /events/:id/result body (mirrors updateResultSchema in events.service.ts).
+// Every field is optional but the backend requires at least one (empty body ->
+// 400); scores are non-negative ints and videoUrl must be an http(s) URL. Send
+// only the fields the rep actually filled in.
+export interface UpdateEventResultInput {
+  homeScore?: number;
+  awayScore?: number;
+  videoUrl?: string;
+  status?: EventListItem['status'];
+}
+
+// The bare events row returned by PATCH /events/:id/result (`.returning()`) --
+// NOT the joined EventListItem, so it carries no homeTeam/awayTeam names. Only
+// the result fields the UI reads back after a save are typed here.
+export interface EventResult {
+  id: string;
+  status: EventListItem['status'];
+  homeScore: number | null;
+  awayScore: number | null;
+  videoUrl: string | null;
 }
 
 // Mirrors a content_items row (content.service.ts / schema.ts). Returned by
@@ -339,6 +365,15 @@ export const updateAssignment = (
   id: string,
   input: UpdateAssignmentInput,
 ) => authPatch<AssignmentRow>(`/assignments/${id}`, token, input);
+
+// Report a game result. The assigned rep (or an admin) may call it; a non-owning
+// rep gets 403 and an empty/invalid body gets 400 -- both surface as
+// "<status> <message>". Returns the updated event row.
+export const updateEventResult = (
+  token: string,
+  id: string,
+  input: UpdateEventResultInput,
+) => authPatch<EventResult>(`/events/${id}/result`, token, input);
 
 export const createUser = (token: string, input: CreateUserInput) =>
   authPost<User>('/users', token, input);
