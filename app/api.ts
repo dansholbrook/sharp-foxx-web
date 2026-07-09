@@ -96,6 +96,8 @@ export interface MyAssignment {
     scheduledAt: string;
     homeTeamId: string | null;
     awayTeamId: string | null;
+    homeTeam: string | null;
+    awayTeam: string | null;
   };
 }
 

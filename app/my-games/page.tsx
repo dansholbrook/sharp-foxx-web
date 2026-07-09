@@ -45,12 +45,13 @@ function formatWhen(iso: string): string {
       });
 }
 
-// The API returns team UUIDs only (no name join), so show ids when present and
-// an honest dash when either side is missing.
-function teams(a: MyAssignment): string {
-  const { homeTeamId, awayTeamId } = a.event;
-  if (!homeTeamId && !awayTeamId) return '—';
-  return `${homeTeamId ?? '—'} vs ${awayTeamId ?? '—'}`;
+// The matchup as readable team names ("Home vs Away"), or null when either side
+// is missing a name -- in which case the card falls back to the sport headline
+// and shows no matchup line at all (no raw UUIDs).
+function matchup(a: MyAssignment): string | null {
+  const { homeTeam, awayTeam } = a.event;
+  if (!homeTeam || !awayTeam) return null;
+  return `${homeTeam} vs ${awayTeam}`;
 }
 
 // One editable game row. Owns its own saving/error/notes-draft state so a save
@@ -217,18 +218,17 @@ function GameRow({
 
   return (
     <article className="card game">
-      {/* ---- Header: sport headline + meta on the left, pills on the right ---- */}
+      {/* ---- Header: matchup headline (sport fallback) + meta on the left, pills on the right ---- */}
       <div className="game-head">
         <div>
           <span className="game-kicker">{game.event.sport}</span>
-          <h3 className="game-title">{game.event.sport}</h3>
+          <h3 className="game-title">{matchup(game) ?? game.event.sport}</h3>
           <div className="game-meta">
             {game.event.venue && (
               <span className="game-meta__seg">{game.event.venue}</span>
             )}
             <span className="game-meta__seg">{formatWhen(game.event.scheduledAt)}</span>
           </div>
-          <span className="mono game-teams">{teams(game)}</span>
         </div>
         <div className="game-pills">
           <span className="pill">{game.event.status}</span>
