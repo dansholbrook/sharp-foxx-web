@@ -76,10 +76,10 @@ export default function DashboardPage() {
   if (!token) return null;
 
   return (
-    <main>
+    <main className="feed-home">
       <div className="header-row">
         <div>
-          <h1>Reports</h1>
+          <span className="wordmark">Sharp Foxx</span>
           <span className="muted">
             Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
@@ -87,18 +87,27 @@ export default function DashboardPage() {
         </div>
         <div className="nav-links">
           <Link href="/feed" className="link-btn">
-            Feed →
+            Feed
           </Link>
           <Link href="/my-games" className="link-btn">
-            My games →
+            My games
           </Link>
           <Link href="/field-reps" className="link-btn">
-            Field reps →
+            Field reps
           </Link>
           <button className="link-btn" onClick={onLogout}>
             Log out
           </button>
         </div>
+      </div>
+
+      <div className="masthead">
+        <span className="masthead-kicker">Revenue &amp; commissions</span>
+        <h1 className="masthead-title">Reports</h1>
+        <p className="masthead-standfirst">
+          Commissions earned per field rep and revenue booked by stream, pulled
+          live from the Sharp Foxx ledger.
+        </p>
       </div>
 
       {loading && <div className="card muted">Loading reports…</div>}
@@ -107,10 +116,18 @@ export default function DashboardPage() {
       {!loading && !error && (
         <>
           {/* ---- Commissions by rep ---- */}
-          <section className="card">
+          <section className="card game">
+            <span className="game-kicker">By field rep</span>
             <h2>Commissions by rep</h2>
             {commissions && commissions.perRep.length > 0 ? (
-              <table>
+              <>
+                <div className="report-total">
+                  <span className="report-total__value">
+                    {usd(commissions.grandTotal)}
+                  </span>
+                  <span className="report-total__label">Total commissions</span>
+                </div>
+                <table className="report-table">
                 <thead>
                   <tr>
                     <th>Rep</th>
@@ -119,7 +136,7 @@ export default function DashboardPage() {
                         {SOURCE_LABELS[k]}
                       </th>
                     ))}
-                    <th className="num">Total</th>
+                    <th className="num total">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -135,7 +152,7 @@ export default function DashboardPage() {
                           {usd(rep.bySource[k] ?? '0')}
                         </td>
                       ))}
-                      <td className="num">{usd(rep.total)}</td>
+                      <td className="num total">{usd(rep.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -145,41 +162,51 @@ export default function DashboardPage() {
                     {SOURCE_KEYS.map((k) => (
                       <td key={k} />
                     ))}
-                    <td className="num">{usd(commissions.grandTotal)}</td>
+                    <td className="num total">{usd(commissions.grandTotal)}</td>
                   </tr>
                 </tfoot>
               </table>
+              </>
             ) : (
               <p className="muted">No commissions recorded.</p>
             )}
           </section>
 
           {/* ---- Revenue by stream ---- */}
-          <section className="card">
+          <section className="card game">
+            <span className="game-kicker">By stream</span>
             <h2>Revenue by stream</h2>
             {revenue && (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Stream</th>
-                    <th className="num">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(revenue.byStream).map(([key, val]) => (
-                    <tr key={key}>
-                      <td>{STREAM_LABELS[key] ?? key}</td>
-                      <td className="num">{usd(val)}</td>
+              <>
+                <div className="report-total">
+                  <span className="report-total__value">
+                    {usd(revenue.total)}
+                  </span>
+                  <span className="report-total__label">Total revenue</span>
+                </div>
+                <table className="report-table">
+                  <thead>
+                    <tr>
+                      <th>Stream</th>
+                      <th className="num total">Revenue</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td>Total</td>
-                    <td className="num">{usd(revenue.total)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </thead>
+                  <tbody>
+                    {Object.entries(revenue.byStream).map(([key, val]) => (
+                      <tr key={key}>
+                        <td>{STREAM_LABELS[key] ?? key}</td>
+                        <td className="num total">{usd(val)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>Total</td>
+                      <td className="num total">{usd(revenue.total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </>
             )}
           </section>
         </>

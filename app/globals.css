@@ -1162,6 +1162,60 @@ tfoot td {
   font-size: 0.92rem;
 }
 
+/* =================================================================
+   Reports dashboard — premium stat + editorial tables
+   Each report is a .card.game (gold top hairline) leading with a large
+   serif headline number, then the existing editorial table. Scoped via
+   .report-* / .report-table; built on the shared palette tokens.
+   ================================================================= */
+
+/* ---- Headline stat: the report's total in large serif gold ---- */
+.report-total {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 2px 0 24px;
+}
+
+.report-total__value {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.9rem, 4.5vw, 2.5rem);
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.report-total__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+/* ---- Table polish: subtle row hover + emphasized totals column ---- */
+.report-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.report-table tbody tr:hover td {
+  background: rgba(201, 163, 78, 0.045);
+}
+
+/* The Total/Revenue column reads a touch brighter and heavier than the
+   per-source breakdown beside it — the number that matters most. */
+.report-table td.total {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Grand-total footer keeps the shared gold treatment, just larger. */
+.report-table tfoot td {
+  font-size: 0.95rem;
+}
+
 /* ---- Responsive: tighten the feed on narrow screens ---- */
 @media (max-width: 560px) {
   .story {
