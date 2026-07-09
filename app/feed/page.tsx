@@ -429,8 +429,12 @@ export default function FeedPage() {
     (async () => {
       try {
         // Both rows load together; if only one fails we still show the other.
+        // Fetch every event (not just scheduled) so finished games -- the ones
+        // that carry a replay videoUrl -- reach the "Recent Results" row and
+        // render as clickable video cards. Filtering to scheduled here would
+        // strip out every game with a video (they're all status 'final').
         const [ev, art] = await Promise.all([
-          getEvents(token, 'scheduled'),
+          getEvents(token),
           getPublishedContent(token),
         ]);
         if (!cancelled) {
@@ -471,6 +475,10 @@ export default function FeedPage() {
   const visibleEvents = (events ?? []).filter(
     (ev) => sport === ALL || ev.sport === sport,
   );
+  // Upcoming = anything not yet finished; Results = finished games, which are
+  // the ones that carry a replay videoUrl and open the video modal on click.
+  const upcomingEvents = visibleEvents.filter((ev) => ev.status !== 'final');
+  const resultEvents = visibleEvents.filter((ev) => ev.status === 'final');
   const visibleArticles = (articles ?? []).filter(
     (item) => sport === ALL || item.eventSport === sport,
   );
@@ -530,8 +538,8 @@ export default function FeedPage() {
       {!loading && (
         <>
           <Row title="Upcoming Games">
-            {visibleEvents.length > 0 ? (
-              visibleEvents.map((ev) => (
+            {upcomingEvents.length > 0 ? (
+              upcomingEvents.map((ev) => (
                 <GameCard
                   key={ev.id}
                   event={ev}
@@ -546,6 +554,18 @@ export default function FeedPage() {
               </div>
             )}
           </Row>
+
+          {resultEvents.length > 0 && (
+            <Row title="Recent Results">
+              {resultEvents.map((ev) => (
+                <GameCard
+                  key={ev.id}
+                  event={ev}
+                  onOpenVideo={() => setActiveVideo(ev)}
+                />
+              ))}
+            </Row>
+          )}
 
           <Row title="Latest Articles">
             {visibleArticles.length > 0 ? (
