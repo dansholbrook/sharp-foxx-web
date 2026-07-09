@@ -216,16 +216,59 @@ function GameRow({
   }
 
   return (
-    <>
-      <tr>
-        <td style={{ textTransform: 'capitalize' }}>{game.event.sport}</td>
-        <td>{game.event.venue ?? '—'}</td>
-        <td>{formatWhen(game.event.scheduledAt)}</td>
-        <td className="mono">{teams(game)}</td>
-        <td>
+    <article className="card game">
+      {/* ---- Header: sport headline + meta on the left, pills on the right ---- */}
+      <div className="game-head">
+        <div>
+          <span className="game-kicker">{game.event.sport}</span>
+          <h3 className="game-title">{game.event.sport}</h3>
+          <div className="game-meta">
+            {game.event.venue && (
+              <span className="game-meta__seg">{game.event.venue}</span>
+            )}
+            <span className="game-meta__seg">{formatWhen(game.event.scheduledAt)}</span>
+          </div>
+          <span className="mono game-teams">{teams(game)}</span>
+        </div>
+        <div className="game-pills">
           <span className="pill">{game.event.status}</span>
-        </td>
-        <td>
+          <span className="pill">{SOURCE_LABELS[game.source] ?? game.source}</span>
+        </div>
+      </div>
+
+      {/* ---- Controls: notes, status, generate, article panel ---- */}
+      <div className="game-controls">
+        <div>
+          <label className="game-field-label">Notes</label>
+          <div className="game-notes-row">
+            <input
+              value={notesDraft}
+              placeholder="Add notes…"
+              disabled={saving}
+              onChange={(e) => setNotesDraft(e.target.value)}
+            />
+            <button
+              className="btn-inline"
+              disabled={saving || !notesDirty}
+              onClick={() => save({ notes: notesDraft })}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {!loadingArticle && !draft && (
+              <button
+                className="btn-inline"
+                disabled={generating || !canGenerate}
+                onClick={generate}
+              >
+                {generating ? 'Generating…' : 'Generate article'}
+              </button>
+            )}
+          </div>
+          {error && <div className="error">{error}</div>}
+        </div>
+
+        <div className="game-status">
+          <label className="game-field-label">Assignment status</label>
           <select
             value={game.status}
             disabled={saving}
@@ -237,89 +280,49 @@ function GameRow({
               </option>
             ))}
           </select>
-        </td>
-        <td>
-          <span className="pill">{SOURCE_LABELS[game.source] ?? game.source}</span>
-        </td>
-        <td>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              value={notesDraft}
-              placeholder="Add notes…"
-              disabled={saving}
-              onChange={(e) => setNotesDraft(e.target.value)}
-            />
-            <button
-              style={{ marginTop: 0, padding: '8px 14px' }}
-              disabled={saving || !notesDirty}
-              onClick={() => save({ notes: notesDraft })}
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            {!loadingArticle && !draft && (
-              <button
-                style={{ marginTop: 0, padding: '8px 14px' }}
-                disabled={generating || !canGenerate}
-                onClick={generate}
-              >
-                {generating ? 'Generating…' : 'Generate article'}
-              </button>
-            )}
-          </div>
-          {error && (
-            <div className="error" style={{ marginTop: 8 }}>
-              {error}
-            </div>
-          )}
-        </td>
-      </tr>
-      {(generating || genError || draft) && (
-        <tr>
-          <td colSpan={8}>
+        </div>
+
+        {(generating || genError || draft) && (
+          <div>
             {generating && (
-              <p className="muted">Generating article… (this can take a few seconds)</p>
+              <p className="game-generating">
+                Generating article… (this can take a few seconds)
+              </p>
             )}
             {genError && <div className="error">{genError}</div>}
             {draft && (
-              <div className="card" style={{ marginTop: 0 }}>
-                <span className="muted">
-                  Article · <span className="pill">{draft.status}</span>
-                </span>
+              <div className="article-panel">
+                <div className="article-panel__head">
+                  <span className="article-panel__label">Article</span>
+                  <span className="pill">{draft.status}</span>
+                </div>
 
-                <label className="muted" style={{ display: 'block', marginTop: 12 }}>
-                  Title
-                </label>
+                <label style={{ marginTop: 16 }}>Title</label>
                 <input
                   value={titleDraft}
                   disabled={editSaving}
                   onChange={(e) => setTitleDraft(e.target.value)}
-                  style={{ width: '100%' }}
                 />
 
-                <label className="muted" style={{ display: 'block', marginTop: 12 }}>
-                  Body (HTML)
-                </label>
+                <label style={{ marginTop: 16 }}>Body (HTML)</label>
                 <textarea
                   value={bodyDraft}
                   disabled={editSaving}
                   onChange={(e) => setBodyDraft(e.target.value)}
                   rows={10}
                   className="mono"
-                  style={{ width: '100%' }}
                 />
 
-                <div
-                  style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}
-                >
+                <div className="article-actions">
                   <button
-                    style={{ marginTop: 0, padding: '8px 14px' }}
+                    className="btn-inline"
                     disabled={editSaving || !draftDirty}
                     onClick={saveDraft}
                   >
                     {editSaving ? 'Saving…' : 'Save changes'}
                   </button>
                   <button
-                    style={{ marginTop: 0, padding: '8px 14px' }}
+                    className="btn-inline"
                     disabled={publishing}
                     onClick={togglePublish}
                   >
@@ -333,22 +336,14 @@ function GameRow({
                   </button>
                 </div>
 
-                {editError && (
-                  <div className="error" style={{ marginTop: 8 }}>
-                    {editError}
-                  </div>
-                )}
-                {publishError && (
-                  <div className="error" style={{ marginTop: 8 }}>
-                    {publishError}
-                  </div>
-                )}
+                {editError && <div className="error">{editError}</div>}
+                {publishError && <div className="error">{publishError}</div>}
               </div>
             )}
-          </td>
-        </tr>
-      )}
-    </>
+          </div>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -409,16 +404,19 @@ export default function MyGamesPage() {
   if (!token) return null;
 
   return (
-    <main>
+    <main className="feed-home">
       <div className="header-row">
         <div>
-          <h1>My games</h1>
+          <span className="wordmark">Sharp Foxx</span>
           <span className="muted">
             Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
         <div className="nav-links">
+          <Link href="/feed" className="link-btn">
+            Feed
+          </Link>
           <Link href="/dashboard" className="link-btn">
             ← Reports
           </Link>
@@ -428,40 +426,41 @@ export default function MyGamesPage() {
         </div>
       </div>
 
-      <section className="card">
-        <h2>Assigned games</h2>
-        {loading && <p className="muted">Loading games…</p>}
-        {error && <div className="error">{error}</div>}
-        {!loading && !error && games && games.length > 0 ? (
-          <table>
-            <thead>
-              <tr>
-                <th>Sport</th>
-                <th>Venue</th>
-                <th>Scheduled</th>
-                <th>Teams</th>
-                <th>Event</th>
-                <th>Assignment</th>
-                <th>Source</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {games.map((g) => (
-                <GameRow
-                  key={g.id}
-                  game={g}
-                  token={token}
-                  authorId={user?.id ?? ''}
-                  onUpdated={onRowUpdated}
-                />
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          !loading && !error && <p className="muted">No games assigned yet.</p>
-        )}
-      </section>
+      <div className="masthead">
+        <span className="masthead-kicker">Your assignments</span>
+        <h1 className="masthead-title">My Games</h1>
+        <p className="masthead-standfirst">
+          Games assigned to you or self-claimed. Add notes, advance the
+          assignment status, and draft or publish a recap for each.
+        </p>
+      </div>
+
+      {loading && <div className="card muted">Loading games…</div>}
+      {error && <div className="error">{error}</div>}
+
+      {!loading && !error && games && games.length > 0 ? (
+        <div className="games-list">
+          {games.map((g) => (
+            <GameRow
+              key={g.id}
+              game={g}
+              token={token}
+              authorId={user?.id ?? ''}
+              onUpdated={onRowUpdated}
+            />
+          ))}
+        </div>
+      ) : (
+        !loading && !error && (
+          <div className="results-empty">
+            <p className="results-empty__title">No games assigned yet</p>
+            <p className="results-empty__hint">
+              When a manager assigns you a game — or you claim one — it will
+              show up here.
+            </p>
+          </div>
+        )
+      )}
     </main>
   );
 }

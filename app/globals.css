@@ -984,6 +984,184 @@ tfoot td {
   color: var(--muted);
 }
 
+/* =================================================================
+   My Games — assignment cards
+   Each assigned game is a card (not a table row): a serif headline, meta
+   line, status/source pills, then spacious controls (notes, status,
+   generate, and the article edit/publish panel). Scoped via .games-list;
+   built entirely on the shared palette tokens.
+   ================================================================= */
+
+.games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* ---- Game card: reuses .card depth, adds a gold top hairline like .story ---- */
+.game {
+  position: relative;
+  overflow: hidden;
+}
+
+.game::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 26px;
+  right: 26px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    rgba(201, 163, 78, 0) 72%
+  );
+  border-radius: 2px;
+  opacity: 0.55;
+}
+
+/* ---- Card header: title block on the left, pills on the right ---- */
+.game-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.game-kicker {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin-bottom: 10px;
+}
+
+.game-title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.35rem, 3vw, 1.7rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin: 0 0 10px;
+  text-transform: capitalize;
+}
+
+/* Meta line: venue · scheduled date, wide-tracked small caps (feed style) */
+.game-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
+}
+
+.game-meta__seg:not(:last-child)::after {
+  content: '·';
+  margin: 0 9px;
+  color: var(--border-strong);
+}
+
+/* Team UUIDs — the API returns ids only, kept honest on a mono line */
+.game-teams {
+  display: block;
+}
+
+.game-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---- Controls: stacked fields with generous rhythm ---- */
+.game-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.game-field-label {
+  /* uses the global uppercase <label> treatment; just no bottom margin
+     collapse when it sits above a flex row */
+  margin-bottom: 10px;
+}
+
+/* Notes row: field grows, buttons sit inline at the field's height */
+.game-notes-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.game-notes-row input {
+  flex: 1 1 260px;
+}
+
+/* Status select stays compact rather than stretching full width */
+.game-status select {
+  max-width: 240px;
+}
+
+/* Inline buttons in control rows drop the default top margin + shrink */
+.btn-inline {
+  margin-top: 0;
+  padding: 11px 18px;
+  flex-shrink: 0;
+}
+
+/* ---- Article panel: a raised sub-panel within the game card ---- */
+.article-panel {
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 22px 24px;
+}
+
+.article-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.article-panel__label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.article-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* Generating notice sits in its own light panel while the AI works */
+.game-generating {
+  padding: 16px 18px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 /* ---- Responsive: tighten the feed on narrow screens ---- */
 @media (max-width: 560px) {
   .story {
