@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useMemo, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
@@ -43,6 +43,9 @@ function thumbClass(sport: string | null): string {
   const key = sport && SPORTS.has(sport) ? sport : 'other';
   return `thumb thumb--${key}`;
 }
+
+// The special "all sports" sentinel for the sport filter chips (mirrors /search).
+const ALL = 'all';
 
 // ---- Search bar: renders prominently; submit navigates to /search (built
 // later). The query is passed along so that page can pick it up. ----
@@ -258,6 +261,9 @@ export default function FeedPage() {
   // Which article is open in the reader (null = closed).
   const [active, setActive] = useState<FeedItem | null>(null);
 
+  // Active sport filter (ALL = show everything). Client-side over fetched data.
+  const [sport, setSport] = useState<string>(ALL);
+
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
     if (!token) {
@@ -296,6 +302,26 @@ export default function FeedPage() {
     router.replace('/');
   }
 
+  // Sports present across BOTH rows — the union drives which chips to show.
+  // Games carry a non-null sport enum; articles carry a nullable eventSport.
+  // Sorted for a stable chip order.
+  const availableSports = useMemo(() => {
+    const set = new Set<string>();
+    for (const ev of events ?? []) set.add(ev.sport);
+    for (const item of articles ?? []) {
+      if (item.eventSport) set.add(item.eventSport);
+    }
+    return Array.from(set).sort();
+  }, [events, articles]);
+
+  // Narrow each row by the selected sport (ALL passes everything through).
+  const visibleEvents = (events ?? []).filter(
+    (ev) => sport === ALL || ev.sport === sport,
+  );
+  const visibleArticles = (articles ?? []).filter(
+    (item) => sport === ALL || item.eventSport === sport,
+  );
+
   if (!token) return null;
 
   return (
@@ -321,22 +347,50 @@ export default function FeedPage() {
 
       <SearchBar />
 
+      {!loading && !error && availableSports.length > 0 && (
+        <div className="filter-row" role="group" aria-label="Filter by sport">
+          <button
+            type="button"
+            className={`chip${sport === ALL ? ' chip--on' : ''}`}
+            aria-pressed={sport === ALL}
+            onClick={() => setSport(ALL)}
+          >
+            All sports
+          </button>
+          {availableSports.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`chip${sport === s ? ' chip--on' : ''}`}
+              aria-pressed={sport === s}
+              onClick={() => setSport(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading && <div className="card muted">Loading feed…</div>}
       {error && <div className="error">{error}</div>}
 
       {!loading && (
         <>
           <Row title="Upcoming Games">
-            {events && events.length > 0 ? (
-              events.map((ev) => <GameCard key={ev.id} event={ev} />)
+            {visibleEvents.length > 0 ? (
+              visibleEvents.map((ev) => <GameCard key={ev.id} event={ev} />)
             ) : (
-              <div className="row-empty">No upcoming games</div>
+              <div className="row-empty">
+                {sport === ALL
+                  ? 'No upcoming games'
+                  : `No upcoming games for ${sport}`}
+              </div>
             )}
           </Row>
 
           <Row title="Latest Articles">
-            {articles && articles.length > 0 ? (
-              articles.map((item) => (
+            {visibleArticles.length > 0 ? (
+              visibleArticles.map((item) => (
                 <ArticleThumb
                   key={item.id}
                   item={item}
@@ -344,7 +398,11 @@ export default function FeedPage() {
                 />
               ))
             ) : (
-              <div className="row-empty">No published articles yet</div>
+              <div className="row-empty">
+                {sport === ALL
+                  ? 'No published articles yet'
+                  : `No articles for ${sport}`}
+              </div>
             )}
           </Row>
 

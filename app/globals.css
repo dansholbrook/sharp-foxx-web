@@ -895,6 +895,95 @@ tfoot td {
   margin-bottom: 4px;
 }
 
+/* =================================================================
+   Search results — reuses the feed search bar + thumbnail cards, but
+   lays games out in a grid (not a carousel) and adds filter chips.
+   Scoped via .feed-home on /search; all built on the shared tokens.
+   ================================================================= */
+
+/* ---- Filter row: toggle chips (sport today; room for status/date) ---- */
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -20px 0 26px;
+}
+
+/* A chip is a resettable pill button — override the global gold button. */
+.chip {
+  margin: 0;
+  padding: 6px 15px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--panel);
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+/* Selected chip picks up the gold accent treatment (like .pill). */
+.chip--on,
+.chip--on:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Result count line ---- */
+.result-count {
+  margin: 0 0 22px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.result-count__q {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---- Results grid: responsive auto-fill of the shared .tcard ---- */
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 24px 18px;
+}
+
+/* In a grid the card fills its column rather than the carousel's fixed width. */
+.results-grid .tcard {
+  flex: initial;
+  width: auto;
+}
+
+/* ---- Empty state ---- */
+.results-empty {
+  padding: 44px 0 8px;
+}
+
+.results-empty__title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.results-empty__hint {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
 /* ---- Responsive: tighten the feed on narrow screens ---- */
 @media (max-width: 560px) {
   .story {
