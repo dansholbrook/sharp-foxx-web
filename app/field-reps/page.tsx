@@ -103,18 +103,24 @@ export default function FieldRepsPage() {
   if (!token) return null;
 
   return (
-    <main>
+    <main className="feed-home">
       <div className="header-row">
         <div>
-          <h1>Field reps</h1>
+          <span className="wordmark">Sharp Foxx</span>
           <span className="muted">
             Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
         <div className="nav-links">
+          <Link href="/feed" className="link-btn">
+            Feed
+          </Link>
+          <Link href="/my-games" className="link-btn">
+            My games
+          </Link>
           <Link href="/dashboard" className="link-btn">
-            ← Reports
+            Reports
           </Link>
           <button className="link-btn" onClick={onLogout}>
             Log out
@@ -122,13 +128,23 @@ export default function FieldRepsPage() {
         </div>
       </div>
 
+      <div className="masthead">
+        <span className="masthead-kicker">Team &amp; roster</span>
+        <h1 className="masthead-title">Field Reps</h1>
+        <p className="masthead-standfirst">
+          Add field reps and regional managers, and browse the current roster
+          with their kind, status, cohort, and commission rate.
+        </p>
+      </div>
+
       {/* ---- Create a field rep ---- */}
-      <section className="card">
+      <section className="card game">
+        <span className="game-kicker">Onboard</span>
         <h2>Add a field rep</h2>
-        <p className="muted" style={{ marginTop: -4, marginBottom: 16, fontSize: '0.85rem' }}>
+        <p className="muted" style={{ marginTop: -6, marginBottom: 22, fontSize: '0.9rem' }}>
           Creates a new user, then a rep linked to it.
         </p>
-        <form onSubmit={onCreate}>
+        <form onSubmit={onCreate} className="rep-form">
           <div className="field">
             <label htmlFor="displayName">Display name</label>
             <input
@@ -173,7 +189,7 @@ export default function FieldRepsPage() {
               autoComplete="off"
             />
           </div>
-          <div className="field">
+          <div className="field field--wide">
             <label htmlFor="cohortLabel">Cohort label (optional)</label>
             <input
               id="cohortLabel"
@@ -183,21 +199,24 @@ export default function FieldRepsPage() {
               autoComplete="off"
             />
           </div>
-          <button type="submit" disabled={busy || !displayName.trim() || !email.trim()}>
-            {busy ? 'Creating…' : 'Create field rep'}
-          </button>
-          {formError && <div className="error">{formError}</div>}
-          {notice && <div className="success">{notice}</div>}
+          <div className="rep-form-actions">
+            <button type="submit" disabled={busy || !displayName.trim() || !email.trim()}>
+              {busy ? 'Creating…' : 'Create field rep'}
+            </button>
+          </div>
+          {formError && <div className="error rep-form-msg">{formError}</div>}
+          {notice && <div className="success rep-form-msg">{notice}</div>}
         </form>
       </section>
 
       {/* ---- Existing field reps ---- */}
-      <section className="card">
+      <section className="card game">
+        <span className="game-kicker">Roster</span>
         <h2>All field reps</h2>
         {loading && <p className="muted">Loading field reps…</p>}
         {error && <div className="error">{error}</div>}
         {!loading && !error && reps && reps.length > 0 ? (
-          <table>
+          <table className="report-table rep-table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -224,7 +243,7 @@ export default function FieldRepsPage() {
                   </td>
                   <td>
                     {rep.kind === 'regional_manager' ? (
-                      <Link href={`/managers/${rep.id}`} className="link-btn">
+                      <Link href={`/managers/${rep.id}`} className="link-btn rep-roster-link">
                         View roster →
                       </Link>
                     ) : (
@@ -236,7 +255,15 @@ export default function FieldRepsPage() {
             </tbody>
           </table>
         ) : (
-          !loading && !error && <p className="muted">No field reps yet.</p>
+          !loading && !error && (
+            <div className="results-empty">
+              <p className="results-empty__title">No field reps yet</p>
+              <p className="results-empty__hint">
+                Add your first field rep or regional manager with the form
+                above, and they&apos;ll appear here.
+              </p>
+            </div>
+          )
         )}
       </section>
     </main>

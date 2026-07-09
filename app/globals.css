@@ -1216,6 +1216,58 @@ tfoot td {
   font-size: 0.95rem;
 }
 
+/* =================================================================
+   Field reps — create-form grid + roster table
+   The create card lays its labeled fields out in a two-column grid (a
+   plain stacked <form> otherwise); the roster reuses .report-table and
+   gives "View roster" the gold action-link treatment. Scoped via
+   .rep-form / .rep-table; built on the shared palette tokens.
+   ================================================================= */
+
+.rep-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 20px;
+}
+
+/* Fields are laid out by the grid gap, so drop their own stacking margin. */
+.rep-form .field {
+  margin-bottom: 0;
+}
+
+/* Full-width rows spanning both columns (cohort, actions, messages). */
+.rep-form .field--wide,
+.rep-form-actions,
+.rep-form-msg {
+  grid-column: 1 / -1;
+}
+
+/* The submit button drops its default top margin inside the grid. */
+.rep-form-actions button {
+  margin-top: 4px;
+}
+
+/* Inline form messages already sit in their own grid row — no top margin. */
+.rep-form-msg {
+  margin-top: 0;
+}
+
+/* Roster: "View roster" reads as a gold action rather than a muted link. */
+.rep-roster-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.rep-roster-link:hover {
+  color: var(--accent-hover);
+}
+
+@media (max-width: 560px) {
+  .rep-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- Responsive: tighten the feed on narrow screens ---- */
 @media (max-width: 560px) {
   .story {
