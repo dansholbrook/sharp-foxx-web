@@ -837,7 +837,7 @@ tfoot td {
   background: rgba(19, 17, 13, 0.5);
 }
 
-/* ---- Article reader: modal overlay reusing .story-*/.article-body ---- */
+/* ---- Article reader: modal overlay reusing .story-* and .article-body ---- */
 .reader-overlay {
   position: fixed;
   inset: 0;
