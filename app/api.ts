@@ -135,6 +135,30 @@ export interface UpdateAssignmentInput {
   notes?: string;
 }
 
+// The joined event listing returned by GET /events (events.service.ts `list`).
+// Keeps every event column but adds homeTeam/awayTeam resolved via two aliased
+// joins to `teams`, so those names are nullable (LEFT join / unset FK). sport
+// and status are the backend enums; scheduledAt is a timestamptz ISO string.
+// Ordered soonest-first by the backend for the Upcoming Games carousel.
+export interface EventListItem {
+  id: string;
+  externalRef: string | null;
+  sport: 'basketball' | 'football' | 'baseball' | 'hockey' | 'soccer' | 'other';
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+  homeTeam: string | null;
+  awayTeam: string | null;
+  marketId: string | null;
+  venue: string | null;
+  status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
+  scheduledAt: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  isLocalStream: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Mirrors a content_items row (content.service.ts / schema.ts). Returned by
 // POST /content/generate, which AI-drafts a recap and stores it as a DRAFT
 // attached to the event -- it never auto-publishes, so status comes back
@@ -293,6 +317,14 @@ export const getMyAssignments = (token: string) =>
 // the backend). Read-only, so no author gating -- any authenticated user can read.
 export const getPublishedContent = (token: string) =>
   authGet<FeedItem[]>('/content?status=published', token);
+
+// Events for the browsable feed, e.g. GET /events?status=scheduled (Upcoming
+// Games). Any authenticated user can list; backend orders soonest-first.
+export const getEvents = (token: string, status?: string) =>
+  authGet<EventListItem[]>(
+    `/events${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+    token,
+  );
 
 // Any content already attached to a game, so a rep can find/edit an existing
 // article on load (not just right after generating). Returns the joined listing

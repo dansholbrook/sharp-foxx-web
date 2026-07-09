@@ -301,3 +301,629 @@ tfoot td {
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
+
+/* =================================================================
+   Feed page — editorial masthead + story cards
+   Scoped to /feed; reuses the shared palette tokens above.
+   ================================================================= */
+
+/* Small serif wordmark that replaces the plain "Feed" h1 in the utility bar */
+.wordmark {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+/* ---- Masthead: the content-feed banner ---- */
+.masthead {
+  margin-bottom: 40px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.masthead-kicker {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  margin-bottom: 14px;
+}
+
+.masthead-title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2.2rem, 6vw, 3.1rem);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  color: var(--accent);
+  margin: 0 0 12px;
+}
+
+.masthead-standfirst {
+  max-width: 54ch;
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* ---- Story list: generous rhythm between cards ---- */
+.story-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* ---- Story card: an editorial block ---- */
+.story {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 30px 32px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28);
+  transition: border-color 0.18s ease, transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+/* Gold hairline along the top edge — a subtle masthead-rule per story */
+.story::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 32px;
+  right: 32px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    rgba(201, 163, 78, 0) 72%
+  );
+  border-radius: 2px;
+  opacity: 0.55;
+  transition: opacity 0.18s ease;
+}
+
+.story:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 14px 34px rgba(0, 0, 0, 0.36);
+}
+
+.story:hover::before {
+  opacity: 1;
+}
+
+.story-kicker {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin-bottom: 12px;
+}
+
+.story-title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.5rem, 3.4vw, 1.95rem);
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin: 0 0 14px;
+}
+
+/* Metadata line: author · sport · matchup · date, wide-tracked small caps */
+.story-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.story-meta__seg:not(:last-child)::after {
+  content: '·';
+  margin: 0 9px;
+  color: var(--border-strong);
+}
+
+/* First segment (author) gets a touch of warmth to anchor the byline */
+.story-meta__seg:first-child {
+  color: var(--text);
+}
+
+/* ---- Read/hide toggle: gold-tracked affordance ---- */
+.story-toggle {
+  margin-top: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.story-toggle:hover:not(:disabled) {
+  background: none;
+  border: none;
+  color: var(--accent-hover);
+}
+
+/* ---- Expanded article body: comfortable reading typography ----
+   Rendered from a trusted HTML string via dangerouslySetInnerHTML, so its
+   child elements are styled here with real selectors rather than inline. */
+.article-body {
+  max-width: 66ch;
+  margin: 22px 0 4px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.article-body > :first-child {
+  margin-top: 0;
+}
+
+.article-body p {
+  margin: 0 0 1.15em;
+}
+
+.article-body h2,
+.article-body h3,
+.article-body h4 {
+  font-family: var(--font-serif);
+  color: var(--text);
+  line-height: 1.25;
+  margin: 1.7em 0 0.6em;
+}
+
+.article-body h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.article-body h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.article-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: rgba(201, 163, 78, 0.4);
+  text-underline-offset: 2px;
+}
+
+.article-body a:hover {
+  text-decoration-color: var(--accent-hover);
+}
+
+.article-body ul,
+.article-body ol {
+  margin: 0 0 1.15em;
+  padding-left: 1.4em;
+}
+
+.article-body li {
+  margin-bottom: 0.4em;
+}
+
+.article-body blockquote {
+  margin: 1.4em 0;
+  padding: 4px 0 4px 20px;
+  border-left: 3px solid var(--accent-dim);
+  color: var(--muted);
+  font-style: italic;
+}
+
+.article-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.article-body strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* =================================================================
+   Feed home — YouTube-style browsable homepage
+   Search bar + horizontally scrolling rows of thumbnail cards.
+   Scoped to /feed via .feed-home; reuses the shared palette tokens.
+   ================================================================= */
+
+/* Wider than the 920px reading column — this is a browse surface. */
+.feed-home {
+  max-width: 1200px;
+}
+
+/* ---- Search bar: prominent rounded field + gold submit pill ---- */
+.feed-search {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  margin: 6px 0 44px;
+}
+
+.feed-search__icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.feed-search__input {
+  flex: 1;
+  padding: 15px 18px 15px 46px;
+  font-size: 1.02rem;
+  background: var(--panel);
+  border-radius: 999px;
+}
+
+.feed-search__btn {
+  margin: 0;
+  padding: 0 28px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+/* ---- Row: title + horizontal scroll track ---- */
+.row {
+  margin-bottom: 42px;
+}
+
+.row-title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.4rem;
+  color: var(--accent);
+  margin: 0 0 16px;
+}
+
+.row-track {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.row-track::-webkit-scrollbar {
+  height: 8px;
+}
+
+.row-track::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+.row-track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.row-empty {
+  color: var(--muted);
+  font-size: 0.92rem;
+  padding: 26px 2px;
+}
+
+/* ---- Thumbnail card: fixed-width, snaps as you scroll ---- */
+.tcard {
+  flex: 0 0 280px;
+  width: 280px;
+  scroll-snap-align: start;
+}
+
+/* Article cards wrap the whole card in a button — reset the global button
+   styling so it reads as a plain clickable card. */
+.tcard-open {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  letter-spacing: normal;
+  text-transform: none;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.tcard-open:hover:not(:disabled) {
+  background: none;
+}
+
+/* The thumbnail block IS the artwork — a branded gradient, 16:9 like video. */
+.thumb {
+  position: relative;
+  aspect-ratio: 1.7778;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: transform 0.18s ease, box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+/* Gold sheen ties every sport gradient back to the brand accent. */
+.thumb::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 90% at 20% 0%,
+    rgba(201, 163, 78, 0.18),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+
+.tcard:hover .thumb,
+.tcard-open:hover .thumb {
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Per-sport gradients — dark, rich, each its own hue. */
+.thumb--basketball {
+  background: linear-gradient(145deg, #3a2410, #7a4415 58%, #b8721f);
+}
+.thumb--football {
+  background: linear-gradient(145deg, #14261a, #1f4a2e 58%, #2f6b3f);
+}
+.thumb--baseball {
+  background: linear-gradient(145deg, #131f2e, #1c3550 58%, #2b567f);
+}
+.thumb--hockey {
+  background: linear-gradient(145deg, #10201f, #1a3c3f 58%, #256b6e);
+}
+.thumb--soccer {
+  background: linear-gradient(145deg, #1e142e, #3a2350 58%, #5a357f);
+}
+.thumb--other {
+  background: linear-gradient(145deg, #1b1811, #2e2617 58%, #4a3c1f);
+}
+
+/* Sport/section tag pill, top-left over the artwork. */
+.thumb-tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(19, 17, 13, 0.55);
+  color: #f3ead2;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Game matchup — the centerpiece of a game thumbnail. */
+.thumb-matchup {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.thumb-team {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+
+.thumb-vs {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Article thumbnail — headline anchored to the lower-left, YouTube-style. */
+.thumb--article {
+  align-items: flex-start;
+  justify-content: flex-end;
+  text-align: left;
+}
+
+.thumb-headline {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.2;
+  color: #fff;
+  margin: 0;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Text metadata beneath the thumbnail. */
+.tcard-body {
+  padding: 12px 4px 0;
+}
+
+.tcard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.tcard-meta__seg:not(:last-child)::after {
+  content: '·';
+  margin: 0 7px;
+  color: var(--border-strong);
+}
+
+.tcard-meta__seg:first-child {
+  color: var(--text);
+}
+
+/* ---- Coming-soon placeholder cards ---- */
+.tcard--soon {
+  opacity: 0.72;
+}
+
+.thumb--soon {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--panel) 0 12px,
+    var(--panel-raised) 12px 24px
+  );
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+.thumb--soon::after {
+  display: none;
+}
+
+.thumb-soon-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  padding: 5px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: rgba(19, 17, 13, 0.5);
+}
+
+/* ---- Article reader: modal overlay reusing .story-*/.article-body ---- */
+.reader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 20px;
+  overflow-y: auto;
+  background: rgba(8, 7, 4, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.reader {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 40px 44px 44px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.reader-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  margin: 0;
+  padding: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--panel-raised);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.reader-close:hover:not(:disabled) {
+  background: var(--panel-raised);
+  color: var(--accent);
+  border-color: var(--border-strong);
+}
+
+.reader-title {
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  margin: 6px 0 14px;
+}
+
+.reader-meta {
+  margin-bottom: 4px;
+}
+
+/* ---- Responsive: tighten the feed on narrow screens ---- */
+@media (max-width: 560px) {
+  .story {
+    padding: 24px 20px;
+  }
+
+  .story::before {
+    left: 20px;
+    right: 20px;
+  }
+
+  .masthead {
+    margin-bottom: 30px;
+  }
+
+  .article-body {
+    font-size: 1rem;
+  }
+
+  .tcard {
+    flex-basis: 220px;
+    width: 220px;
+  }
+
+  .feed-search__btn {
+    padding: 0 18px;
+  }
+
+  .reader {
+    padding: 32px 22px 30px;
+  }
+}
