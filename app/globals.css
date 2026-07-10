@@ -2256,3 +2256,130 @@ tfoot td {
   color: var(--accent-dim);
   font-variant-numeric: tabular-nums;
 }
+
+/* =================================================================
+   My Games — schedule table + per-game workspace
+   The list page is now a schedule table (each row a link to a game's
+   workspace); the workspace is a single-column, phone-first stack of
+   sections (Live & Result, Assignment, Article, Sponsor). Reuses
+   .report-table, .card/.game, .pill, .live-badge, .result-* and the
+   shared palette; the rules below only add the schedule/workspace chrome.
+   ================================================================= */
+
+/* The schedule sits in a card that scrolls horizontally on a phone rather
+   than squashing the columns. */
+.sched-card {
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+
+/* Keep cells on one line so the table stays legible; the card scrolls if the
+   columns don't fit (courtside on a phone). */
+.sched-table th,
+.sched-table td {
+  white-space: nowrap;
+}
+
+.sched-sport {
+  text-transform: capitalize;
+}
+
+/* Each row is a link to its game workspace: pointer cursor, a gold focus ring
+   for keyboard users, and the shared report-table hover. */
+.sched-row {
+  cursor: pointer;
+}
+
+.sched-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* ---- Game workspace ---- */
+.ws-page {
+  max-width: 720px;
+}
+
+/* Header block: kicker + serif matchup, meta line, then the status pills and
+   the public-page link. */
+.ws-header {
+  margin-bottom: 26px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ws-title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 5vw, 2.4rem);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  color: var(--accent);
+  margin: 0 0 12px;
+  text-transform: capitalize;
+}
+
+.ws-meta {
+  margin-bottom: 14px;
+}
+
+/* Status pills + public link on one wrapping row; the link is pushed to the
+   trailing edge on wide screens. */
+.ws-pills {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ws-public-link {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+/* Each section is a .card.game (gold hairline); generous rhythm between them
+   so the touch targets sit apart on a phone. */
+.ws-section {
+  margin-bottom: 20px;
+}
+
+.ws-section__title {
+  margin-bottom: 18px;
+}
+
+/* Stacked labeled fields within a section (status select, notes). */
+.ws-field {
+  margin-bottom: 18px;
+}
+
+.ws-field:last-child {
+  margin-bottom: 0;
+}
+
+/* The status select stays compact rather than stretching full width. */
+.ws-field.game-status select {
+  max-width: 260px;
+}
+
+.ws-generate {
+  margin-bottom: 14px;
+}
+
+/* Sponsor section: the "Presented by" line beside its attach/remove action. */
+.ws-sponsor {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  /* Full-bleed the workspace action buttons so they're easy thumb targets;
+     the compact score inputs keep their own fixed width. */
+  .ws-section .btn-inline {
+    width: 100%;
+  }
+}

@@ -74,6 +74,14 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p === '/my-games',
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
+  // The per-game workspace (/my-games/:eventId) shares My Games' role gate. The
+  // API still enforces assignment ownership; the page also matches the id against
+  // the caller's own /assignments/mine and shows the branded access state if it
+  // isn't one of theirs.
+  {
+    match: (p) => p.startsWith('/my-games/'),
+    roles: ['admin', 'regional_manager', 'field_rep'],
+  },
   // Same role gate as My Games; the rep-profile check (which a bare admin fails)
   // happens at the API on the earnings call, surfaced as the page's access state.
   {
