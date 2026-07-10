@@ -326,6 +326,66 @@ export interface CreateAssignmentInput {
   notes?: string;
 }
 
+// An advertiser row as returned by GET /advertisers. marketId/managedByRep come
+// from nullable columns (an advertiser need not be tied to a market or a
+// managing rep), so keep them nullable. Only id/businessName are read by the UI
+// (the businessName is joined client-side onto ad orders, which carry only the
+// advertiserId).
+export interface Advertiser {
+  id: string;
+  businessName: string;
+  marketId: string | null;
+  managedByRep: string | null;
+}
+
+// POST /advertisers body. marketId is optional; a duplicate businessName comes
+// back 409 -> "409 <message>", shown inline by the Log a Sale form.
+export interface CreateAdvertiserInput {
+  businessName: string;
+  marketId?: string;
+}
+
+// An ad_packages row as returned by GET /ad-packages (active only). price is
+// numeric money -> a string; durationDays/impressions are ints. Selecting a
+// package in the Log a Sale form pre-fills the (editable) order amount from price
+// and, with a start date, computes endsOn from durationDays.
+export interface AdPackage {
+  id: string;
+  name: string;
+  price: string;
+  durationDays: number;
+  impressions: number;
+  isActive: boolean;
+}
+
+// An ad_orders row as returned by GET /ad-orders/mine and GET /ad-orders?repId=,
+// and by POST /ad-orders. amount is numeric money -> a string; startsOn/endsOn
+// are nullable date strings. advertiserId is a bare UUID here (no name join), so
+// the UI resolves the businessName from GET /advertisers and joins by id.
+export interface AdOrder {
+  id: string;
+  advertiserId: string;
+  packageId: string | null;
+  amount: string;
+  status: string;
+  startsOn: string | null;
+  endsOn: string | null;
+  createdAt: string;
+}
+
+// POST /ad-orders body. The backend creates the order AND its commission
+// atomically; a field_rep's sale is always credited to themselves (enforced
+// server-side), so no repId is sent. Send status "active". amount is required and
+// must be > 0; packageId/startsOn/endsOn are optional.
+export interface CreateAdOrderInput {
+  advertiserId: string;
+  packageId?: string;
+  amount: number;
+  status: string;
+  startsOn?: string;
+  endsOn?: string;
+}
+
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
 async function toError(res: Response): Promise<Error> {
   let detail = res.statusText;
@@ -494,3 +554,33 @@ export const createEvent = (token: string, input: CreateEventInput) =>
 // duplicate assignment comes back 409 -> "409 <message>", shown inline.
 export const createAssignment = (token: string, input: CreateAssignmentInput) =>
   authPost<AssignmentRow>('/assignments', token, input);
+
+// Advertisers to populate the Log a Sale dropdown (and to resolve businessName
+// for ad-order listings, which carry only advertiserId).
+export const getAdvertisers = (token: string) =>
+  authGet<Advertiser[]>('/advertisers', token);
+
+// Create an advertiser (name-only from the inline creator). A duplicate
+// businessName returns 409 -> "409 <message>", shown inline.
+export const createAdvertiser = (token: string, input: CreateAdvertiserInput) =>
+  authPost<Advertiser>('/advertisers', token, input);
+
+// Active ad packages to populate the (optional) package dropdown; selecting one
+// pre-fills the order amount from its price.
+export const getAdPackages = (token: string) =>
+  authGet<AdPackage[]>('/ad-packages', token);
+
+// The caller's own ad orders (a rep's logged sales), for the My Sales section.
+export const getMyAdOrders = (token: string) =>
+  authGet<AdOrder[]>('/ad-orders/mine', token);
+
+// Manager/admin drill-down: one rep's ad orders (repId is a field_reps id). A
+// manager is limited to their roster -- a rep off it comes back 403 ->
+// "403 <message>"; the drill-down handles that without blanking the page.
+export const getRepAdOrders = (token: string, repId: string) =>
+  authGet<AdOrder[]>(`/ad-orders?repId=${encodeURIComponent(repId)}`, token);
+
+// Log a sale: creates the ad order and its commission atomically. A field_rep's
+// sale is always credited to themselves (backend-enforced). Send status "active".
+export const createAdOrder = (token: string, input: CreateAdOrderInput) =>
+  authPost<AdOrder>('/ad-orders', token, input);

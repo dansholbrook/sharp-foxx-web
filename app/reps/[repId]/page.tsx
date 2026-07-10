@@ -11,13 +11,31 @@ import {
   getRepAssignments,
   getContentByAuthor,
   getEvents,
+  getRepAdOrders,
+  getAdvertisers,
   MyAssignment,
   EventContentItem,
   EventListItem,
+  AdOrder,
 } from '../../api';
 
 const usd = (v: string) =>
   Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+// Readable date for an ad order's date-only fields (yyyy-mm-dd), parsed as UTC so
+// it never drifts a day in negative-offset timezones. '—' when absent.
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  return Number.isNaN(d.getTime())
+    ? dateStr
+    : d.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+}
 
 // Format the timestamptz string the API returns; fall back to the raw value if
 // it somehow doesn't parse (same helper shape as My Games).
@@ -71,6 +89,12 @@ export default function RepDrilldownPage() {
   const [adOrders, setAdOrders] = useState<string | null>(search.get('adOrders'));
   const [games, setGames] = useState<MyAssignment[] | null>(null);
   const [articles, setArticles] = useState<EventContentItem[] | null>(null);
+  // The rep's ad orders + an advertiserId -> businessName map (orders carry only
+  // the id). Loaded best-effort and independently of the roster gate: a 403 on
+  // the ad-orders endpoint must not blank the rest of the page.
+  const [sales, setSales] = useState<AdOrder[] | null>(null);
+  const [advertisersById, setAdvertisersById] = useState<Record<string, string>>({});
+  const [salesError, setSalesError] = useState<string | null>(null);
   const [resultsByEvent, setResultsByEvent] = useState<Record<string, ResultSeed>>({});
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -142,6 +166,30 @@ export default function RepDrilldownPage() {
           if (!cancelled) setArticles(content);
         } else if (!cancelled) {
           setArticles([]);
+        }
+
+        // Ad orders are gated separately from assignments, so load them in their
+        // own try/catch: a 403 here (or any failure) must NOT reach the outer
+        // catch and blank the page -- managers can still see everything else.
+        try {
+          const [orders, advertisers] = await Promise.all([
+            getRepAdOrders(token, repId),
+            getAdvertisers(token),
+          ]);
+          if (!cancelled) {
+            setSales(orders);
+            setAdvertisersById(
+              Object.fromEntries(advertisers.map((a) => [a.id, a.businessName])),
+            );
+          }
+        } catch (salesErr) {
+          if (!cancelled) {
+            const m = salesErr instanceof Error ? salesErr.message : '';
+            // A 403 just means no ad-order access for this rep -- show the empty
+            // state, not an error. Surface anything else inline in the section.
+            if (!m.startsWith('403')) setSalesError(m || 'Failed to load sales');
+            setSales([]);
+          }
         }
       } catch (err) {
         if (cancelled) return;
@@ -306,6 +354,54 @@ export default function RepDrilldownPage() {
               <p className="results-empty__title">No articles yet</p>
               <p className="results-empty__hint">
                 Recaps this rep drafts or publishes will appear here.
+              </p>
+            </div>
+          )
+        )}
+      </section>
+
+      {/* ---- Sales ---- */}
+      <section className="card game">
+        <span className="game-kicker">Advertising</span>
+        <h2>Sales</h2>
+        {loading && <p className="muted">Loading sales…</p>}
+        {salesError && <div className="error">{salesError}</div>}
+        {!loading && !salesError && sales && sales.length > 0 ? (
+          <table className="report-table rep-table">
+            <thead>
+              <tr>
+                <th>Advertiser</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Dates</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.map((s) => (
+                <tr key={s.id}>
+                  <td>{advertisersById[s.advertiserId] ?? 'Advertiser'}</td>
+                  <td>{usd(s.amount)}</td>
+                  <td>
+                    <span className="pill">{s.status}</span>
+                  </td>
+                  <td>
+                    {s.startsOn || s.endsOn ? (
+                      `${formatDate(s.startsOn)} – ${formatDate(s.endsOn)}`
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          !loading &&
+          !salesError && (
+            <div className="results-empty">
+              <p className="results-empty__title">No sales logged</p>
+              <p className="results-empty__hint">
+                Advertiser deals this rep logs will appear here.
               </p>
             </div>
           )

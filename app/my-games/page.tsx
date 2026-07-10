@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { AddGameForm } from '../add-game-form';
+import { LogSaleForm } from '../log-sale-form';
 import { canAccess } from '../roles';
 import {
   getMyAssignments,
@@ -16,11 +17,33 @@ import {
   unpublishContent,
   getEvents,
   updateEventResult,
+  getMyAdOrders,
+  getAdvertisers,
+  getFieldReps,
   MyAssignment,
   ContentItem,
   EventContentItem,
   UpdateEventResultInput,
+  AdOrder,
 } from '../api';
+
+const usd = (v: string) =>
+  Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+// Readable date for an ad order's date-only fields (yyyy-mm-dd), parsed as UTC so
+// it never drifts a day in negative-offset timezones. '—' when absent.
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  return Number.isNaN(d.getTime())
+    ? dateStr
+    : d.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+}
 
 // The scores/replay link already on an event, used to pre-fill the Report Result
 // form. /assignments/mine doesn't carry these, so the page loads them separately
@@ -511,6 +534,17 @@ export default function MyGamesPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showLogSale, setShowLogSale] = useState(false);
+
+  // My Sales: the rep's own ad orders, plus an advertiserId -> businessName map
+  // (ad orders carry only the id) and the rep's commission rate for the Log a
+  // Sale confirmation. All best-effort -- a failure here must not break the page.
+  const [sales, setSales] = useState<AdOrder[] | null>(null);
+  const [advertisersById, setAdvertisersById] = useState<Record<string, string>>({});
+  const [salesError, setSalesError] = useState<string | null>(null);
+  const [salesLoading, setSalesLoading] = useState(true);
+  const [commissionRate, setCommissionRate] = useState<string | null>(null);
+
   // Whether the signed-in user is actually a field_rep -- only then does adding
   // a game self-claim it (an admin viewing this page just creates the event).
   const isFieldRep = (user?.roles ?? []).includes('field_rep');
@@ -550,6 +584,28 @@ export default function MyGamesPage() {
     }
   }, []);
 
+  // Load (or reload) the My Sales section: the rep's own ad orders plus the
+  // advertiser-name map used to render them. Reused on mount and after logging a
+  // sale. Its own error state so a sales failure never touches the games list.
+  const loadSales = useCallback(async (t: string) => {
+    setSalesLoading(true);
+    setSalesError(null);
+    try {
+      const [orders, advertisers] = await Promise.all([
+        getMyAdOrders(t),
+        getAdvertisers(t),
+      ]);
+      setSales(orders);
+      setAdvertisersById(
+        Object.fromEntries(advertisers.map((a) => [a.id, a.businessName])),
+      );
+    } catch (err) {
+      setSalesError(err instanceof Error ? err.message : 'Failed to load sales');
+    } finally {
+      setSalesLoading(false);
+    }
+  }, []);
+
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
     if (!token) {
@@ -558,7 +614,20 @@ export default function MyGamesPage() {
     }
     if (!allowed) return;
     loadGames(token);
-  }, [token, router, allowed, loadGames]);
+    loadSales(token);
+    // Resolve the rep's own commission rate for the Log a Sale confirmation.
+    // Best-effort: a plain rep may not be able to list field-reps, in which case
+    // the confirmation just falls back to "Sale logged."
+    const uid = user?.id;
+    if (uid) {
+      getFieldReps(token)
+        .then((reps) => {
+          const mine = reps.find((r) => r.userId === uid);
+          if (mine) setCommissionRate(mine.commissionRate);
+        })
+        .catch(() => {});
+    }
+  }, [token, router, allowed, loadGames, loadSales, user?.id]);
 
   // Merge a saved row's changed fields back into state so the UI reflects the
   // server without a full refetch.
@@ -599,13 +668,22 @@ export default function MyGamesPage() {
               assignment status, and draft or publish a recap for each.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn-inline add-game-btn"
-            onClick={() => setShowAdd(true)}
-          >
-            + Add Game
-          </button>
+          <div className="masthead-actions">
+            <button
+              type="button"
+              className="btn-inline"
+              onClick={() => setShowLogSale(true)}
+            >
+              Log a Sale
+            </button>
+            <button
+              type="button"
+              className="btn-inline"
+              onClick={() => setShowAdd(true)}
+            >
+              + Add Game
+            </button>
+          </div>
         </div>
       </div>
 
@@ -615,6 +693,15 @@ export default function MyGamesPage() {
           selfClaim={isFieldRep}
           onCreated={() => loadGames(token)}
           onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {showLogSale && (
+        <LogSaleForm
+          token={token}
+          commissionRate={commissionRate}
+          onCreated={() => loadSales(token)}
+          onClose={() => setShowLogSale(false)}
         />
       )}
 
@@ -645,6 +732,55 @@ export default function MyGamesPage() {
           </div>
         )
       )}
+
+      {/* ---- My Sales ---- */}
+      <section className="card game">
+        <span className="game-kicker">Advertising</span>
+        <h2>My Sales</h2>
+        {salesLoading && <p className="muted">Loading sales…</p>}
+        {salesError && <div className="error">{salesError}</div>}
+        {!salesLoading && !salesError && sales && sales.length > 0 ? (
+          <table className="report-table rep-table">
+            <thead>
+              <tr>
+                <th>Advertiser</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Dates</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.map((s) => (
+                <tr key={s.id}>
+                  <td>{advertisersById[s.advertiserId] ?? 'Advertiser'}</td>
+                  <td>{usd(s.amount)}</td>
+                  <td>
+                    <span className="pill">{s.status}</span>
+                  </td>
+                  <td>
+                    {s.startsOn || s.endsOn ? (
+                      `${formatDate(s.startsOn)} – ${formatDate(s.endsOn)}`
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          !salesLoading &&
+          !salesError && (
+            <div className="results-empty">
+              <p className="results-empty__title">No sales logged yet</p>
+              <p className="results-empty__hint">
+                Use “Log a Sale” above to record an advertiser deal — it will show
+                up here with the commission you earned.
+              </p>
+            </div>
+          )
+        )}
+      </section>
     </main>
   );
 }
