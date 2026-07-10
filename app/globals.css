@@ -1268,6 +1268,64 @@ tfoot td {
   }
 }
 
+/* =================================================================
+   Rep drill-down — masthead stat cards + game result cell
+   Reached from the roster; header totals (commissions, ad orders) read
+   as a small row of stat cards, and the Games table shows a compact
+   score/video indicator. Scoped via .rep-stat* / .rep-result.
+   ================================================================= */
+
+.rep-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.rep-stat {
+  flex: 1 1 200px;
+  padding: 16px 18px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.rep-stat__label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  margin-bottom: 8px;
+}
+
+.rep-stat__value {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.5rem, 3.5vw, 1.9rem);
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Score + Final/Video pills sit inline in the Result column. */
+.rep-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rep-result__score {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
 /* ---- Responsive: tighten the feed on narrow screens ---- */
 @media (max-width: 560px) {
   .story {

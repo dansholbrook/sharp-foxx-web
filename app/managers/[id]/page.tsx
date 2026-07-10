@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { AppNav, AccessDenied } from '../../nav';
@@ -133,7 +134,22 @@ export default function ManagerRosterPage() {
             <tbody>
               {reps.map((rep) => (
                 <tr key={rep.repId}>
-                  <td>{rep.displayName ?? '—'}</td>
+                  <td>
+                    {/* Drill into the rep. The header stats (name, commissions,
+                        ad orders) come straight off this roster row via query
+                        params so the drill-down needn't refetch them; the page
+                        resolves the rep's user id separately for its content. */}
+                    <Link
+                      href={`/reps/${rep.repId}?name=${encodeURIComponent(
+                        rep.displayName ?? '',
+                      )}&commissions=${encodeURIComponent(
+                        rep.totalCommissions,
+                      )}&adOrders=${rep.adOrdersCount}`}
+                      className="rep-roster-link"
+                    >
+                      {rep.displayName ?? '—'}
+                    </Link>
+                  </td>
                   <td className="mono">{rep.email ?? '—'}</td>
                   <td className="num">{usd(rep.totalCommissions)}</td>
                   <td className="num">{rep.adOrdersCount}</td>

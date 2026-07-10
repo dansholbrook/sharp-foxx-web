@@ -58,6 +58,10 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   { match: (p) => p === '/dashboard', roles: ['admin'] },
   { match: (p) => p === '/field-reps', roles: ['admin', 'regional_manager'] },
   { match: (p) => p.startsWith('/managers/'), roles: ['admin', 'regional_manager'] },
+  // Rep drill-down, reached by clicking a rep on the roster page -- same gate as
+  // the roster. The API still enforces roster membership per rep (a manager
+  // opening a rep off their roster 403s), which the page surfaces as AccessDenied.
+  { match: (p) => p.startsWith('/reps/'), roles: ['admin', 'regional_manager'] },
   {
     match: (p) => p === '/my-games',
     roles: ['admin', 'regional_manager', 'field_rep'],

@@ -399,6 +399,21 @@ export const getManagerReps = (token: string, id: string) =>
 export const getMyAssignments = (token: string) =>
   authGet<MyAssignment[]>('/assignments/mine', token);
 
+// Manager drill-down: one rep's assignments (repId is a field_reps id), the same
+// event-joined shape as /assignments/mine. Admin may query any rep; a
+// regional_manager only reps on their own roster -- a rep off their roster comes
+// back 403 -> "403 <message>". Like /mine, the event carries NO scores/video;
+// load those from GET /events (getEvents) and join by event id, as My Games does.
+export const getRepAssignments = (token: string, repId: string) =>
+  authGet<MyAssignment[]>(`/assignments?repId=${encodeURIComponent(repId)}`, token);
+
+// Content authored by one user. NOTE authorId is a USER id (content_items
+// .author_user_id), NOT a field_reps id -- the roster's repId won't match here.
+// Staff callers (admin/manager/rep) get every status incl. drafts; returns the
+// joined listing shape (EventContentItem), newest-created first.
+export const getContentByAuthor = (token: string, authorId: string) =>
+  authGet<EventContentItem[]>(`/content?authorId=${encodeURIComponent(authorId)}`, token);
+
 // The public feed: published content only, newest-first (ordering is enforced by
 // the backend). Read-only, so no author gating -- any authenticated user can read.
 export const getPublishedContent = (token: string) =>
