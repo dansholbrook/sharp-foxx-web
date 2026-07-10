@@ -34,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
   { href: '/field-reps', label: 'Field reps', roles: ['admin', 'regional_manager'] },
+  { href: '/applicants', label: 'Applicants', roles: ['admin', 'regional_manager'] },
   { href: '/dashboard', label: 'Reports', roles: ['admin'] },
 ];
 
@@ -62,9 +63,16 @@ export function navLinksFor(roles: string[]): Array<{ href: string; label: strin
 // Which roles may open a given page. Paths not listed are open to any
 // authenticated user (/feed, /search). /managers/:id shares the Field Reps gate
 // since the "View roster" link that reaches it lives on that page.
+//
+// NOTE: /apply is deliberately absent -- it is a PUBLIC page that renders its
+// own minimal branded shell (no AppNav) and never touches the auth session, so
+// it needs no entry here and never redirects an anonymous visitor to login.
 const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = [
   { match: (p) => p === '/dashboard', roles: ['admin'] },
   { match: (p) => p === '/field-reps', roles: ['admin', 'regional_manager'] },
+  // The staff review queue for the public /apply intake. Same gate as Field
+  // Reps (the backend restricts GET/approve/reject to these two roles).
+  { match: (p) => p === '/applicants', roles: ['admin', 'regional_manager'] },
   { match: (p) => p.startsWith('/managers/'), roles: ['admin', 'regional_manager'] },
   // Rep drill-down, reached by clicking a rep on the roster page -- same gate as
   // the roster. The API still enforces roster membership per rep (a manager

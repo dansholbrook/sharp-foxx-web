@@ -6,6 +6,7 @@ import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { AddGameForm } from '../add-game-form';
 import { canAccess } from '../roles';
+import { useOwnRep, TrainingGate } from '../training-gate';
 import {
   getMyAssignments,
   getEvents,
@@ -63,6 +64,8 @@ export default function MyGamesPage() {
   const pathname = usePathname();
   const { token, user } = useAuth();
   const allowed = canAccess(user?.roles ?? [], pathname);
+  // Gate an onboarding rep behind the training holding card (see below).
+  const { ownRep } = useOwnRep(token, user?.id, allowed);
 
   const [games, setGames] = useState<MyAssignment[] | null>(null);
   // eventId -> freshest game status, from GET /events, for the Game-status
@@ -193,6 +196,8 @@ export default function MyGamesPage() {
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
+  // An onboarding rep sees the Academy holding card instead of the schedule.
+  if (ownRep?.status === 'onboarding') return <TrainingGate />;
 
   return (
     <main className="feed-home">

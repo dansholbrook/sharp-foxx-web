@@ -2383,3 +2383,368 @@ tfoot td {
     width: 100%;
   }
 }
+
+/* =================================================================
+   Application flow — public /apply, staff /applicants, training gate,
+   and the roster Activate action. Reuses the shared palette + card /
+   masthead / pill primitives; scoped via .apply-* / .applicant-* /
+   .track-* / .approve-* / .training-gate / .roster-* classes.
+   ================================================================= */
+
+/* An anchor styled as the gold pill button (the <button> element rules don't
+   reach <a>). Used by the training-gate + apply-confirm CTAs. */
+a.btn-inline {
+  display: inline-block;
+  padding: 11px 18px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+a.btn-inline:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: var(--accent-text);
+}
+
+/* ---- Public apply page: a narrower single-column form ---- */
+.apply-page {
+  max-width: 760px;
+}
+
+/* Override the two-column rep-form grid -- a recruiting form reads better
+   stacked, with only the city/state pair sitting side by side. */
+.apply-form {
+  grid-template-columns: 1fr;
+}
+
+.apply-city-state {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 20px;
+}
+
+.apply-textarea {
+  min-height: 120px;
+}
+
+/* Live pitch counter: muted until the 30-char minimum is met, then gold. */
+.apply-pitch-count {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.apply-pitch-count--ok {
+  color: var(--accent);
+}
+
+/* Inline per-field validation message (client mirror or server zod errors). */
+.apply-field-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #e0928a;
+}
+
+.apply-signin-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.apply-signin-link:hover {
+  color: var(--accent-hover);
+}
+
+/* ---- Track radio cards: two large selectable panels ---- */
+.track-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.track-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.track-card:hover {
+  border-color: var(--accent-dim);
+}
+
+.track-card--selected {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.08);
+}
+
+/* The real radio is visually hidden; the whole card is the hit target. */
+.track-card__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.track-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 163, 78, 0.16);
+}
+
+.track-card__title {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.track-card__blurb {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---- Yes/No segmented control (HD smartphone) ---- */
+.yn-group {
+  display: flex;
+  gap: 10px;
+}
+
+.yn-option {
+  margin-top: 0;
+  padding: 9px 26px;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+}
+
+.yn-option:hover:not(:disabled) {
+  background: var(--bg);
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.yn-option--selected,
+.yn-option--selected:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Success confirmation (replaces the form) ---- */
+.apply-confirm__lead {
+  font-size: 1rem;
+  color: var(--text);
+  margin: 0 0 20px;
+  line-height: 1.6;
+}
+
+/* ---- Staff applicants queue ---- */
+.applicant-chips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.applicant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.applicant-card {
+  margin-bottom: 0;
+}
+
+.applicant-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.applicant-name {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.applicant-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+
+/* Track badge on a card: reuses .pill; the manager variant reads bolder. */
+.track-pill {
+  flex-shrink: 0;
+}
+
+.track-pill--regional_manager {
+  background: rgba(201, 163, 78, 0.16);
+  border: 1px solid var(--accent);
+}
+
+.applicant-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 30px;
+  margin: 18px 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.applicant-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.applicant-fact__label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent-dim);
+}
+
+.applicant-pitch {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.applicant-more {
+  margin-top: 6px;
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+.applicant-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.applicant-review {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+/* ---- Approved sign-in id: prominent, copyable ---- */
+.approve-id {
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+}
+
+.approve-id--inline {
+  max-width: 520px;
+}
+
+.approve-id__label {
+  display: block;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent-dim);
+  margin-bottom: 8px;
+}
+
+.approve-id__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.approve-id__value {
+  font-size: 0.95rem;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.copy-id-btn {
+  margin-top: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  font-weight: 600;
+}
+
+.approve-done__lead {
+  font-size: 1rem;
+  color: var(--text);
+  margin: 0 0 18px;
+}
+
+.approve-done__note {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+}
+
+/* ---- Training gate (onboarding holding card) ---- */
+.training-gate {
+  text-align: left;
+}
+
+.training-gate__copy {
+  font-size: 1.05rem;
+  color: var(--text);
+  line-height: 1.65;
+  margin: 0 0 22px;
+  max-width: 560px;
+}
+
+.training-gate__cta {
+  margin-bottom: 20px;
+}
+
+.training-gate__note {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+/* ---- Manager roster: stacked Activate + Assign actions ---- */
+.roster-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.roster-activate {
+  padding: 7px 16px;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 560px) {
+  .track-cards,
+  .apply-city-state {
+    grid-template-columns: 1fr;
+  }
+}

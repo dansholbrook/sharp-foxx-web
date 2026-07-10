@@ -695,3 +695,129 @@ export const createSponsorship = (
 // attached it, or staff); a foreign one surfaces as "<status> <message>".
 export const deleteSponsorship = (token: string, id: string) =>
   authDelete(`/sponsorships/${id}`, token);
+
+// ---- Applications: the public recruiting intake + the staff review queue ----
+
+// The rep_status enum on the backend (field_reps.status). 'onboarding' gates a
+// newly-approved rep behind training; 'active' unlocks their games portal.
+export type RepStatus =
+  | 'applicant'
+  | 'onboarding'
+  | 'active'
+  | 'paused'
+  | 'offboarded';
+
+// A full applications row as returned by GET /applications (staff only). track
+// maps 1:1 onto field_reps.kind and a role code. reviewedBy/reviewedAt/
+// createdUserId are null until a staffer approves/rejects; createdUserId is the
+// new sign-in id, present only after approval. Mirrors applications.service.ts.
+export interface Application {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  city: string;
+  state: string;
+  track: 'field_rep' | 'regional_manager';
+  hasSmartphone: boolean;
+  pitch: string;
+  resumeUrl: string | null;
+  status: 'submitted' | 'approved' | 'rejected';
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdUserId: string | null;
+  createdAt: string;
+}
+
+// POST /applications body (mirrors createApplicationSchema). The only
+// unauthenticated write in the app. pitch must be >= 30 chars; resumeUrl, when
+// present, must be an http(s) URL. phone/resumeUrl are optional.
+export interface ApplyInput {
+  fullName: string;
+  email: string;
+  phone?: string;
+  city: string;
+  state: string;
+  track: 'field_rep' | 'regional_manager';
+  hasSmartphone: boolean;
+  pitch: string;
+  resumeUrl?: string;
+}
+
+// POST /applications/:id/approve body (mirrors approveApplicationSchema).
+// managerId (a regional_manager rep row) hangs the new rep under that manager;
+// omit it and the approving manager auto-becomes the rep's manager.
+export interface ApproveApplicationInput {
+  managerId?: string;
+  commissionRate?: number;
+}
+
+// The zod flatten() shape the API returns on a 400 from the create route
+// (BadRequestException(error.flatten())). createApplication throws this so the
+// apply form can render fieldErrors inline against each input.
+export class ApplyValidationError extends Error {
+  fieldErrors: Record<string, string[]>;
+  formErrors: string[];
+  constructor(fieldErrors: Record<string, string[]>, formErrors: string[]) {
+    super(formErrors[0] ?? 'Please fix the highlighted fields.');
+    this.name = 'ApplyValidationError';
+    this.fieldErrors = fieldErrors;
+    this.formErrors = formErrors;
+  }
+}
+
+// PUBLIC create -- no token. A 400 (zod) throws ApplyValidationError with the
+// per-field messages; a 409 (duplicate application OR an email that already has
+// an account) throws the shared "409 <message>" Error the form turns into a
+// "Sign in" nudge. Returns only { id, status } on success.
+export async function createApplication(
+  input: ApplyInput,
+): Promise<{ id: string; status: string }> {
+  const res = await fetch(`${BASE}/applications`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (res.ok) return res.json();
+  if (res.status === 400) {
+    const body = await res.json().catch(() => null);
+    if (body && (body.fieldErrors || body.formErrors)) {
+      throw new ApplyValidationError(body.fieldErrors ?? {}, body.formErrors ?? []);
+    }
+  }
+  throw await toError(res);
+}
+
+// Staff review queue: full rows, newest first. Defaults to status=submitted on
+// the backend when no filter is given (admin, regional_manager).
+export const getApplications = (token: string, status?: Application['status']) =>
+  authGet<Application[]>(
+    `/applications${status ? `?status=${status}` : ''}`,
+    token,
+  );
+
+// Approve -> stands up the account (user + rep + role) and returns the updated
+// application plus { userId } (the new sign-in id staff share with the applicant).
+export const approveApplication = (
+  token: string,
+  id: string,
+  input: ApproveApplicationInput,
+) =>
+  authPost<Application & { userId: string }>(
+    `/applications/${id}/approve`,
+    token,
+    input,
+  );
+
+// Reject -> stamps status + reviewer. No body; returns the updated application.
+export const rejectApplication = (token: string, id: string) =>
+  authPost<Application>(`/applications/${id}/reject`, token, {});
+
+// Update a field_rep's status (admin, regional_manager). Used by the roster's
+// "Activate" action to move an onboarding rep to 'active' (which also stamps
+// onboardedAt server-side). Returns the updated field_reps row.
+export const updateFieldRepStatus = (
+  token: string,
+  id: string,
+  status: RepStatus,
+) => authPatch<FieldRep>(`/field-reps/${id}/status`, token, { status });

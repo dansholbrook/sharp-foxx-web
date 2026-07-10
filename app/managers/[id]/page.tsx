@@ -10,8 +10,11 @@ import { canAccess } from '../../roles';
 import {
   getManagerReps,
   getManagerSummary,
+  getFieldReps,
+  updateFieldRepStatus,
   ManagerRoster,
   ManagerSummary,
+  RepStatus,
 } from '../../api';
 
 const usd = (v: string) =>
@@ -52,6 +55,14 @@ export default function ManagerRosterPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [assign, setAssign] = useState<AssignTarget | null>(null);
+
+  // The roster payload carries no rep status, so we join it from GET /field-reps
+  // (keyed by field_reps id === roster repId) to surface an "Activate" action on
+  // reps still onboarding. Best-effort: a failed lookup just hides Activate.
+  const [statusByRep, setStatusByRep] = useState<Record<string, RepStatus>>({});
+  // Reps mid-activation (for the button's busy state) + any activation error.
+  const [activating, setActivating] = useState<Record<string, boolean>>({});
+  const [activateError, setActivateError] = useState<string | null>(null);
 
   // Territory summary (stat cards + recent activity). Loaded independently of the
   // roster and best-effort: a failure here must not blank the roster below, so it
@@ -97,10 +108,42 @@ export default function ManagerRosterPage() {
         if (!cancelled) setSummaryLoading(false);
       }
     })();
+    // Rep statuses (for the Activate action). Best-effort + independent so a
+    // failure just leaves every rep without an Activate button.
+    (async () => {
+      try {
+        const reps = await getFieldReps(token);
+        if (!cancelled) {
+          setStatusByRep(
+            Object.fromEntries(reps.map((r) => [r.id, r.status as RepStatus])),
+          );
+        }
+      } catch {
+        /* leave statuses empty -- no Activate buttons render */
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [token, id, router, allowed]);
+
+  // Activate an onboarding rep -> status 'active'. Updates the local status map
+  // on success so the Activate button disappears without a full refetch.
+  async function activateRep(repId: string) {
+    if (!token) return;
+    setActivating((m) => ({ ...m, [repId]: true }));
+    setActivateError(null);
+    try {
+      const updated = await updateFieldRepStatus(token, repId, 'active');
+      setStatusByRep((m) => ({ ...m, [repId]: updated.status as RepStatus }));
+    } catch (err) {
+      setActivateError(
+        err instanceof Error ? err.message : 'Failed to activate rep',
+      );
+    } finally {
+      setActivating((m) => ({ ...m, [repId]: false }));
+    }
+  }
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
@@ -241,6 +284,7 @@ export default function ManagerRosterPage() {
         <h2>Field reps</h2>
         {loading && <p className="muted">Loading roster…</p>}
         {error && <div className="error">{error}</div>}
+        {activateError && <div className="error">{activateError}</div>}
         {!loading && !error && reps.length > 0 ? (
           <table className="report-table rep-table">
             <thead>
@@ -275,20 +319,32 @@ export default function ManagerRosterPage() {
                   <td className="num">{usd(rep.totalCommissions)}</td>
                   <td className="num">{rep.adOrdersCount}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="link-btn rep-roster-link"
-                      onClick={() =>
-                        setAssign({
-                          rep: {
-                            id: rep.repId,
-                            name: rep.displayName ?? 'this rep',
-                          },
-                        })
-                      }
-                    >
-                      Assign game →
-                    </button>
+                    <div className="roster-actions">
+                      {statusByRep[rep.repId] === 'onboarding' && (
+                        <button
+                          type="button"
+                          className="btn-inline roster-activate"
+                          onClick={() => activateRep(rep.repId)}
+                          disabled={activating[rep.repId]}
+                        >
+                          {activating[rep.repId] ? 'Activating…' : 'Activate'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="link-btn rep-roster-link"
+                        onClick={() =>
+                          setAssign({
+                            rep: {
+                              id: rep.repId,
+                              name: rep.displayName ?? 'this rep',
+                            },
+                          })
+                        }
+                      >
+                        Assign game →
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

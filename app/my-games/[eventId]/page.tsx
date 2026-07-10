@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '../../auth-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
+import { useOwnRep, TrainingGate } from '../../training-gate';
 import {
   getMyAssignments,
   updateAssignment,
@@ -886,6 +887,8 @@ export default function GameWorkspacePage() {
   const eventId = params.eventId;
   const { token, user } = useAuth();
   const allowed = canAccess(user?.roles ?? [], pathname);
+  // Gate an onboarding rep behind the training holding card (see below).
+  const { ownRep } = useOwnRep(token, user?.id, allowed);
 
   const [assignment, setAssignment] = useState<MyAssignment | null>(null);
   const [resultSeed, setResultSeed] = useState<ResultSeed | undefined>(undefined);
@@ -978,6 +981,8 @@ export default function GameWorkspacePage() {
 
   if (!token) return null;
   if (!allowed || notFound) return <AccessDenied />;
+  // An onboarding rep sees the Academy holding card instead of the workspace.
+  if (ownRep?.status === 'onboarding') return <TrainingGate />;
 
   return (
     <main className="feed-home ws-page">
