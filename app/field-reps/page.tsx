@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
+import { AddGameForm } from '../add-game-form';
 import { canAccess } from '../roles';
 import {
   getFieldReps,
@@ -37,6 +38,7 @@ export default function FieldRepsPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
 
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
@@ -117,13 +119,32 @@ export default function FieldRepsPage() {
       </div>
 
       <div className="masthead">
-        <span className="masthead-kicker">Team &amp; roster</span>
-        <h1 className="masthead-title">Field Reps</h1>
-        <p className="masthead-standfirst">
-          Add field reps and regional managers, and browse the current roster
-          with their kind, status, cohort, and commission rate.
-        </p>
+        <div className="masthead-head">
+          <div>
+            <span className="masthead-kicker">Team &amp; roster</span>
+            <h1 className="masthead-title">Field Reps</h1>
+            <p className="masthead-standfirst">
+              Add field reps and regional managers, and browse the current roster
+              with their kind, status, cohort, and commission rate.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-inline add-game-btn"
+            onClick={() => setShowAdd(true)}
+          >
+            + Add Game
+          </button>
+        </div>
       </div>
+
+      {showAdd && (
+        <AddGameForm
+          token={token}
+          selfClaim={false}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
 
       {/* ---- Create a field rep ---- */}
       <section className="card game">

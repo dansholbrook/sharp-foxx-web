@@ -268,6 +268,64 @@ export interface UpdateContentInput {
   body?: string;
 }
 
+// A teams row as returned by GET /teams?sport=<sport> (teams.service.ts),
+// ordered by name. level is the backend enum ('pro' | 'college' |
+// 'high_school'); league is nullable (optional on create).
+export interface Team {
+  id: string;
+  name: string;
+  sport: string;
+  level: string;
+  league: string | null;
+}
+
+// POST /teams body (mirrors createTeamSchema). A duplicate name within a sport
+// comes back 409 -> surfaced as "409 <message>" by the client.
+export interface CreateTeamInput {
+  name: string;
+  sport: string;
+  level: 'pro' | 'college' | 'high_school';
+  league?: string;
+}
+
+// POST /events body (mirrors createEventSchema). scheduledAt is an ISO datetime
+// string; team ids/venue/isLocalStream/status are all optional. Send only the
+// fields the Add Game form actually filled in.
+export interface CreateEventInput {
+  sport: string;
+  scheduledAt: string;
+  venue?: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  isLocalStream?: boolean;
+  status?: EventListItem['status'];
+}
+
+// The bare events row returned by POST /events (`.returning()`) -- NOT the
+// joined EventListItem, so it carries no homeTeam/awayTeam names. Only the
+// fields the Add Game flow reads back (id, to self-claim) are relied on.
+export interface CreatedEvent {
+  id: string;
+  sport: EventListItem['sport'];
+  scheduledAt: string;
+  venue: string | null;
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+  status: EventListItem['status'];
+  isLocalStream: boolean;
+}
+
+// POST /assignments body. A manager (regional_manager/admin) may pass repId to
+// assign that rep to the game; omitting repId self-claims for the caller's own
+// rep row (managers have rep rows, so an omitted repId is a manager self-claim).
+// notes is optional. Returns the bare event_assignments row (no event join),
+// same shape as PATCH.
+export interface CreateAssignmentInput {
+  eventId: string;
+  repId?: string;
+  notes?: string;
+}
+
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
 async function toError(res: Response): Promise<Error> {
   let detail = res.statusText;
@@ -402,3 +460,22 @@ export const publishContent = (token: string, id: string) =>
 
 export const unpublishContent = (token: string, id: string) =>
   authPost<ContentItem>(`/content/${id}/unpublish`, token, {});
+
+// Teams for a sport, name-ordered, to populate the Add Game team dropdowns.
+export const getTeams = (token: string, sport: string) =>
+  authGet<Team[]>(`/teams?sport=${encodeURIComponent(sport)}`, token);
+
+// Create a team (admin/manager/field_rep). A duplicate name within the sport
+// returns 409 -> "409 <message>", shown inline by the Add Game form.
+export const createTeam = (token: string, input: CreateTeamInput) =>
+  authPost<Team>('/teams', token, input);
+
+// Create a game. Same roles as team create; returns the bare event row.
+export const createEvent = (token: string, input: CreateEventInput) =>
+  authPost<CreatedEvent>('/events', token, input);
+
+// Create an assignment: a manager assigns a rep (input.repId) or self-claims a
+// game (repId omitted). A self-claim lands in the caller's own My Games; a
+// duplicate assignment comes back 409 -> "409 <message>", shown inline.
+export const createAssignment = (token: string, input: CreateAssignmentInput) =>
+  authPost<AssignmentRow>('/assignments', token, input);

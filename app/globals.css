@@ -1449,3 +1449,100 @@ tfoot td {
   font-size: 1.15rem;
   color: var(--accent);
 }
+
+/* =================================================================
+   Add Game — masthead action button + shared modal form (My Games /
+   Field Reps). Reuses .card / .rep-form / .btn-inline; built on the
+   shared palette tokens.
+   ================================================================= */
+
+/* Masthead lays its text block beside the "+ Add Game" action. */
+.masthead-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.add-game-btn {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+/* Dimmed backdrop; the dialog card sits centered and can scroll if tall. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 20px 40px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 620px;
+  margin: 0;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+/* Close reads as a muted text action, not a gold button. */
+.modal-close {
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+/* Inline "new team" creator: name grows, level + actions sit alongside. */
+.new-team-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.new-team-row input {
+  flex: 1 1 200px;
+}
+
+.new-team-level {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 140px;
+}
+
+/* Checkbox field opts out of the full-width input rule and sits inline. */
+.checkbox-field {
+  align-self: center;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.checkbox-label input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}

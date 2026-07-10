@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
+import { AddGameForm } from '../add-game-form';
 import { canAccess } from '../roles';
 import {
   getMyAssignments,
@@ -509,6 +510,45 @@ export default function MyGamesPage() {
   const [resultsByEvent, setResultsByEvent] = useState<Record<string, ResultSeed>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  // Whether the signed-in user is actually a field_rep -- only then does adding
+  // a game self-claim it (an admin viewing this page just creates the event).
+  const isFieldRep = (user?.roles ?? []).includes('field_rep');
+
+  // Load (or reload) the assignments plus the events lookup used to pre-fill each
+  // row's Report Result form. Reused on mount and after adding + claiming a game.
+  const loadGames = useCallback(async (t: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Assignments are the page; the events lookup is only for pre-filling the
+      // result form, so a failure there must not break the page -> swallow it.
+      const [data, events] = await Promise.all([
+        getMyAssignments(t),
+        getEvents(t).catch(() => []),
+      ]);
+      setGames(data);
+      setResultsByEvent(
+        Object.fromEntries(
+          events.map((e) => [
+            e.id,
+            {
+              homeScore: e.homeScore,
+              awayScore: e.awayScore,
+              videoUrl: e.videoUrl,
+              status: e.status,
+            },
+          ]),
+        ),
+      );
+    } catch (err) {
+      // The client turns failures into "<status> <message>", e.g. a user with
+      // no rep profile gets "404 No rep profile for this user".
+      setError(err instanceof Error ? err.message : 'Failed to load games');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
@@ -517,46 +557,8 @@ export default function MyGamesPage() {
       return;
     }
     if (!allowed) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    (async () => {
-      try {
-        // Assignments are the page; the events lookup is only for pre-filling the
-        // result form, so a failure there must not break the page -> swallow it.
-        const [data, events] = await Promise.all([
-          getMyAssignments(token),
-          getEvents(token).catch(() => []),
-        ]);
-        if (cancelled) return;
-        setGames(data);
-        setResultsByEvent(
-          Object.fromEntries(
-            events.map((e) => [
-              e.id,
-              {
-                homeScore: e.homeScore,
-                awayScore: e.awayScore,
-                videoUrl: e.videoUrl,
-                status: e.status,
-              },
-            ]),
-          ),
-        );
-      } catch (err) {
-        // The client turns failures into "<status> <message>", e.g. a user with
-        // no rep profile gets "404 No rep profile for this user".
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load games');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, router, allowed]);
+    loadGames(token);
+  }, [token, router, allowed, loadGames]);
 
   // Merge a saved row's changed fields back into state so the UI reflects the
   // server without a full refetch.
@@ -588,13 +590,33 @@ export default function MyGamesPage() {
       </div>
 
       <div className="masthead">
-        <span className="masthead-kicker">Your assignments</span>
-        <h1 className="masthead-title">My Games</h1>
-        <p className="masthead-standfirst">
-          Games assigned to you or self-claimed. Add notes, advance the
-          assignment status, and draft or publish a recap for each.
-        </p>
+        <div className="masthead-head">
+          <div>
+            <span className="masthead-kicker">Your assignments</span>
+            <h1 className="masthead-title">My Games</h1>
+            <p className="masthead-standfirst">
+              Games assigned to you or self-claimed. Add notes, advance the
+              assignment status, and draft or publish a recap for each.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-inline add-game-btn"
+            onClick={() => setShowAdd(true)}
+          >
+            + Add Game
+          </button>
+        </div>
       </div>
+
+      {showAdd && (
+        <AddGameForm
+          token={token}
+          selfClaim={isFieldRep}
+          onCreated={() => loadGames(token)}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
 
       {loading && <div className="card muted">Loading games…</div>}
       {error && <div className="error">{error}</div>}

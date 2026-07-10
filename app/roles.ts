@@ -20,7 +20,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Feed',
     roles: ['admin', 'regional_manager', 'field_rep', 'viewer'],
   },
-  { href: '/my-games', label: 'My games', roles: ['admin', 'field_rep'] },
+  {
+    href: '/my-games',
+    label: 'My games',
+    roles: ['admin', 'regional_manager', 'field_rep'],
+  },
   { href: '/field-reps', label: 'Field reps', roles: ['admin', 'regional_manager'] },
   { href: '/dashboard', label: 'Reports', roles: ['admin'] },
 ];
@@ -54,7 +58,10 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   { match: (p) => p === '/dashboard', roles: ['admin'] },
   { match: (p) => p === '/field-reps', roles: ['admin', 'regional_manager'] },
   { match: (p) => p.startsWith('/managers/'), roles: ['admin', 'regional_manager'] },
-  { match: (p) => p === '/my-games', roles: ['admin', 'field_rep'] },
+  {
+    match: (p) => p === '/my-games',
+    roles: ['admin', 'regional_manager', 'field_rep'],
+  },
 ];
 
 export function canAccess(roles: string[], pathname: string): boolean {
