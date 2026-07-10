@@ -95,6 +95,10 @@ export default function RepDrilldownPage() {
   const [sales, setSales] = useState<AdOrder[] | null>(null);
   const [advertisersById, setAdvertisersById] = useState<Record<string, string>>({});
   const [salesError, setSalesError] = useState<string | null>(null);
+  // The rep's commission rate (4dp decimal string) from GET /field-reps, used to
+  // show an "est. commission" per sale (amount × rate). null when unavailable --
+  // then the column is omitted silently, per spec (no true per-rep ledger yet).
+  const [commissionRate, setCommissionRate] = useState<string | null>(null);
   const [resultsByEvent, setResultsByEvent] = useState<Record<string, ResultSeed>>({});
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
@@ -141,6 +145,9 @@ export default function RepDrilldownPage() {
 
         const rep = reps.find((r) => r.id === repId);
         if (rep?.displayName) setRepName((n) => n || rep.displayName!);
+        // Keep the rep's rate for the Sales "est. commission" column. It's a
+        // numeric string; leave it null (column hidden) if the rep isn't found.
+        if (rep?.commissionRate != null) setCommissionRate(rep.commissionRate);
 
         // Refetch the header totals from the manager's roster so a hard refresh
         // (no query params) still shows them. rep.managerId is the owning
@@ -372,6 +379,9 @@ export default function RepDrilldownPage() {
               <tr>
                 <th>Advertiser</th>
                 <th>Amount</th>
+                {commissionRate != null && (
+                  <th className="num">Est. commission</th>
+                )}
                 <th>Status</th>
                 <th>Dates</th>
               </tr>
@@ -381,6 +391,11 @@ export default function RepDrilldownPage() {
                 <tr key={s.id}>
                   <td>{advertisersById[s.advertiserId] ?? 'Advertiser'}</td>
                   <td>{usd(s.amount)}</td>
+                  {commissionRate != null && (
+                    <td className="num est-commission">
+                      {usd((Number(s.amount) * Number(commissionRate)).toFixed(2))}
+                    </td>
+                  )}
                   <td>
                     <span className="pill">{s.status}</span>
                   </td>

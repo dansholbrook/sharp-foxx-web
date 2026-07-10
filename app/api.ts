@@ -78,6 +78,46 @@ export interface ManagerRoster {
   }>;
 }
 
+// Mirrors reports.service.ts `myEarnings()` -- the CALLER's own commission
+// earnings, resolved from their field_reps row (reps AND managers have one). All
+// money is numeric -> a string; rate is a 4dp decimal string (e.g. "0.1500").
+// sourceType is the commission_source enum; status the commission_status enum
+// (lifetime totals include 'reversed'). commissions come back newest-first
+// (earnedAt desc) -- render in API order. paidAt is null until paid.
+export interface MyEarningsReport {
+  totals: { pending: string; approved: string; paid: string; lifetime: string };
+  commissions: Array<{
+    id: string;
+    sourceType: 'ad_order' | 'nil_contribution' | 'subscription' | 'retail_order';
+    baseAmount: string;
+    rate: string;
+    amount: string;
+    status: 'pending' | 'approved' | 'paid' | 'reversed';
+    earnedAt: string;
+    paidAt: string | null;
+  }>;
+}
+
+// Mirrors reports.service.ts `managerSummary()` -- a territory rollup keyed on
+// the manager's OWN field_reps id (the roster route's :id). Admin sees any
+// territory; a regional_manager only their own (else 403). Money is numeric -> a
+// string; recentOrders is capped at 10, newest-first, and stays UNFILTERED so a
+// 'canceled'/'draft' order can appear (unlike totalSales, which excludes them).
+// businessName/repDisplayName come from left joins, so they can be null.
+export interface ManagerSummary {
+  repCount: number;
+  totalSales: { count: number; amount: string };
+  totalCommissions: { pending: string; approved: string; paid: string };
+  recentOrders: Array<{
+    id: string;
+    amount: string;
+    status: string;
+    createdAt: string;
+    businessName: string | null;
+    repDisplayName: string | null;
+  }>;
+}
+
 // Mirrors assignments.service.ts `listMine()` -- the caller's own assignments
 // joined to their events. Teams come back as raw UUIDs (no name join) and are
 // nullable; scheduledAt/assignedAt are ISO strings (timestamptz, mode 'string').
@@ -485,6 +525,17 @@ export const getFieldReps = (token: string) =>
 
 export const getManagerReps = (token: string, id: string) =>
   authGet<ManagerRoster>(`/reports/managers/${id}/reps`, token);
+
+// The caller's own commission earnings (reps AND managers -- anyone with a
+// field_reps row). A user with no rep profile comes back 403 -> "403 No field
+// rep profile for this user"; the My Games section hides itself on that.
+export const getMyEarnings = (token: string) =>
+  authGet<MyEarningsReport>('/reports/my-earnings', token);
+
+// A manager's territory rollup (id is the manager's field_reps row id -- the
+// roster route's :id). Admin any; a regional_manager only their own (else 403).
+export const getManagerSummary = (token: string, id: string) =>
+  authGet<ManagerSummary>(`/reports/managers/${id}/summary`, token);
 
 export const getMyAssignments = (token: string) =>
   authGet<MyAssignment[]>('/assignments/mine', token);

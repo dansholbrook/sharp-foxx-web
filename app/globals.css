@@ -2208,3 +2208,51 @@ tfoot td {
   background: #241f12;
   border-color: var(--accent-dim);
 }
+
+/* =================================================================
+   Earnings + territory dashboards — the My Earnings section on My Games
+   and the territory overview on the manager roster. Both reuse the
+   existing .rep-stat* cards and .report-table; the rules below only add
+   the small sub-line under a stat, section spacing, and the estimate tint.
+   ================================================================= */
+
+/* Let the four stat cards pack tighter so they sit on one row on the wider
+   .feed-home surfaces before wrapping (rep-stat's own basis is 200px). */
+.earnings-stats .rep-stat,
+.territory-stats .rep-stat {
+  flex-basis: 170px;
+}
+
+/* Give the ledger/overview cards breathing room above their table. */
+.earnings-stats,
+.territory-stats {
+  margin-bottom: 24px;
+}
+
+/* Small qualifier under a stat value (e.g. "3 orders", "pending + approved"). */
+.rep-stat__sub {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* "Recent activity" heading sits below the stat cards on the roster overview. */
+.territory-activity__head {
+  margin: 4px 0 12px;
+}
+
+/* The base × rate expression reads as a quiet calculation, not a headline. */
+.earnings-calc {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Estimated (derived) commission on the rep drill-down — dimmed gold to signal
+   it's computed from the rate, not a booked ledger figure. */
+.est-commission {
+  color: var(--accent-dim);
+  font-variant-numeric: tabular-nums;
+}
