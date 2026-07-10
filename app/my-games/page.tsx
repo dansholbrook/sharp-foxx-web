@@ -20,12 +20,16 @@ import {
   getMyAdOrders,
   getAdvertisers,
   getFieldReps,
+  getEventSponsorship,
+  createSponsorship,
+  deleteSponsorship,
   MyAssignment,
   ContentItem,
   EventContentItem,
   UpdateEventResultInput,
   EventResult,
   AdOrder,
+  Sponsorship,
 } from '../api';
 
 const usd = (v: string) =>
@@ -104,6 +108,107 @@ function LiveBadge() {
   );
 }
 
+// Small modal to attach one of the rep's own ad orders to a game as its
+// presenting sponsor. Dropdown of the rep's orders (advertiser name + amount),
+// POSTs the link, and handles a 409 (game already sponsored) inline. On success
+// it hands the new Sponsorship back up so the card updates without a refetch.
+function AttachSponsorForm({
+  token,
+  eventId,
+  orders,
+  advertisersById,
+  onLinked,
+  onClose,
+}: {
+  token: string;
+  eventId: string;
+  orders: AdOrder[];
+  advertisersById: Record<string, string>;
+  onLinked: (sponsorship: Sponsorship) => void;
+  onClose: () => void;
+}) {
+  const [adOrderId, setAdOrderId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!adOrderId) {
+      setError('Pick one of your sales to link.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const sponsorship = await createSponsorship(token, { eventId, adOrderId });
+      onLinked(sponsorship);
+    } catch (err) {
+      // 409 -> "409 This game already has a presenting sponsor"; shown inline so
+      // the rep can pick a different game or back out.
+      setError(err instanceof Error ? err.message : 'Failed to attach sponsor');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Attach sponsor"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <span className="game-kicker">Presenting sponsor</span>
+            <h2 style={{ margin: '2px 0 0' }}>Attach sponsor</h2>
+          </div>
+          <button type="button" className="link-btn modal-close" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="rep-form">
+          <div className="field field--wide">
+            <label htmlFor="attach-order">Your sale</label>
+            <select
+              id="attach-order"
+              value={adOrderId}
+              onChange={(e) => {
+                setAdOrderId(e.target.value);
+                setError(null);
+              }}
+            >
+              <option value="">Choose one of your sales…</option>
+              {orders.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {(advertisersById[o.advertiserId] ?? 'Advertiser')} — {usd(o.amount)}
+                </option>
+              ))}
+            </select>
+            {orders.length === 0 && (
+              <span className="muted sponsor-field-hint">
+                Log a sale first — you can only sponsor a game with one of your own
+                orders.
+              </span>
+            )}
+          </div>
+
+          <div className="rep-form-actions">
+            <button type="submit" disabled={submitting || orders.length === 0}>
+              {submitting ? 'Attaching…' : 'Attach sponsor'}
+            </button>
+          </div>
+
+          {error && <div className="error rep-form-msg">{error}</div>}
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // One editable game row. Owns its own saving/error/notes-draft state so a save
 // on one row never blocks or clobbers another. On success it hands the changed
 // fields back up via onUpdated so the parent's row stays in sync (the PATCH
@@ -114,16 +219,79 @@ function GameRow({
   authorId,
   resultSeed,
   onUpdated,
+  // Sponsor management is the rep's own view only (canSponsor). myOrders are the
+  // rep's own ad orders -- both the attach picker's options and how we tell a
+  // sponsorship the rep attached (its adOrderId is one of theirs) so we can offer
+  // Remove. advertisersById labels those orders. All best-effort from the parent.
+  canSponsor,
+  myOrders,
+  advertisersById,
 }: {
   game: MyAssignment;
   token: string;
   authorId: string;
   resultSeed?: ResultSeed;
   onUpdated: (id: string, fields: { status?: MyAssignment['status']; notes?: string | null }) => void;
+  canSponsor: boolean;
+  myOrders: AdOrder[];
+  advertisersById: Record<string, string>;
 }) {
   const [notesDraft, setNotesDraft] = useState(game.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Presenting sponsor for this game (or null). Loaded once on mount; a
+  // failed lookup is swallowed so it never breaks the row. showAttach drives the
+  // attach modal; removing/sponsorError own the Remove action's state.
+  const [sponsorship, setSponsorship] = useState<Sponsorship | null>(null);
+  const [loadingSponsor, setLoadingSponsor] = useState(true);
+  const [showAttach, setShowAttach] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [sponsorError, setSponsorError] = useState<string | null>(null);
+
+  // A sponsorship whose ad order is one of the rep's own was attached by them,
+  // so we offer Remove (the backend enforces the same ownership on DELETE).
+  const attachedByMe =
+    sponsorship != null && myOrders.some((o) => o.id === sponsorship.adOrderId);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingSponsor(true);
+    (async () => {
+      try {
+        const s = await getEventSponsorship(token, game.event.id);
+        if (!cancelled) setSponsorship(s);
+      } catch {
+        /* a failed sponsor lookup shouldn't break the row -- leave it null */
+      } finally {
+        if (!cancelled) setLoadingSponsor(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, game.event.id]);
+
+  async function removeSponsor() {
+    if (!sponsorship) return;
+    if (
+      !window.confirm(
+        `Remove ${sponsorship.businessName} as this game's presenting sponsor?`,
+      )
+    ) {
+      return;
+    }
+    setRemoving(true);
+    setSponsorError(null);
+    try {
+      await deleteSponsorship(token, sponsorship.id);
+      setSponsorship(null);
+    } catch (err) {
+      setSponsorError(err instanceof Error ? err.message : 'Failed to remove sponsor');
+    } finally {
+      setRemoving(false);
+    }
+  }
 
   // ---- Report Result: home/away scores + a video URL, PATCHed to the event.
   // Seeded from whatever is already on the event (resultSeed); `result` is the
@@ -422,6 +590,14 @@ function GameRow({
             )}
             <span className="game-meta__seg">{formatWhen(game.event.scheduledAt)}</span>
           </div>
+          {sponsorship && (
+            <p className="game-sponsor-line">
+              Presented by{' '}
+              <span className="game-sponsor-line__name">
+                {sponsorship.businessName}
+              </span>
+            </p>
+          )}
         </div>
         <div className="game-pills">
           {isLive ? (
@@ -432,6 +608,48 @@ function GameRow({
           <span className="pill">{SOURCE_LABELS[game.source] ?? game.source}</span>
         </div>
       </div>
+
+      {/* ---- Sponsor actions (rep's own view): attach when unsponsored, remove
+          a sponsorship the rep attached. Hidden until the lookup resolves. ---- */}
+      {canSponsor && !loadingSponsor && (
+        <div className="game-sponsor-actions">
+          {!sponsorship ? (
+            <button
+              type="button"
+              className="btn-inline btn-ghost"
+              onClick={() => setShowAttach(true)}
+            >
+              Attach sponsor
+            </button>
+          ) : (
+            attachedByMe && (
+              <button
+                type="button"
+                className="link-btn"
+                disabled={removing}
+                onClick={removeSponsor}
+              >
+                {removing ? 'Removing…' : 'Remove sponsor'}
+              </button>
+            )
+          )}
+          {sponsorError && <div className="error">{sponsorError}</div>}
+        </div>
+      )}
+
+      {showAttach && (
+        <AttachSponsorForm
+          token={token}
+          eventId={game.event.id}
+          orders={myOrders}
+          advertisersById={advertisersById}
+          onLinked={(s) => {
+            setSponsorship(s);
+            setShowAttach(false);
+          }}
+          onClose={() => setShowAttach(false)}
+        />
+      )}
 
       {/* ---- Controls: notes, status, generate, article panel ---- */}
       <div className="game-controls">
@@ -851,6 +1069,9 @@ export default function MyGamesPage() {
               authorId={user?.id ?? ''}
               resultSeed={resultsByEvent[g.event.id]}
               onUpdated={onRowUpdated}
+              canSponsor={isFieldRep}
+              myOrders={sales ?? []}
+              advertisersById={advertisersById}
             />
           ))}
         </div>

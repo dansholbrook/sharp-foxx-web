@@ -386,6 +386,27 @@ export interface CreateAdOrderInput {
   endsOn?: string;
 }
 
+// A game sponsorship as returned by GET /sponsorships?eventId= and POST
+// /sponsorships. businessName/advertiserId are resolved server-side from the
+// linked ad order's advertiser, so the "Presented by" strip needs no extra
+// join. eventId + adOrderId are the two sides of the link. The eventId lookup
+// returns this row or null (a game with no presenting sponsor).
+export interface Sponsorship {
+  id: string;
+  eventId: string;
+  adOrderId: string;
+  advertiserId: string;
+  businessName: string;
+}
+
+// POST /sponsorships body. Links an existing ad order to an event. A rep may
+// only pass their own orders (enforced server-side); a game that already has a
+// sponsor comes back 409 -> "409 This game already has a presenting sponsor".
+export interface CreateSponsorshipInput {
+  eventId: string;
+  adOrderId: string;
+}
+
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
 async function toError(res: Response): Promise<Error> {
   let detail = res.statusText;
@@ -442,6 +463,15 @@ async function authPatch<T>(path: string, token: string, body: unknown): Promise
   });
   if (!res.ok) throw await toError(res);
   return res.json();
+}
+
+// DELETE returns 204 (no body), so there's nothing to parse -- resolve to void.
+async function authDelete(path: string, token: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw await toError(res);
 }
 
 export const getCommissions = (token: string) =>
@@ -593,3 +623,24 @@ export const getRepAdOrders = (token: string, repId: string) =>
 // sale is always credited to themselves (backend-enforced). Send status "active".
 export const createAdOrder = (token: string, input: CreateAdOrderInput) =>
   authPost<AdOrder>('/ad-orders', token, input);
+
+// The presenting sponsor for a game (or null when none). Open to every role
+// incl. viewer, so the fan-facing game page can render the "Presented by" strip.
+export const getEventSponsorship = (token: string, eventId: string) =>
+  authGet<Sponsorship | null>(
+    `/sponsorships?eventId=${encodeURIComponent(eventId)}`,
+    token,
+  );
+
+// Link an ad order to a game as its presenting sponsor. A rep may only use their
+// own orders (enforced server-side); a game that already has a sponsor comes
+// back 409 -> "409 This game already has a presenting sponsor", shown inline.
+export const createSponsorship = (
+  token: string,
+  input: CreateSponsorshipInput,
+) => authPost<Sponsorship>('/sponsorships', token, input);
+
+// Remove a sponsorship. Permissions are enforced server-side (the rep who
+// attached it, or staff); a foreign one surfaces as "<status> <message>".
+export const deleteSponsorship = (token: string, id: string) =>
+  authDelete(`/sponsorships/${id}`, token);

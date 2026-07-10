@@ -13,8 +13,11 @@ import {
   createAdvertiser,
   getAdPackages,
   createAdOrder,
+  getEvents,
+  createSponsorship,
   Advertiser,
   AdPackage,
+  EventListItem,
   CreateAdOrderInput,
 } from './api';
 
@@ -30,6 +33,23 @@ function addDays(dateStr: string, days: number): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+// Compact date for a game option label ("Home vs Away — Aug 3"). scheduledAt is
+// a full ISO timestamp (not a date-only string), so parse it directly.
+function formatGameDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// The dropdown label for a sponsorable game: "Home vs Away — date", with TBD
+// standing in for either unnamed side (no raw UUIDs).
+function gameLabel(e: EventListItem): string {
+  const home = e.homeTeam ?? 'TBD';
+  const away = e.awayTeam ?? 'TBD';
+  return `${home} vs ${away} — ${formatGameDate(e.scheduledAt)}`;
 }
 
 // Readable date for the computed end date preview (parsed as UTC to match how it
@@ -62,16 +82,25 @@ export function LogSaleForm({
 }) {
   const [advertisers, setAdvertisers] = useState<Advertiser[]>([]);
   const [packages, setPackages] = useState<AdPackage[]>([]);
+  // Non-final games the new sale can optionally sponsor. Best-effort: a failed
+  // load just leaves the picker empty rather than blocking the sale.
+  const [games, setGames] = useState<EventListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [advertiserId, setAdvertiserId] = useState('');
   const [packageId, setPackageId] = useState('');
   const [amount, setAmount] = useState('');
   const [startsOn, setStartsOn] = useState(''); // date input value (yyyy-mm-dd)
+  // Optional game to link this sale to as its presenting sponsor.
+  const [sponsorEventId, setSponsorEventId] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Set only when the SALE succeeded but the optional game link failed (e.g. a
+  // 409 because that game already has a sponsor). Shown alongside the success so
+  // the two outcomes never get confused -- the sale is never rolled back.
+  const [sponsorWarning, setSponsorWarning] = useState<string | null>(null);
 
   // Inline "new advertiser" state (name only, same shape as add-game's new-team).
   const [addingNew, setAddingNew] = useState(false);
@@ -85,13 +114,17 @@ export function LogSaleForm({
     setLoading(true);
     (async () => {
       try {
-        const [advs, pkgs] = await Promise.all([
+        const [advs, pkgs, evs] = await Promise.all([
           getAdvertisers(token),
           getAdPackages(token),
+          // The game picker is optional -- a failed load leaves it empty and the
+          // rest of the form still works.
+          getEvents(token).catch(() => [] as EventListItem[]),
         ]);
         if (cancelled) return;
         setAdvertisers(advs);
         setPackages(pkgs);
+        setGames(evs.filter((e) => e.status !== 'final'));
       } catch (err) {
         if (!cancelled) {
           setFormError(err instanceof Error ? err.message : 'Failed to load form data');
@@ -164,6 +197,7 @@ export function LogSaleForm({
     e.preventDefault();
     setFormError(null);
     setSuccess(null);
+    setSponsorWarning(null);
 
     if (!advertiserId) {
       setFormError('Pick an advertiser.');
@@ -188,7 +222,7 @@ export function LogSaleForm({
 
     setSubmitting(true);
     try {
-      await createAdOrder(token, body);
+      const order = await createAdOrder(token, body);
       // Commission is booked server-side; echo it client-side when we know the
       // rep's rate, otherwise just confirm the sale.
       const rate = commissionRate != null ? Number(commissionRate) : NaN;
@@ -197,12 +231,33 @@ export function LogSaleForm({
           ? `Sale logged — you earned ${usd(amountNum * rate)} in commission.`
           : 'Sale logged.';
       setSuccess(message);
+
+      // Optional game link. The SALE already succeeded above, so a failure here
+      // (e.g. 409 -- the game already has a sponsor) never rolls it back: we keep
+      // the success and add a clear warning that only the link failed.
+      if (sponsorEventId) {
+        try {
+          await createSponsorship(token, {
+            eventId: sponsorEventId,
+            adOrderId: order.id,
+          });
+          setSuccess(`${message} Linked as the game's presenting sponsor.`);
+        } catch (linkErr) {
+          const detail =
+            linkErr instanceof Error ? linkErr.message : 'Failed to link the game';
+          setSponsorWarning(
+            `The sale was saved, but the game link failed (${detail}). You can attach this order to another game from My Sales.`,
+          );
+        }
+      }
+
       onCreated?.();
       // Clear for a possible next entry (the confirmation stays visible).
       setAdvertiserId('');
       setPackageId('');
       setAmount('');
       setStartsOn('');
+      setSponsorEventId('');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Failed to log sale');
     } finally {
@@ -341,6 +396,32 @@ export function LogSaleForm({
             )}
           </div>
 
+          {/* ---- Sponsor a game (optional) ---- */}
+          <div className="field field--wide">
+            <label htmlFor="ls-sponsor">Sponsor a game (optional)</label>
+            <select
+              id="ls-sponsor"
+              value={sponsorEventId}
+              disabled={loading}
+              onChange={(e) => {
+                setSponsorEventId(e.target.value);
+                setSuccess(null);
+                setSponsorWarning(null);
+              }}
+            >
+              <option value="">No game</option>
+              {games.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {gameLabel(g)}
+                </option>
+              ))}
+            </select>
+            <span className="muted sponsor-field-hint">
+              Links this sale to a game as its presenting sponsor. The sale still
+              saves if the game already has one.
+            </span>
+          </div>
+
           <div className="rep-form-actions">
             <button type="submit" disabled={submitting || loading}>
               {submitting ? 'Logging…' : 'Log sale'}
@@ -349,6 +430,9 @@ export function LogSaleForm({
 
           {formError && <div className="error rep-form-msg">{formError}</div>}
           {success && <div className="success rep-form-msg">{success}</div>}
+          {sponsorWarning && (
+            <div className="error rep-form-msg sponsor-warning">{sponsorWarning}</div>
+          )}
         </form>
       </div>
     </div>

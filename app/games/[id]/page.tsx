@@ -10,9 +10,11 @@ import {
   getEvents,
   getEventContent,
   getPublishedContent,
+  getEventSponsorship,
   EventListItem,
   EventContentItem,
   FeedItem,
+  Sponsorship,
 } from '../../api';
 import { toYouTubeEmbed } from '../../video';
 
@@ -194,6 +196,18 @@ function Scoreboard({ event }: { event: EventListItem }) {
   );
 }
 
+// ---- Presenting sponsor strip: a slim gold-bordered band beneath the
+// scoreboard, stadium-naming-rights classy. Renders nothing when a game has no
+// sponsor (the caller passes null through), never an empty placeholder. ----
+function PresentingSponsorStrip({ sponsorship }: { sponsorship: Sponsorship }) {
+  return (
+    <div className="sponsor-strip">
+      <span className="sponsor-strip__label">Presented by</span>
+      <span className="sponsor-strip__name">{sponsorship.businessName}</span>
+    </div>
+  );
+}
+
 // ---- Share row: plain intent URLs (no SDKs) + clipboard copy. ----
 function ShareRow({ event }: { event: EventListItem }) {
   const home = event.homeTeam ?? 'TBD';
@@ -343,6 +357,9 @@ export default function GamePage() {
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [articles, setArticles] = useState<EventContentItem[] | null>(null);
   const [latest, setLatest] = useState<FeedItem[] | null>(null);
+  // The game's presenting sponsor, or null when it has none. A failed lookup
+  // degrades silently (stays null), so the strip simply doesn't render.
+  const [sponsorship, setSponsorship] = useState<Sponsorship | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -361,17 +378,21 @@ export default function GamePage() {
         // powers the "More games" rail). Published-only content for this game;
         // the global published feed powers "Latest articles". Article/feed
         // failures shouldn't blank the page, so they're swallowed to [].
-        const [ev, content, feed] = await Promise.all([
+        const [ev, content, feed, sponsor] = await Promise.all([
           getEvents(token),
           getEventContent(token, id, 'published').catch(
             () => [] as EventContentItem[],
           ),
           getPublishedContent(token).catch(() => [] as FeedItem[]),
+          // The sponsor strip is a garnish, not the page -- a failed lookup
+          // degrades silently to null rather than blanking the game.
+          getEventSponsorship(token, id).catch(() => null),
         ]);
         if (cancelled) return;
         setEvents(ev);
         setArticles(content);
         setLatest(feed);
+        setSponsorship(sponsor);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load game');
@@ -462,6 +483,7 @@ export default function GamePage() {
           <div className="game-main">
             <GameVideo event={event} />
             <Scoreboard event={event} />
+            {sponsorship && <PresentingSponsorStrip sponsorship={sponsorship} />}
             <ShareRow event={event} />
 
             <section className="game-articles">
