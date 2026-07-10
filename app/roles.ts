@@ -25,6 +25,14 @@ const NAV_ITEMS: NavItem[] = [
     label: 'My games',
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
+  // The rep's "business office": logged sales + earned commissions. Open to every
+  // role that can hold a rep profile (a bare admin with no rep row sees the page's
+  // branded access state, since the earnings call 403s).
+  {
+    href: '/my-sales',
+    label: 'My sales',
+    roles: ['admin', 'regional_manager', 'field_rep'],
+  },
   { href: '/field-reps', label: 'Field reps', roles: ['admin', 'regional_manager'] },
   { href: '/dashboard', label: 'Reports', roles: ['admin'] },
 ];
@@ -64,6 +72,12 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   { match: (p) => p.startsWith('/reps/'), roles: ['admin', 'regional_manager'] },
   {
     match: (p) => p === '/my-games',
+    roles: ['admin', 'regional_manager', 'field_rep'],
+  },
+  // Same role gate as My Games; the rep-profile check (which a bare admin fails)
+  // happens at the API on the earnings call, surfaced as the page's access state.
+  {
+    match: (p) => p === '/my-sales',
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
   // The fan-facing game page is open to every authenticated role -- a viewer
