@@ -66,6 +66,14 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p === '/my-games',
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
+  // The fan-facing game page is open to every authenticated role -- a viewer
+  // reaches it by clicking any game card on the feed or search results. Listed
+  // explicitly (rather than relying on the open-by-default fallback) so the
+  // intent is legible alongside the staff-gated pages above.
+  {
+    match: (p) => p.startsWith('/games/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'viewer'],
+  },
 ];
 
 export function canAccess(roles: string[], pathname: string): boolean {

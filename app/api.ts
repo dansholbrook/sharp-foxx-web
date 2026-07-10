@@ -487,11 +487,20 @@ export const getEvents = (token: string, status?: string) =>
     token,
   );
 
-// Any content already attached to a game, so a rep can find/edit an existing
-// article on load (not just right after generating). Returns the joined listing
-// shape, newest-created first for this non-published view.
-export const getEventContent = (token: string, eventId: string) =>
-  authGet<EventContentItem[]>(`/content?eventId=${eventId}`, token);
+// Any content already attached to a game. With no status filter (the default) a
+// staff caller gets every status, so a rep can find/edit an existing draft on
+// load (not just right after generating). Pass status: 'published' for the
+// fan-facing game page -- that read is open to any authenticated role. Returns
+// the joined listing shape, newest-created first.
+export const getEventContent = (
+  token: string,
+  eventId: string,
+  status?: 'draft' | 'published' | 'archived',
+) =>
+  authGet<EventContentItem[]>(
+    `/content?eventId=${eventId}${status ? `&status=${status}` : ''}`,
+    token,
+  );
 
 export const updateAssignment = (
   token: string,

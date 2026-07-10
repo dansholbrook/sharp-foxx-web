@@ -24,6 +24,7 @@ import {
   ContentItem,
   EventContentItem,
   UpdateEventResultInput,
+  EventResult,
   AdOrder,
 } from '../api';
 
@@ -92,6 +93,17 @@ function matchup(a: MyAssignment): string | null {
   return `${homeTeam} vs ${awayTeam}`;
 }
 
+// The shared pulsing LIVE badge (dot + wordmark) — same scoped .live-badge
+// treatment used on the feed/search cards and the game page.
+function LiveBadge() {
+  return (
+    <span className="live-badge">
+      <span className="live-badge__dot" aria-hidden="true" />
+      Live
+    </span>
+  );
+}
+
 // One editable game row. Owns its own saving/error/notes-draft state so a save
 // on one row never blocks or clobbers another. On success it hands the changed
 // fields back up via onUpdated so the parent's row stays in sync (the PATCH
@@ -128,7 +140,27 @@ function GameRow({
   const [result, setResult] = useState<ResultSeed | null>(resultSeed ?? null);
   const [resultSaving, setResultSaving] = useState(false);
   const [resultError, setResultError] = useState<string | null>(null);
-  const [resultSaved, setResultSaved] = useState(false);
+  // Success line under the result form; its text varies by action (saved score,
+  // went live, ended game), so it's a message rather than a bare flag.
+  const [resultNotice, setResultNotice] = useState<string | null>(null);
+
+  // Live-state transitions are their own PATCHes to the event (they change
+  // status), independent of the score save. Go Live and End Game each own their
+  // loading/error state so neither blocks the plain score save.
+  const [liveSaving, setLiveSaving] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [endSaving, setEndSaving] = useState(false);
+  // Set when Go Live is pressed with an empty video field: the stream URL must
+  // be pasted BEFORE going live, so we prompt for it inline instead of PATCHing.
+  const [needsUrl, setNeedsUrl] = useState(false);
+
+  // The event's live status is tracked in `result` (seeded from the event and
+  // refreshed from each PATCH response), so the card reflects go-live / end-game
+  // in place; fall back to the status carried on the assignment.
+  const currentStatus = result?.status ?? game.event.status;
+  const isScheduled = currentStatus === 'scheduled';
+  const isLive = currentStatus === 'live';
+  const resultBusy = resultSaving || endSaving || liveSaving;
 
   // At least one field must be sent (empty body -> 400), so gate Save on that.
   const resultHasInput =
@@ -208,9 +240,25 @@ function GameRow({
     }
   }
 
-  // Report the game result. Build the body from only the filled-in fields so a
-  // rep can save just a score, just a video link, or both. Merge the returned
-  // event row back into `result`/the drafts so the card reflects the save.
+  // Merge a PATCH /events/:id/result response back into the card: the echoed
+  // score/video/status and the seeded drafts, plus the success line. Shared by
+  // the score save, Go Live, and End Game so all three update the card in place.
+  function applyResult(updated: EventResult, notice: string) {
+    setResult({
+      homeScore: updated.homeScore,
+      awayScore: updated.awayScore,
+      videoUrl: updated.videoUrl,
+      status: updated.status,
+    });
+    setHomeScoreDraft(updated.homeScore != null ? String(updated.homeScore) : '');
+    setAwayScoreDraft(updated.awayScore != null ? String(updated.awayScore) : '');
+    setVideoUrlDraft(updated.videoUrl ?? '');
+    setResultNotice(notice);
+  }
+
+  // Report/update the score. Build the body from only the filled-in fields so a
+  // rep can save just a score, just a video link, or both -- and NEVER changes
+  // status (when live this is the "Update Score" running-score save).
   async function saveResult() {
     const body: UpdateEventResultInput = {};
     if (homeScoreDraft.trim() !== '') body.homeScore = Number(homeScoreDraft);
@@ -227,24 +275,66 @@ function GameRow({
     }
     setResultSaving(true);
     setResultError(null);
-    setResultSaved(false);
+    setResultNotice(null);
     try {
       const updated = await updateEventResult(token, game.event.id, body);
-      setResult({
-        homeScore: updated.homeScore,
-        awayScore: updated.awayScore,
-        videoUrl: updated.videoUrl,
-        status: updated.status,
-      });
-      setHomeScoreDraft(updated.homeScore != null ? String(updated.homeScore) : '');
-      setAwayScoreDraft(updated.awayScore != null ? String(updated.awayScore) : '');
-      setVideoUrlDraft(updated.videoUrl ?? '');
-      setResultSaved(true);
+      applyResult(updated, isLive ? 'Score updated.' : 'Result saved.');
     } catch (err) {
       // 403 (not your game) / 400 (bad body) surface as "<status> <message>".
       setResultError(err instanceof Error ? err.message : 'Failed to save result');
     } finally {
       setResultSaving(false);
+    }
+  }
+
+  // Take a scheduled game live. The stream URL must be pasted first, so with an
+  // empty video field we prompt inline instead of PATCHing; with a URL present
+  // we PATCH { status: 'live', videoUrl } and the card flips to its live state.
+  async function goLive() {
+    if (videoUrlDraft.trim() === '') {
+      setNeedsUrl(true);
+      return;
+    }
+    setNeedsUrl(false);
+    setLiveSaving(true);
+    setLiveError(null);
+    setResultNotice(null);
+    try {
+      const updated = await updateEventResult(token, game.event.id, {
+        status: 'live',
+        videoUrl: videoUrlDraft.trim(),
+      });
+      applyResult(updated, 'You’re live.');
+    } catch (err) {
+      setLiveError(err instanceof Error ? err.message : 'Failed to go live');
+    } finally {
+      setLiveSaving(false);
+    }
+  }
+
+  // End a live game: PATCH { status: 'final' } together with whatever scores are
+  // in the inputs, after a confirm. Reuses the result error line for failures.
+  async function endGame() {
+    if (
+      !window.confirm(
+        'End this game and mark it final? The score in the inputs will be published as the final result.',
+      )
+    ) {
+      return;
+    }
+    const body: UpdateEventResultInput = { status: 'final' };
+    if (homeScoreDraft.trim() !== '') body.homeScore = Number(homeScoreDraft);
+    if (awayScoreDraft.trim() !== '') body.awayScore = Number(awayScoreDraft);
+    setEndSaving(true);
+    setResultError(null);
+    setResultNotice(null);
+    try {
+      const updated = await updateEventResult(token, game.event.id, body);
+      applyResult(updated, 'Game ended — marked final.');
+    } catch (err) {
+      setResultError(err instanceof Error ? err.message : 'Failed to end game');
+    } finally {
+      setEndSaving(false);
     }
   }
 
@@ -334,7 +424,11 @@ function GameRow({
           </div>
         </div>
         <div className="game-pills">
-          <span className="pill">{game.event.status}</span>
+          {isLive ? (
+            <LiveBadge />
+          ) : (
+            <span className="pill">{currentStatus}</span>
+          )}
           <span className="pill">{SOURCE_LABELS[game.source] ?? game.source}</span>
         </div>
       </div>
@@ -385,9 +479,13 @@ function GameRow({
           </select>
         </div>
 
-        {/* ---- Report result: scores + replay link, PATCHed to the event ---- */}
+        {/* ---- Result / live score: scores + stream/replay link, PATCHed to the
+            event. Same fields throughout; the buttons change with status --
+            Go Live (scheduled), Update Score + End Game (live). ---- */}
         <div className="game-result">
-          <label className="game-field-label">Report result</label>
+          <label className="game-field-label">
+            {isLive ? 'Live score' : 'Report result'}
+          </label>
           <div className="result-row">
             <div className="result-scores">
               <input
@@ -398,10 +496,10 @@ function GameRow({
                 aria-label={`${game.event.homeTeam ?? 'Home'} score`}
                 placeholder="Home"
                 value={homeScoreDraft}
-                disabled={resultSaving}
+                disabled={resultBusy}
                 onChange={(e) => {
                   setHomeScoreDraft(e.target.value);
-                  setResultSaved(false);
+                  setResultNotice(null);
                 }}
               />
               <span className="result-dash" aria-hidden="true">
@@ -415,45 +513,80 @@ function GameRow({
                 aria-label={`${game.event.awayTeam ?? 'Away'} score`}
                 placeholder="Away"
                 value={awayScoreDraft}
-                disabled={resultSaving}
+                disabled={resultBusy}
                 onChange={(e) => {
                   setAwayScoreDraft(e.target.value);
-                  setResultSaved(false);
+                  setResultNotice(null);
                 }}
               />
             </div>
             <input
               type="url"
               className="result-video-input"
-              aria-label="Video URL"
-              placeholder="Video URL (https://…)"
+              aria-label={isScheduled ? 'Stream URL' : 'Video URL'}
+              placeholder={
+                isScheduled
+                  ? 'Stream URL (https://…) — paste before going live'
+                  : 'Video URL (https://…)'
+              }
               value={videoUrlDraft}
-              disabled={resultSaving}
+              disabled={resultBusy}
               onChange={(e) => {
                 setVideoUrlDraft(e.target.value);
-                setResultSaved(false);
+                setResultNotice(null);
+                setNeedsUrl(false);
               }}
             />
             <button
               className="btn-inline"
-              disabled={resultSaving || !resultHasInput}
+              disabled={resultBusy || !resultHasInput}
               onClick={saveResult}
             >
-              {resultSaving ? 'Saving…' : 'Save result'}
+              {resultSaving
+                ? 'Saving…'
+                : isLive
+                  ? 'Update Score'
+                  : 'Save result'}
             </button>
+            {isScheduled && (
+              <button
+                className="btn-inline"
+                disabled={resultBusy}
+                onClick={goLive}
+              >
+                {liveSaving ? 'Going live…' : 'Go Live'}
+              </button>
+            )}
+            {isLive && (
+              <button
+                className="btn-inline btn-ghost"
+                disabled={resultBusy}
+                onClick={endGame}
+              >
+                {endSaving ? 'Ending…' : 'End Game (Final)'}
+              </button>
+            )}
           </div>
+          {needsUrl && (
+            <p className="game-hint">
+              Paste the stream URL above first — it needs to be set before the
+              game goes live.
+            </p>
+          )}
           {result && result.homeScore != null && result.awayScore != null && (
             <p className="result-current">
               {result.status === 'final' && <span className="pill">Final</span>}
+              {result.status === 'live' && <LiveBadge />}
               <span className="result-current__score">
                 {result.homeScore} – {result.awayScore}
               </span>
             </p>
           )}
-          {resultSaved && !resultError && (
-            <div className="success">Result saved.</div>
+          {resultNotice && !resultError && (
+            <div className="success">{resultNotice}</div>
           )}
           {resultError && <div className="error">{resultError}</div>}
+          {liveError && <div className="error">{liveError}</div>}
         </div>
 
         {(generating || genError || draft) && (
