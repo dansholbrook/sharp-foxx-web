@@ -2419,6 +2419,25 @@ a.btn-inline:hover {
   max-width: 760px;
 }
 
+/* ---- Login: developer sign-in disclosure, tucked below the real form ---- */
+.dev-signin {
+  margin-top: 4px;
+  text-align: center;
+}
+
+.dev-signin__toggle {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+/* The revealed UUID panel reads as a small left-aligned card, not centered. */
+.dev-signin__panel {
+  margin-top: 16px;
+  text-align: left;
+}
+
 /* Override the two-column rep-form grid -- a recruiting form reads better
    stacked, with only the city/state pair sitting side by side. */
 .apply-form {
@@ -2664,6 +2683,13 @@ a.btn-inline:hover {
 
 .approve-id--inline {
   max-width: 520px;
+}
+
+/* The approve success stacks two credential blocks (user id + temp password). */
+.approve-creds {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .approve-id__label {

@@ -80,7 +80,11 @@ function ApproveModal({
   const [managerId, setManagerId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  // The one-time sign-in credentials returned on approval (null until approved).
+  const [credentials, setCredentials] = useState<{
+    userId: string;
+    tempPassword: string;
+  } | null>(null);
 
   const ratePct = Number.isNaN(Number(rate))
     ? null
@@ -100,7 +104,7 @@ function ApproveModal({
         commissionRate: parsed,
         managerId: managerId || undefined,
       });
-      setUserId(result.userId);
+      setCredentials({ userId: result.userId, tempPassword: result.tempPassword });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve.');
     } finally {
@@ -109,7 +113,7 @@ function ApproveModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={userId ? undefined : onClose}>
+    <div className="modal-overlay" onClick={credentials ? undefined : onClose}>
       <div
         className="modal-card card"
         role="dialog"
@@ -122,28 +126,40 @@ function ApproveModal({
             <span className="game-kicker">Approve</span>
             <h2 style={{ margin: '2px 0 0' }}>{application.fullName}</h2>
           </div>
-          {!userId && (
+          {!credentials && (
             <button type="button" className="link-btn modal-close" onClick={onClose}>
               Close
             </button>
           )}
         </div>
 
-        {userId ? (
-          // ---- Success: the new sign-in id, ready to hand off. ----
+        {credentials ? (
+          // ---- Success: the sign-in credentials, ready to hand off once. ----
           <div className="approve-done">
             <p className="approve-done__lead">
               Account created for <strong>{application.fullName}</strong>.
             </p>
-            <div className="approve-id">
-              <span className="approve-id__label">Sign-in ID</span>
-              <div className="approve-id__row">
-                <code className="approve-id__value mono">{userId}</code>
-                <CopyId value={userId} />
+            <div className="approve-creds">
+              <div className="approve-id">
+                <span className="approve-id__label">User ID</span>
+                <div className="approve-id__row">
+                  <code className="approve-id__value mono">{credentials.userId}</code>
+                  <CopyId value={credentials.userId} />
+                </div>
+              </div>
+              <div className="approve-id">
+                <span className="approve-id__label">Temporary password</span>
+                <div className="approve-id__row">
+                  <code className="approve-id__value mono">
+                    {credentials.tempPassword}
+                  </code>
+                  <CopyId value={credentials.tempPassword} />
+                </div>
               </div>
             </div>
             <p className="muted approve-done__note">
-              Share this sign-in ID with the applicant.
+              Share these sign-in credentials with the applicant — the password
+              is shown only once.
             </p>
             <div className="rep-form-actions">
               <button type="button" onClick={onApproved}>

@@ -26,6 +26,9 @@ export function AppNav() {
           {l.label}
         </Link>
       ))}
+      <Link href="/account/password" className="link-btn">
+        Change password
+      </Link>
       <button className="link-btn" onClick={onLogout}>
         Log out
       </button>

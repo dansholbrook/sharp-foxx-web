@@ -11,6 +11,10 @@ export interface LoginResponse {
   tokenType: string;
   expiresIn: string;
   user: { id: string; displayName: string; roles: string[] };
+  // True when the account is on a temporary password and must set a real one
+  // before proceeding. Absent on the legacy dev (userId) login path -- callers
+  // treat absent as false.
+  mustChangePassword?: boolean;
 }
 
 export interface CommissionsReport {
@@ -461,7 +465,28 @@ async function toError(res: Response): Promise<Error> {
   return new Error(`${res.status} ${detail}`);
 }
 
-export async function login(userId: string): Promise<LoginResponse> {
+// Real sign-in: email + password. The backend returns the usual token/user
+// payload plus mustChangePassword (true when the account is still on a temp
+// password). A bad credential comes back 401 -> "401 <message>", surfaced
+// verbatim by the login form.
+export async function login(
+  email: string,
+  password: string,
+): Promise<LoginResponse> {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw await toError(res);
+  return res.json();
+}
+
+// Legacy dev sign-in: the same /auth/login endpoint still accepts a bare userId
+// (a dev flag on the backend mints a token from it) for test users not yet
+// migrated to a password. No mustChangePassword comes back on this path, so the
+// caller treats it as false.
+export async function devLogin(userId: string): Promise<LoginResponse> {
   const res = await fetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -469,6 +494,31 @@ export async function login(userId: string): Promise<LoginResponse> {
   });
   if (!res.ok) throw await toError(res);
   return res.json();
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+// Set a new password (Bearer auth). currentPassword is required whenever the
+// account has any password set (including a temp). The backend enforces
+// newPassword >= 10; a wrong current password comes back 401 and a weak/invalid
+// new one 400 -- both surface as "<status> <message>". The success body isn't
+// read (may be 200+json or 204), so this resolves to void.
+export async function changePassword(
+  token: string,
+  input: ChangePasswordInput,
+): Promise<void> {
+  const res = await fetch(`${BASE}/auth/change-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await toError(res);
 }
 
 async function authGet<T>(path: string, token: string): Promise<T> {
@@ -797,13 +847,14 @@ export const getApplications = (token: string, status?: Application['status']) =
   );
 
 // Approve -> stands up the account (user + rep + role) and returns the updated
-// application plus { userId } (the new sign-in id staff share with the applicant).
+// application plus { userId, tempPassword } -- the sign-in credentials staff
+// hand off to the applicant. tempPassword is shown once (never returned again).
 export const approveApplication = (
   token: string,
   id: string,
   input: ApproveApplicationInput,
 ) =>
-  authPost<Application & { userId: string }>(
+  authPost<Application & { userId: string; tempPassword: string }>(
     `/applications/${id}/approve`,
     token,
     input,
