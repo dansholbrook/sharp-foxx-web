@@ -3447,3 +3447,207 @@ a.btn-inline:hover {
   margin: 4px 0 0;
   font-size: 0.9rem;
 }
+
+/* =================================================================
+   Game photos — correspondent upload (workspace Photos section) +
+   the fan gallery with a no-library lightbox on the game page.
+   Scoped via .photos-* / .lightbox-*; reuses the shared palette,
+   .card.game, .btn-inline and .game-hint primitives.
+   ================================================================= */
+
+/* Upload row: the "Add photos" pill (a styled <label> wrapping a hidden file
+   input) beside a format/size hint. */
+.photos-upload {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+/* The label is styled as a gold pill (the `button` element rules don't reach a
+   <label>, same as a.btn-inline); the real <input> is visually hidden but still
+   clickable via the label. */
+.photos-pick {
+  display: inline-block;
+  padding: 11px 18px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.photos-pick:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.photos-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.photos-hint {
+  margin: 0;
+}
+
+/* Responsive thumbnail grid — auto-fills square tiles, tighter on the fan side. */
+.photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.photos-grid--gallery {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+}
+
+/* Square tile with a cover-cropped image. */
+.photos-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+}
+
+/* A tile that's a button (the fan gallery) resets button chrome. */
+.photos-tile--btn {
+  padding: 0;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.photos-tile--btn:hover {
+  border-color: var(--border-strong);
+}
+
+.photos-tile__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Owner delete (×): a small dark chip pinned to the tile corner. */
+.photos-tile__delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(19, 17, 13, 0.82);
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.photos-tile__delete:hover {
+  background: #2c1714;
+  color: #f0b4ac;
+  border-color: #5c2b2b;
+}
+
+/* Pending / failed upload tiles: a state label centered in the square. */
+.photos-tile--pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  text-align: center;
+}
+
+.photos-tile__state {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.photos-tile__failed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.photos-tile__err {
+  font-size: 0.78rem;
+  color: #f0b4ac;
+  word-break: break-word;
+}
+
+.photos-tile__failed-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* The fan gallery lives under Coverage. */
+.game-photos {
+  margin-top: 28px;
+}
+
+/* ---- Lightbox: full image over a dark overlay, no external libs ---- */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(9, 8, 6, 0.9);
+}
+
+.lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: rgba(19, 17, 13, 0.82);
+  color: var(--text);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lightbox-close:hover {
+  background: var(--panel-raised);
+  color: var(--accent);
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
@@ -27,6 +27,11 @@ import {
   getLiveEvents,
   createLiveEvent,
   deleteLiveEvent,
+  presignGamePhoto,
+  uploadToPresignedUrl,
+  confirmMedia,
+  getGamePhotos,
+  deleteMedia,
   MyAssignment,
   ContentItem,
   EventContentItem,
@@ -36,6 +41,7 @@ import {
   Sponsorship,
   LiveEvent,
   LiveEventType,
+  GamePhoto,
 } from '../../api';
 
 const usd = (v: string) =>
@@ -586,6 +592,226 @@ function LiveConsole({
           </ul>
         )}
       </div>
+    </section>
+  );
+}
+
+// Client-side upload guards, mirrored on the backend: only these image types,
+// and 10MB max. We reject a bad file BEFORE presigning so the rep gets an
+// instant, clear message instead of a round-trip 400.
+const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+// A file mid-flight through presign -> PUT -> confirm. `file` is kept so a failed
+// upload can be retried in place; on success it's dropped from the pending list
+// and its confirmed GamePhoto joins the grid. `key` is a stable per-attempt id.
+type PhotoUpload = {
+  key: string;
+  file: File;
+  status: 'uploading' | 'failed';
+  error?: string;
+};
+
+// The workspace Photos section: a multi-file picker that runs each file through
+// the presign -> PUT -> confirm chain with per-file state, plus a grid of the
+// game's confirmed photos with an owner-only delete (×). Best-effort load; a
+// failed initial fetch just leaves an empty grid and never breaks the page.
+function PhotosSection({
+  token,
+  eventId,
+  myUserId,
+}: {
+  token: string;
+  eventId: string;
+  myUserId: string;
+}) {
+  const [photos, setPhotos] = useState<GamePhoto[]>([]);
+  const [uploads, setUploads] = useState<PhotoUpload[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // A monotonic counter for unique upload keys (Date.now/random are fine in the
+  // browser, but a counter keeps keys stable and collision-free across a batch).
+  const keySeq = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const list = await getGamePhotos(token, eventId);
+        if (!cancelled) setPhotos(list);
+      } catch {
+        /* a failed photo load shouldn't break the workspace -- leave it empty */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, eventId]);
+
+  // Run one file through the full chain, driving its tile's state. On success the
+  // tile is removed and the confirmed photo is prepended to the grid; on failure
+  // the tile flips to `failed` (with a Retry that calls back in).
+  async function runUpload(key: string, file: File) {
+    setUploads((u) =>
+      u.map((x) => (x.key === key ? { ...x, status: 'uploading', error: undefined } : x)),
+    );
+    try {
+      const { uploadUrl, publicUrl, mediaId } = await presignGamePhoto(token, {
+        fileName: file.name,
+        contentType: file.type,
+        sizeBytes: file.size,
+        eventId,
+      });
+      await uploadToPresignedUrl(uploadUrl, file, file.type);
+      await confirmMedia(token, mediaId);
+      const photo: GamePhoto = {
+        id: mediaId,
+        publicUrl,
+        createdAt: new Date().toISOString(),
+        uploaderUserId: myUserId,
+      };
+      setPhotos((p) => [photo, ...p]);
+      setUploads((u) => u.filter((x) => x.key !== key));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setUploads((u) =>
+        u.map((x) => (x.key === key ? { ...x, status: 'failed', error: msg } : x)),
+      );
+    }
+  }
+
+  // Validate + enqueue each picked file. Oversize/wrong-type files become an
+  // immediate `failed` tile (no presign attempt) with a clear reason.
+  function onPick(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      const key = `up-${keySeq.current++}`;
+      if (!PHOTO_TYPES.includes(file.type)) {
+        setUploads((u) => [
+          ...u,
+          { key, file, status: 'failed', error: 'Use a JPEG, PNG, or WebP image.' },
+        ]);
+        continue;
+      }
+      if (file.size > PHOTO_MAX_BYTES) {
+        setUploads((u) => [
+          ...u,
+          { key, file, status: 'failed', error: 'Too large — max 10MB.' },
+        ]);
+        continue;
+      }
+      setUploads((u) => [...u, { key, file, status: 'uploading' }]);
+      void runUpload(key, file);
+    }
+    // Reset the input so re-picking the same file fires onChange again.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  async function removePhoto(photo: GamePhoto) {
+    if (!window.confirm('Delete this photo? This cannot be undone.')) return;
+    try {
+      await deleteMedia(token, photo.id);
+      setPhotos((p) => p.filter((x) => x.id !== photo.id));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to delete photo');
+    }
+  }
+
+  function dismissUpload(key: string) {
+    setUploads((u) => u.filter((x) => x.key !== key));
+  }
+
+  const isEmpty = !loading && photos.length === 0 && uploads.length === 0;
+
+  return (
+    <section className="card game ws-section">
+      <span className="game-kicker">Gallery</span>
+      <h2 className="ws-section__title">Photos</h2>
+
+      <div className="photos-upload">
+        <label className="photos-pick">
+          Add photos
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="photos-file-input"
+            onChange={(e) => onPick(e.target.files)}
+          />
+        </label>
+        <span className="game-hint photos-hint">
+          JPEG, PNG, or WebP · up to 10MB each
+        </span>
+      </div>
+
+      {loadError && <div className="error">{loadError}</div>}
+
+      {loading ? (
+        <p className="muted">Loading photos…</p>
+      ) : isEmpty ? (
+        <p className="game-hint" style={{ marginTop: 0 }}>
+          No photos yet — add some from courtside.
+        </p>
+      ) : (
+        <div className="photos-grid">
+          {uploads.map((up) => (
+            <div key={up.key} className="photos-tile photos-tile--pending">
+              {up.status === 'uploading' ? (
+                <span className="photos-tile__state">Uploading…</span>
+              ) : (
+                <div className="photos-tile__failed">
+                  <span className="photos-tile__err">{up.error ?? 'Failed'}</span>
+                  <div className="photos-tile__failed-actions">
+                    {PHOTO_TYPES.includes(up.file.type) &&
+                      up.file.size <= PHOTO_MAX_BYTES && (
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() => runUpload(up.key, up.file)}
+                        >
+                          Retry
+                        </button>
+                      )}
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => dismissUpload(up.key)}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {photos.map((photo) => (
+            <div key={photo.id} className="photos-tile">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photo.publicUrl}
+                alt="Game photo"
+                loading="lazy"
+                className="photos-tile__img"
+              />
+              {photo.uploaderUserId === myUserId && (
+                <button
+                  type="button"
+                  className="photos-tile__delete"
+                  aria-label="Delete photo"
+                  onClick={() => removePhoto(photo)}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1368,6 +1594,9 @@ function GameWorkspace({
           {sponsorError && <div className="error">{sponsorError}</div>}
         </section>
       )}
+
+      {/* ---- (e) Photos ---- */}
+      <PhotosSection token={token} eventId={eventId} myUserId={authorId} />
 
       {showAttach && (
         <AttachSponsorForm

@@ -1026,3 +1026,80 @@ export interface LtiLaunchTicket {
 // comes back 403 -> "403 <message>"; callers fall back to the plain Moodle URL.
 export const getLtiLaunchTicket = (token: string) =>
   authGet<LtiLaunchTicket>('/lti/launch/ticket', token);
+
+// ---- Game photos: correspondent upload + fan gallery (S3-style presigned PUT) ----
+
+// A confirmed game photo as returned by GET /media?purpose=game_photo. publicUrl
+// is the CDN/bucket URL used directly as the <img> src; uploaderUserId is a bare
+// user id, matched against the signed-in user to decide who may delete a tile.
+export interface GamePhoto {
+  id: string;
+  publicUrl: string;
+  createdAt: string;
+  uploaderUserId: string;
+}
+
+// POST /media/presign response. uploadUrl is a short-lived (10-min) presigned PUT
+// bound to the exact contentType sent below; publicUrl is where the confirmed
+// image will live; mediaId is the row to confirm/delete.
+export interface PresignResponse {
+  uploadUrl: string;
+  publicUrl: string;
+  mediaId: string;
+}
+
+// Ask the API for a presigned upload slot for a game photo. purpose is fixed to
+// "game_photo"; the backend enforces jpeg/png/webp, <=10MB, and that the caller
+// is assigned to the event (else 403/400 -> "<status> <message>").
+export const presignGamePhoto = (
+  token: string,
+  input: { fileName: string; contentType: string; sizeBytes: number; eventId: string },
+) =>
+  authPost<PresignResponse>('/media/presign', token, {
+    purpose: 'game_photo',
+    ...input,
+  });
+
+// Raw PUT of the file bytes to the presigned uploadUrl. This does NOT go through
+// the API base and carries NO Authorization header -- the URL itself is the
+// credential. The Content-Type MUST match the one sent to presign or the signed
+// URL rejects it. A non-2xx (expired/mismatched) surfaces as "<status> upload".
+export async function uploadToPresignedUrl(
+  uploadUrl: string,
+  file: Blob,
+  contentType: string,
+): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`${res.status} upload failed`);
+}
+
+// Confirm an uploaded photo (POST /media/:id/confirm) so it becomes visible in
+// GET /media. The success body isn't relied on (may be 200+json or 204), so this
+// resolves to void -- callers already hold publicUrl/mediaId from presign.
+export async function confirmMedia(token: string, mediaId: string): Promise<void> {
+  const res = await fetch(`${BASE}/media/${mediaId}/confirm`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw await toError(res);
+}
+
+// Confirmed photos for a game, viewer-allowed (any authenticated role). Used by
+// the fan gallery and the workspace grid.
+export const getGamePhotos = (token: string, eventId: string) =>
+  authGet<GamePhoto[]>(
+    `/media?eventId=${encodeURIComponent(eventId)}&purpose=game_photo`,
+    token,
+  );
+
+// Delete a photo (uploader or admin, enforced server-side). 204, no body.
+export const deleteMedia = (token: string, mediaId: string) =>
+  authDelete(`/media/${mediaId}`, token);

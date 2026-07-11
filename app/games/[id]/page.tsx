@@ -12,11 +12,13 @@ import {
   getPublishedContent,
   getEventSponsorship,
   getLiveEvents,
+  getGamePhotos,
   EventListItem,
   EventContentItem,
   FeedItem,
   Sponsorship,
   LiveEvent,
+  GamePhoto,
 } from '../../api';
 import { toYouTubeEmbed } from '../../video';
 
@@ -574,6 +576,94 @@ function SponsorTakeover({
   );
 }
 
+// ---- Fan photo gallery: a responsive lazy thumbnail grid of the game's
+// confirmed photos with a no-library lightbox (full image over a dark overlay,
+// click/X/Esc to close). Loads best-effort and renders NOTHING until at least
+// one photo exists, so a failed load or an empty game simply shows no section. ----
+function GamePhotos({ token, eventId }: { token: string | null; eventId: string }) {
+  const [photos, setPhotos] = useState<GamePhoto[]>([]);
+  const [active, setActive] = useState<GamePhoto | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getGamePhotos(token, eventId);
+        if (!cancelled) setPhotos(list);
+      } catch {
+        /* photos are a garnish -- a failed load just hides the section */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, eventId]);
+
+  // Esc closes the lightbox while it's open.
+  useEffect(() => {
+    if (!active) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setActive(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active]);
+
+  if (photos.length === 0) return null;
+
+  return (
+    <section className="game-photos">
+      <h2 className="game-articles__head">Photos</h2>
+      <div className="photos-grid photos-grid--gallery">
+        {photos.map((photo) => (
+          <button
+            key={photo.id}
+            type="button"
+            className="photos-tile photos-tile--btn"
+            onClick={() => setActive(photo)}
+            aria-label="View photo"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photo.publicUrl}
+              alt="Game photo"
+              loading="lazy"
+              className="photos-tile__img"
+            />
+          </button>
+        ))}
+      </div>
+
+      {active && (
+        <div
+          className="lightbox-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Photo viewer"
+          onClick={() => setActive(null)}
+        >
+          <button
+            type="button"
+            className="lightbox-close"
+            aria-label="Close"
+            onClick={() => setActive(null)}
+          >
+            ×
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={active.publicUrl}
+            alt="Game photo"
+            className="lightbox-img"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function GamePage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -746,6 +836,8 @@ export default function GamePage() {
                 </div>
               )}
             </section>
+
+            <GamePhotos token={token} eventId={id} />
           </div>
 
           <aside className="game-rail">
