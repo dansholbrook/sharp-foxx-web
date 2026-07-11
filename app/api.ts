@@ -945,3 +945,17 @@ export const updateFieldRepStatus = (
   id: string,
   status: RepStatus,
 ) => authPatch<FieldRep>(`/field-reps/${id}/status`, token, { status });
+
+// ---- LTI: one-time launch into the Academy (Moodle) ----
+
+// GET /lti/launch/ticket (Bearer; caller needs a rep profile or admin) returns
+// an absolute, one-time launch URL (60s expiry). Opening it in a browser tab
+// runs the full LTI redirect chain and lands the user signed in inside Moodle.
+export interface LtiLaunchTicket {
+  url: string;
+}
+
+// Mint a launch ticket for the signed-in rep. A caller with no rep profile
+// comes back 403 -> "403 <message>"; callers fall back to the plain Moodle URL.
+export const getLtiLaunchTicket = (token: string) =>
+  authGet<LtiLaunchTicket>('/lti/launch/ticket', token);

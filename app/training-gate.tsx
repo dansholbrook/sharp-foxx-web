@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { AppNav } from './nav';
 import { useAuth } from './auth-context';
-import { getFieldReps, FieldRep } from './api';
+import { getFieldReps, getLtiLaunchTicket, FieldRep } from './api';
+
+// The plain Academy (Moodle) home, used as the graceful fallback when a one-time
+// LTI launch ticket can't be minted (403/500/network) -- training must never be
+// unreachable, the rep may just have to sign in by hand.
+const MOODLE_URL = 'https://danielh901.sg-host.com';
 
 // Resolve the CALLER's own field_reps row by matching the signed-in user id
 // against the roster from GET /field-reps (reps AND managers have one). Returns:
@@ -52,7 +57,34 @@ export function useOwnRep(
 // shell + masthead so it reads like the rest of the app; the gold CTA opens the
 // external Academy in a new tab. Rendered by My Games and the game workspace.
 export function TrainingGate() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const [launching, setLaunching] = useState(false);
+  // Shown when we fell back to the plain Moodle URL (no auto sign-in).
+  const [fellBack, setFellBack] = useState(false);
+
+  // Start training via the LTI launch flow. Popup blockers only allow a new tab
+  // opened synchronously in the click handler, so open a BLANK tab first, then
+  // point it at the one-time launch URL once the ticket resolves. If the ticket
+  // can't be minted (403/500/network) fall back to the plain Moodle URL in the
+  // same tab so training is never unreachable.
+  const startTraining = async () => {
+    const tab = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    setFellBack(false);
+    setLaunching(true);
+    try {
+      if (!token) throw new Error('no token');
+      const { url } = await getLtiLaunchTicket(token);
+      if (tab) tab.location.href = url;
+      else window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // Auto sign-in unavailable -- send them to the plain Academy home instead.
+      setFellBack(true);
+      if (tab) tab.location.href = MOODLE_URL;
+      else window.open(MOODLE_URL, '_blank', 'noopener,noreferrer');
+    } finally {
+      setLaunching(false);
+    }
+  };
 
   return (
     <main className="feed-home">
@@ -81,14 +113,19 @@ export function TrainingGate() {
         <p className="training-gate__copy">
           Complete your correspondent training to unlock your games portal.
         </p>
-        <a
+        <button
+          type="button"
           className="btn-inline training-gate__cta"
-          href="https://danielh901.sg-host.com"
-          target="_blank"
-          rel="noopener noreferrer"
+          onClick={startTraining}
+          disabled={launching}
         >
-          Start training →
-        </a>
+          {launching ? 'Starting…' : 'Start training →'}
+        </button>
+        {fellBack && (
+          <p className="training-gate__note muted">
+            Automatic sign-in unavailable — logging in manually may be required.
+          </p>
+        )}
         <p className="training-gate__note muted">
           Once you finish, your Regional Manager will activate your account.
         </p>
