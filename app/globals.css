@@ -3350,3 +3350,100 @@ a.btn-inline:hover {
     animation: none;
   }
 }
+
+/* =================================================================
+   Editorial review — the /review queue, the workspace's editor's-note
+   callout + in-review lock, and the shared "submitted" pill/nav badge.
+   Reuses .card / .pill / .article-body / .applicant-* wherever it can.
+   ================================================================= */
+
+/* Solid-gold count badge on the Review nav link (queue length). */
+.nav-badge {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 17px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* "Submitted" / "Submitted — awaiting review" pill: the gold-filled .pill
+   variant that reads as an active editorial state, not a neutral tag. */
+.pill--review {
+  color: var(--accent-hover);
+  background: rgba(201, 163, 78, 0.16);
+  border-color: var(--accent);
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+/* Editor's note: gold-bordered send-back callout above the workspace editor. */
+.editor-note {
+  margin: 16px 0 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: rgba(201, 163, 78, 0.08);
+}
+
+.editor-note__label {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin-bottom: 6px;
+}
+
+.editor-note__body {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* Read-only render of a rep's submitted article while it's in the queue. */
+.article-review-lock {
+  margin-top: 16px;
+}
+
+.article-review-lock__title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--accent);
+  margin: 14px 0 6px;
+}
+
+/* Review card facts row — same treatment as the applicants facts strip. */
+.review-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 30px;
+  margin: 18px 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The expandable HTML preview sits in a raised panel to set it off the card. */
+.review-body {
+  margin-top: 4px;
+  padding: 18px 20px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.review-collapsed {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+}

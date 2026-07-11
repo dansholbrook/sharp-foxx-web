@@ -34,6 +34,9 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
   { href: '/field-reps', label: 'Field reps', roles: ['admin', 'regional_manager'] },
+  // Editorial review queue: submitted articles awaiting an editor. Same gate as
+  // the backend GET /content/review-queue (admin + regional_manager).
+  { href: '/review', label: 'Review', roles: ['admin', 'regional_manager'] },
   { href: '/applicants', label: 'Applicants', roles: ['admin', 'regional_manager'] },
   { href: '/dashboard', label: 'Reports', roles: ['admin'] },
 ];
@@ -73,6 +76,8 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   // The staff review queue for the public /apply intake. Same gate as Field
   // Reps (the backend restricts GET/approve/reject to these two roles).
   { match: (p) => p === '/applicants', roles: ['admin', 'regional_manager'] },
+  // Editorial review queue -- same gate as the backend review-queue route.
+  { match: (p) => p === '/review', roles: ['admin', 'regional_manager'] },
   { match: (p) => p.startsWith('/managers/'), roles: ['admin', 'regional_manager'] },
   // Rep drill-down, reached by clicking a rep on the roster page -- same gate as
   // the roster. The API still enforces roster membership per rep (a manager

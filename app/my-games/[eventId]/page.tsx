@@ -12,7 +12,9 @@ import {
   updateAssignment,
   generateArticle,
   getEventContent,
+  getContentItem,
   updateContent,
+  submitContent,
   publishContent,
   unpublishContent,
   getEvents,
@@ -600,6 +602,7 @@ function GameWorkspace({
   token,
   authorId,
   canSponsor,
+  canPublishDirectly,
   myOrders,
   advertisersById,
 }: {
@@ -608,6 +611,10 @@ function GameWorkspace({
   token: string;
   authorId: string;
   canSponsor: boolean;
+  // Admin/regional_manager viewing a game they claimed: they publish/unpublish
+  // directly. A field_rep author instead submits for review (and never sees
+  // Unpublish -- that's staff-only now on the backend).
+  canPublishDirectly: boolean;
   myOrders: AdOrder[];
   advertisersById: Record<string, string>;
 }) {
@@ -745,6 +752,11 @@ function GameWorkspace({
     draft !== null &&
     (titleDraft !== draft.title || bodyDraft !== (draft.body ?? ''));
 
+  // A field_rep's submitted article is locked while it sits in the editors'
+  // queue: no editing, no actions -- just a read-only render and a note that
+  // it's in review. Staff (who publish directly) never hit this.
+  const repReadOnly = !canPublishDirectly && draft?.status === 'submitted';
+
   // On mount, pull any content already attached to this game and adopt the first
   // (the backend lists this non-published view newest-created first) as the
   // editable draft, seeding the edit fields from it.
@@ -757,9 +769,15 @@ function GameWorkspace({
         if (cancelled) return;
         const existing = items[0];
         if (existing) {
-          setDraft(existing);
-          setTitleDraft(existing.title);
-          setBodyDraft(existing.body ?? '');
+          // The list projection omits reviewNote; fetch the full row so a
+          // returned draft can show its "Editor's note". Fall back to the list
+          // row if the by-id lookup fails.
+          const full = await getContentItem(token, existing.id).catch(() => null);
+          if (cancelled) return;
+          const adopted = full ?? existing;
+          setDraft(adopted);
+          setTitleDraft(adopted.title);
+          setBodyDraft(adopted.body ?? '');
         }
       } catch {
         /* a failed content lookup shouldn't break the page -- leave it empty */
@@ -926,6 +944,30 @@ function GameWorkspace({
       setEditError(err instanceof Error ? err.message : 'Failed to save changes');
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  // Author action: submit the draft for editorial review (draft -> submitted).
+  // Reuses the publish button's loading/error slot (they're never shown at
+  // once). Merges status + the cleared reviewNote back so the panel flips to its
+  // read-only "awaiting review" state in place.
+  async function submitForReview() {
+    if (!draft) return;
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const updated = await submitContent(token, draft.id);
+      setDraft((d) =>
+        d
+          ? { ...d, status: updated.status, reviewNote: updated.reviewNote ?? null }
+          : updated,
+      );
+    } catch (err) {
+      setPublishError(
+        err instanceof Error ? err.message : 'Failed to submit for review',
+      );
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -1180,50 +1222,98 @@ function GameWorkspace({
               <div className="article-panel">
                 <div className="article-panel__head">
                   <span className="article-panel__label">Article</span>
-                  <span className="pill">{draft.status}</span>
+                  {draft.status === 'submitted' ? (
+                    <span className="pill pill--review">
+                      Submitted — awaiting review
+                    </span>
+                  ) : (
+                    <span className="pill">{draft.status}</span>
+                  )}
                 </div>
 
-                <label style={{ marginTop: 16 }}>Title</label>
-                <input
-                  value={titleDraft}
-                  disabled={editSaving}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                />
+                {/* Send-back feedback loop: an editor's note on a returned
+                    draft, shown only while draft (never stale on published). */}
+                {draft.status === 'draft' && draft.reviewNote && (
+                  <div className="editor-note">
+                    <span className="editor-note__label">Editor&apos;s note</span>
+                    <p className="editor-note__body">{draft.reviewNote}</p>
+                  </div>
+                )}
 
-                <label style={{ marginTop: 16 }}>Body (HTML)</label>
-                <textarea
-                  value={bodyDraft}
-                  disabled={editSaving}
-                  onChange={(e) => setBodyDraft(e.target.value)}
-                  rows={10}
-                  className="mono"
-                />
+                {repReadOnly ? (
+                  // Locked while in the editors' queue: read-only render only.
+                  <div className="article-review-lock">
+                    <p className="game-hint" style={{ marginTop: 0 }}>
+                      This article is in review — editing is locked until an
+                      editor publishes it or sends it back.
+                    </p>
+                    <h3 className="article-review-lock__title">{draft.title}</h3>
+                    <div
+                      className="article-body"
+                      dangerouslySetInnerHTML={{ __html: draft.body ?? '' }}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <label style={{ marginTop: 16 }}>Title</label>
+                    <input
+                      value={titleDraft}
+                      disabled={editSaving}
+                      onChange={(e) => setTitleDraft(e.target.value)}
+                    />
 
-                <div className="article-actions">
-                  <button
-                    className="btn-inline"
-                    disabled={editSaving || !draftDirty}
-                    onClick={saveDraft}
-                  >
-                    {editSaving ? 'Saving…' : 'Save changes'}
-                  </button>
-                  <button
-                    className="btn-inline"
-                    disabled={publishing}
-                    onClick={togglePublish}
-                  >
-                    {publishing
-                      ? draft.status === 'published'
-                        ? 'Unpublishing…'
-                        : 'Publishing…'
-                      : draft.status === 'published'
-                        ? 'Unpublish'
-                        : 'Publish'}
-                  </button>
-                </div>
+                    <label style={{ marginTop: 16 }}>Body (HTML)</label>
+                    <textarea
+                      value={bodyDraft}
+                      disabled={editSaving}
+                      onChange={(e) => setBodyDraft(e.target.value)}
+                      rows={10}
+                      className="mono"
+                    />
 
-                {editError && <div className="error">{editError}</div>}
-                {publishError && <div className="error">{publishError}</div>}
+                    <div className="article-actions">
+                      <button
+                        className="btn-inline"
+                        disabled={editSaving || !draftDirty}
+                        onClick={saveDraft}
+                      >
+                        {editSaving ? 'Saving…' : 'Save changes'}
+                      </button>
+
+                      {canPublishDirectly ? (
+                        // Staff publish/unpublish directly.
+                        <button
+                          className="btn-inline"
+                          disabled={publishing}
+                          onClick={togglePublish}
+                        >
+                          {publishing
+                            ? draft.status === 'published'
+                              ? 'Unpublishing…'
+                              : 'Publishing…'
+                            : draft.status === 'published'
+                              ? 'Unpublish'
+                              : 'Publish'}
+                        </button>
+                      ) : (
+                        // A field_rep submits a draft for review; on a published
+                        // item they get no second action (Unpublish is staff-only).
+                        draft.status === 'draft' && (
+                          <button
+                            className="btn-inline"
+                            disabled={publishing}
+                            onClick={submitForReview}
+                          >
+                            {publishing ? 'Submitting…' : 'Submit for review'}
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    {editError && <div className="error">{editError}</div>}
+                    {publishError && <div className="error">{publishError}</div>}
+                  </>
+                )}
               </div>
             )}
           </>
@@ -1320,6 +1410,11 @@ export default function GameWorkspacePage() {
 
   // Only a field_rep can self-claim/sponsor; an admin viewing lacks a sponsor flow.
   const isFieldRep = (user?.roles ?? []).includes('field_rep');
+  // Staff (admin/regional_manager) publish/unpublish articles directly; a
+  // field_rep author submits for review instead (backend enforces the same).
+  const canPublishDirectly = (user?.roles ?? []).some(
+    (r) => r === 'admin' || r === 'regional_manager',
+  );
 
   // Load the caller's assignments and match this event id (the ownership guard),
   // plus the events lookup used to pre-fill the result form. A failed events
@@ -1427,6 +1522,7 @@ export default function GameWorkspacePage() {
           token={token}
           authorId={user?.id ?? ''}
           canSponsor={isFieldRep}
+          canPublishDirectly={canPublishDirectly}
           myOrders={myOrders}
           advertisersById={advertisersById}
         />

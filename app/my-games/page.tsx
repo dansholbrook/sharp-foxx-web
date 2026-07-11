@@ -78,7 +78,7 @@ export default function MyGamesPage() {
   // draft). Fetched in ONE request via GET /content?authorId= (the rep's own
   // content across all games) rather than one lookup per row.
   const [articleByEvent, setArticleByEvent] = useState<
-    Record<string, 'draft' | 'published'>
+    Record<string, 'draft' | 'submitted' | 'published'>
   >({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,13 +131,17 @@ export default function MyGamesPage() {
       try {
         const content = await getContentByAuthor(token, user.id);
         if (cancelled) return;
-        const map: Record<string, 'draft' | 'published'> = {};
+        // Precedence published > submitted > draft, so the "furthest along"
+        // article wins a game's cell when a rep has more than one.
+        const rank = { draft: 0, submitted: 1, published: 2 } as const;
+        const map: Record<string, 'draft' | 'submitted' | 'published'> = {};
         for (const c of content) {
           if (!c.eventId) continue;
-          if (c.status === 'published') map[c.eventId] = 'published';
-          else if (c.status === 'draft' && map[c.eventId] !== 'published') {
-            map[c.eventId] = 'draft';
+          if (c.status !== 'draft' && c.status !== 'submitted' && c.status !== 'published') {
+            continue;
           }
+          const prev = map[c.eventId];
+          if (!prev || rank[c.status] > rank[prev]) map[c.eventId] = c.status;
         }
         setArticleByEvent(map);
       } catch {
@@ -300,8 +304,14 @@ export default function MyGamesPage() {
                     <td>{sponsor ?? <span className="muted">—</span>}</td>
                     <td>
                       {article ? (
-                        <span className="pill">
-                          {article === 'published' ? 'Published' : 'Draft'}
+                        <span
+                          className={`pill${article === 'submitted' ? ' pill--review' : ''}`}
+                        >
+                          {article === 'published'
+                            ? 'Published'
+                            : article === 'submitted'
+                              ? 'In review'
+                              : 'Draft'}
                         </span>
                       ) : (
                         <span className="muted">—</span>

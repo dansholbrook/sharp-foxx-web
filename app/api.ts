@@ -238,12 +238,19 @@ export interface EventResult {
 export interface ContentItem {
   id: string;
   kind: 'blog' | 'podcast' | 'video' | 'athlete_profile';
-  status: 'draft' | 'published';
+  // The editorial flow adds 'submitted' between draft and published: an author
+  // submits a draft for review; a manager publishes it or returns it to draft.
+  status: 'draft' | 'submitted' | 'published' | 'archived';
   authorUserId: string | null;
   title: string;
   slug: string | null;
   body: string | null;
   mediaUrl: string | null;
+  // Send-back feedback: a manager's optional note set when returning a submitted
+  // item to draft, cleared on the next submit. Null on the happy path. Present on
+  // the bare content_items row (GET /content/:id, submit/return/publish), but NOT
+  // in the flattened list projection (getEventContent) -- see EventContentItem.
+  reviewNote: string | null;
   institutionId: string | null;
   teamId: string | null;
   athleteId: string | null;
@@ -282,7 +289,7 @@ export interface FeedItem {
 export interface EventContentItem {
   id: string;
   kind: ContentItem['kind'];
-  status: 'draft' | 'published' | 'archived';
+  status: 'draft' | 'submitted' | 'published' | 'archived';
   title: string;
   slug: string | null;
   body: string | null;
@@ -295,6 +302,40 @@ export interface EventContentItem {
   eventScheduledAt: string | null;
   homeTeam: string | null;
   awayTeam: string | null;
+  // NOT in the list projection (listContent omits it) -- optional so the editor
+  // can read draft.reviewNote off either shape. Fetch the bare row via
+  // getContentItem to actually populate it.
+  reviewNote?: string | null;
+}
+
+// A row in the editorial review queue (content.service.ts `reviewQueue`),
+// returned by GET /content/review-queue. Submitted items awaiting a decision,
+// newest-created first. Like the reader feed it flattens joins (author display
+// name, event/team context) so a card renders without follow-up lookups. status
+// is always 'submitted' here; body is the HTML to preview, reviewNote is any
+// prior send-back note (usually null on a fresh submission).
+export interface ReviewQueueItem {
+  id: string;
+  kind: ContentItem['kind'];
+  status: 'submitted';
+  title: string;
+  slug: string | null;
+  body: string | null;
+  mediaUrl: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+  author: string | null;
+  eventId: string | null;
+  eventSport: string | null;
+  eventScheduledAt: string | null;
+  homeTeam: string | null;
+  awayTeam: string | null;
+}
+
+// POST /content/:id/return body (mirrors returnContentSchema). The note is the
+// optional send-back feedback stored on review_note and shown to the author.
+export interface ReturnContentInput {
+  note?: string;
 }
 
 // Request body for POST /content/generate (mirrors generateArticleSchema). The
@@ -668,13 +709,39 @@ export const updateContent = (
   input: UpdateContentInput,
 ) => authPatch<ContentItem>(`/content/${id}`, token, input);
 
-// Publishing/unpublishing are editorial actions (author-or-manager). Both take
-// no body and return the updated row with its new status/publishedAt.
+// The full bare content_items row by id (staff see any status). Unlike the
+// flattened list projection this carries reviewNote, so the workspace fetches it
+// to show a send-back "Editor's note" on a returned draft. A non-existent id is
+// a 404 -> "404 <message>".
+export const getContentItem = (token: string, id: string) =>
+  authGet<ContentItem>(`/content/${id}`, token);
+
+// The author submits their OWN draft for editorial review (draft -> submitted).
+// A non-author gets 403 and a non-draft 409 -- both "<status> <message>".
+// Clears any stale reviewNote from a previous send-back.
+export const submitContent = (token: string, id: string) =>
+  authPost<ContentItem>(`/content/${id}/submit`, token, {});
+
+// Publishing is now staff-only (author-or-manager): a field_rep gets 403 with a
+// message pointing at submit. Takes no body; returns the updated row.
 export const publishContent = (token: string, id: string) =>
   authPost<ContentItem>(`/content/${id}/publish`, token, {});
 
+// Unpublishing is staff-only too (roster-scoped for managers); returns the
+// updated row now back in draft.
 export const unpublishContent = (token: string, id: string) =>
   authPost<ContentItem>(`/content/${id}/unpublish`, token, {});
+
+// Staff editorial review queue: submitted items awaiting a decision, newest
+// first. Admin sees all; a regional_manager only submissions by roster reps. A
+// caller without a manager profile (and not admin) gets 403.
+export const getReviewQueue = (token: string) =>
+  authGet<ReviewQueueItem[]>('/content/review-queue', token);
+
+// A manager/admin returns a submitted item to its author as a draft, with an
+// optional feedback note. Roster-scoped; a non-submitted item is a 409.
+export const returnContent = (token: string, id: string, input: ReturnContentInput) =>
+  authPost<ContentItem>(`/content/${id}/return`, token, input);
 
 // Teams for a sport, name-ordered, to populate the Add Game team dropdowns.
 export const getTeams = (token: string, sport: string) =>

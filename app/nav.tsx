@@ -1,16 +1,18 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from './auth-context';
 import { navLinksFor } from './roles';
+import { getReviewQueue } from './api';
 
 // The header nav links, filtered to what the signed-in role can actually use
 // (see navLinksFor). Log Out is always present. Logout clears the in-memory
 // session and bounces to the login page -- the same behavior every page had.
 export function AppNav() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { token, user, logout } = useAuth();
 
   function onLogout() {
     logout();
@@ -19,11 +21,36 @@ export function AppNav() {
 
   const links = navLinksFor(user?.roles ?? []);
 
+  // Badge the Review link with the queue count. One best-effort fetch on mount
+  // (no polling); a failure or an empty queue simply shows no badge. Only staff
+  // who can reach /review ever see the link, so gate the fetch on that too.
+  const canReview = (user?.roles ?? []).some(
+    (r) => r === 'admin' || r === 'regional_manager',
+  );
+  const [reviewCount, setReviewCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!token || !canReview) return;
+    let cancelled = false;
+    getReviewQueue(token)
+      .then((items) => {
+        if (!cancelled) setReviewCount(items.length);
+      })
+      .catch(() => {
+        /* leave the badge off on failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, canReview]);
+
   return (
     <div className="nav-links">
       {links.map((l) => (
         <Link key={l.href} href={l.href} className="link-btn">
           {l.label}
+          {l.href === '/review' && reviewCount != null && reviewCount > 0 && (
+            <span className="nav-badge">{reviewCount}</span>
+          )}
         </Link>
       ))}
       <Link href="/account/password" className="link-btn">
