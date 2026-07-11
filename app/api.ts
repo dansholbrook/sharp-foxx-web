@@ -746,6 +746,79 @@ export const createSponsorship = (
 export const deleteSponsorship = (token: string, id: string) =>
   authDelete(`/sponsorships/${id}`, token);
 
+// ---- Live events: the courtside play-by-play stream on a game ----
+
+// The live_event type enum on the backend. Each carries a small typed payload
+// (see LiveEvent.payload) validated server-side. score_update ALSO syncs the
+// events row scoreboard, so a fan poll sees the new score without a separate
+// result save.
+export type LiveEventType =
+  | 'score_update'
+  | 'period'
+  | 'big_play'
+  | 'timeout'
+  | 'sponsor_spot'
+  | 'status_note';
+
+// A live_events row as returned by POST/GET /events/:id/live-events. payload is
+// a per-type bag (the backend validates the shape for each type): score_update
+// { homeScore, awayScore }, period { label }, big_play { text }, sponsor_spot
+// { sponsorshipId }, timeout/status_note free-form. Typed loosely as optional
+// fields so read sites can pull what a given type carries without a cast.
+// createdAt is a timestamptz string WITH offset -- echo it back verbatim as the
+// ?after= cursor (don't reformat it).
+export interface LiveEvent {
+  id: string;
+  eventId: string;
+  type: LiveEventType;
+  payload: {
+    homeScore?: number;
+    awayScore?: number;
+    label?: string;
+    text?: string;
+    sponsorshipId?: string;
+    [key: string]: unknown;
+  };
+  createdAt: string;
+}
+
+// POST /events/:id/live-events body. payload rules per type are enforced on the
+// backend; a bad shape comes back 400 -> "400 <message>". timeout/status_note
+// take an optional free payload, so payload is optional here.
+export interface CreateLiveEventInput {
+  type: LiveEventType;
+  payload?: Record<string, unknown>;
+}
+
+// The game's play-by-play, ascending, <=200 rows, open to all roles. Poll by
+// passing the LAST seen event's createdAt as `after` (verbatim -- it includes
+// the timezone offset); with no cursor this returns the full history so the fan
+// feed can seed itself before it starts polling.
+export const getLiveEvents = (token: string, eventId: string, after?: string) =>
+  authGet<LiveEvent[]>(
+    `/events/${eventId}/live-events${
+      after ? `?after=${encodeURIComponent(after)}` : ''
+    }`,
+    token,
+  );
+
+// Emit one live event (admin or the assigned rep/manager). Returns the created
+// row -- the console reconciles its optimistic score from the echoed payload.
+export const createLiveEvent = (
+  token: string,
+  eventId: string,
+  input: CreateLiveEventInput,
+) => authPost<LiveEvent>(`/events/${eventId}/live-events`, token, input);
+
+// Retract a live event (the emitter or an admin). 204, no body. NOTE the fan
+// cursor poller can't see a deletion, so a retracted event lingers on already-
+// loaded fan pages until reload -- an accepted v1 limitation.
+export const deleteLiveEvent = (
+  token: string,
+  eventId: string,
+  liveEventId: string,
+) => authDelete(`/events/${eventId}/live-events/${liveEventId}`, token);
+
 // ---- Applications: the public recruiting intake + the staff review queue ----
 
 // The rep_status enum on the backend (field_reps.status). 'onboarding' gates a

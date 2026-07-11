@@ -2774,3 +2774,579 @@ a.btn-inline:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   Courtside live console — /my-games/[eventId], shown at the top of
+   the workspace only while a game is live. Phone-first with big tap
+   targets. Reuses .card.game, .pill, .live-badge, .btn-inline and the
+   gold palette; new chrome scoped under .console-*.
+   ================================================================= */
+
+/* The console sits above everything with a bolder gold hairline so it reads as
+   the priority surface, not just another section. */
+.console-card {
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 0 1px rgba(201, 163, 78, 0.12);
+}
+
+.console-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* ---- (a) PRIMARY scoreboard: names flanking two LARGE editable scores, laid
+   out like the game-page scoreboard but at console scale. A two-row grid keeps
+   the labels above their score and the dash centered on the number row. ---- */
+.console-board {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  justify-items: center;
+  column-gap: 12px;
+  row-gap: 10px;
+  padding: 22px 16px 24px;
+  margin-bottom: 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.console-board__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+.console-board__label--home {
+  grid-area: 1 / 1;
+}
+.console-board__label--away {
+  grid-area: 1 / 3;
+}
+
+/* The Home/Away eyebrow marks the sides apart (gold on home, muted on away)
+   the way the game page distinguishes them by alignment. */
+.console-board__tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+.console-board__label--home .console-board__tag {
+  color: var(--accent);
+}
+.console-board__label--away .console-board__tag {
+  color: var(--muted);
+}
+
+.console-board__name {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1rem, 3.6vw, 1.5rem);
+  line-height: 1.1;
+  color: var(--text);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Each score is a huge serif number you can tap to edit — reads as a scoreboard,
+   not a form field. Spinners stripped; focus lights the gold ring. */
+.console-board__score {
+  margin: 0;
+  width: 100%;
+  max-width: 3.2em;
+  padding: 6px 4px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2.8rem, 14vw, 4rem);
+  line-height: 1;
+  text-align: center;
+  color: var(--accent-hover);
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.console-board__score--home {
+  grid-area: 2 / 1;
+}
+.console-board__score--away {
+  grid-area: 2 / 3;
+}
+.console-board__score::-webkit-outer-spin-button,
+.console-board__score::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.console-board__score:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 163, 78, 0.16);
+}
+.console-board__score:disabled {
+  opacity: 0.6;
+}
+
+.console-board__dash {
+  grid-area: 2 / 2;
+  font-family: var(--font-serif);
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  color: var(--muted);
+  line-height: 1;
+}
+
+/* The one gold action for the primary flow — full-width, unmissable. */
+.console-sync {
+  margin: 0 0 22px;
+  width: 100%;
+  padding: 16px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.console-sync:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* ---- (a2) SECONDARY quick add: per-team +1/+2/+3, deliberately quiet ---- */
+.console-quickadd {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.console-quickadd__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.console-quickadd__team {
+  min-width: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-bumps {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Ghost/outline tap targets — thumb-sized for courtside, but visually subordinate
+   to the gold Sync button above. */
+.console-bump {
+  margin-top: 0;
+  min-width: 52px;
+  padding: 12px 0;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.console-bump:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  background: rgba(201, 163, 78, 0.08);
+}
+
+/* ---- Shared groups / labels ---- */
+.console-group {
+  margin-bottom: 20px;
+}
+
+.console-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--accent-dim);
+}
+
+/* ---- (b) Period chips + big-play presets ---- */
+.console-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.console-chip {
+  margin-top: 0;
+  padding: 12px 16px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.console-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  background: rgba(201, 163, 78, 0.08);
+}
+
+/* ---- (c) Big play input row ---- */
+.console-bigplay {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.console-bigplay input {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+/* ---- (d)(e) Timeout + sponsor spot ---- */
+.console-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.console-sponsor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The prominent gold sponsor-spot button — filled, unmissable. */
+.console-sponsor-btn {
+  margin-top: 0;
+  padding: 13px 22px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.console-sponsor-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.console-sponsor-meta {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* ---- (f) Emitted feed with retract ---- */
+.console-feed {
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.console-feed__empty {
+  margin: 0;
+}
+
+.console-feed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.console-feed__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.console-feed__item:last-child {
+  border-bottom: none;
+}
+
+.console-feed__time {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.console-feed__text {
+  flex: 1 1 auto;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+/* The retract (×) reads as a quiet control until hovered. */
+.console-retract {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.console-retract:hover {
+  border-color: #7c4a3a;
+  color: #e0a08c;
+  background: rgba(124, 74, 58, 0.14);
+}
+
+@media (max-width: 560px) {
+  /* Full-bleed the big-play emit + timeout/sponsor buttons for thumbs. */
+  .console-bigplay .btn-inline,
+  .console-actions .btn-inline,
+  .console-sponsor,
+  .console-sponsor-btn {
+    width: 100%;
+  }
+  .console-bigplay {
+    flex-wrap: wrap;
+  }
+}
+
+/* =================================================================
+   Fan live pulse — /games/[id], the read-only courtside experience.
+   The scoreboard flash, the period label, the "Live from courtside"
+   feed, and the sponsor takeover overlay. Scoped under .pulse-*.
+   ================================================================= */
+
+/* Subtle flash when the live score changes (re-keyed span replays it). */
+@keyframes pulse-score-flash {
+  0% {
+    color: var(--accent-hover);
+    text-shadow: 0 0 18px rgba(217, 182, 104, 0.6);
+  }
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+.pulse-flash {
+  animation: pulse-score-flash 1s ease-out;
+}
+
+/* Small period label under the scoreboard center ("2nd", "Half", "OT"). */
+.pulse-period {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--accent-dim);
+}
+
+/* ---- "Live from courtside" feed under the sponsor strip ---- */
+.pulse-feed {
+  margin: 0 0 22px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.pulse-feed__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.pulse-feed__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.pulse-feed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pulse-feed__item {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border);
+  animation: pulse-slide-in 0.4s ease-out;
+}
+
+.pulse-feed__item:last-child {
+  border-bottom: none;
+}
+
+.pulse-feed__time {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.pulse-feed__text {
+  flex: 1 1 auto;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+@keyframes pulse-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Sponsor takeover: a gold-bordered card sliding over the video area ---- */
+/* Anchor for the absolutely-positioned takeover (covers the video only). */
+.game-main--live-anchor {
+  position: relative;
+}
+
+.pulse-takeover {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  aspect-ratio: 1.7778;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  /* Click-through so the page is never blocked; only the card re-enables it. */
+  pointer-events: none;
+  animation: pulse-takeover-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pulse-takeover__card {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 86%;
+  padding: 30px 44px;
+  text-align: center;
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  background: linear-gradient(150deg, #201a10, #2a2011 55%, #3d2e14);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55),
+    0 0 22px rgba(201, 163, 78, 0.28);
+}
+
+.pulse-takeover__kicker {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+
+.pulse-takeover__name {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 5vw, 2.8rem);
+  line-height: 1.08;
+  color: #f3ead2;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.5);
+}
+
+.pulse-takeover__close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.pulse-takeover__close:hover {
+  background: rgba(201, 163, 78, 0.14);
+  border-color: var(--accent);
+}
+
+@keyframes pulse-takeover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-flash,
+  .pulse-feed__item,
+  .pulse-takeover {
+    animation: none;
+  }
+}

@@ -22,6 +22,9 @@ import {
   getEventSponsorship,
   createSponsorship,
   deleteSponsorship,
+  getLiveEvents,
+  createLiveEvent,
+  deleteLiveEvent,
   MyAssignment,
   ContentItem,
   EventContentItem,
@@ -29,6 +32,8 @@ import {
   EventResult,
   AdOrder,
   Sponsorship,
+  LiveEvent,
+  LiveEventType,
 } from '../../api';
 
 const usd = (v: string) =>
@@ -182,6 +187,404 @@ function AttachSponsorForm({
         </form>
       </div>
     </div>
+  );
+}
+
+// Time-of-day only ("7:04 PM"), for the emitted-events feed + sponsor "aired at".
+function formatClock(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// Sport-agnostic period chips + the three instant big-play presets.
+const PERIOD_LABELS = ['1st', '2nd', '3rd', '4th', 'Half', 'OT'];
+const BIG_PLAY_PRESETS = ['Big play!', 'And-one!', 'Clutch shot!'];
+
+// A one-line label for a live event in the compact emitted feed.
+function liveEventSummary(ev: LiveEvent): string {
+  switch (ev.type) {
+    case 'score_update':
+      return `Score ${ev.payload.homeScore ?? '?'} – ${ev.payload.awayScore ?? '?'}`;
+    case 'period':
+      return `Period: ${ev.payload.label ?? ''}`.trim();
+    case 'big_play':
+      return ev.payload.text ? String(ev.payload.text) : 'Big play';
+    case 'timeout':
+      return 'Timeout';
+    case 'sponsor_spot':
+      return 'Sponsor spot';
+    case 'status_note':
+      return ev.payload.text ? String(ev.payload.text) : 'Status note';
+    default:
+      return ev.type;
+  }
+}
+
+// The COURTSIDE console — shown at the top of the workspace only while a game is
+// live. Phone-first, big tap targets: a score pad (+1/+2/+3 per team, optimistic
+// then reconciled from the emit response), period chips, big-play input + preset
+// buttons, a timeout button, the gold sponsor-spot button, and a reverse-chron
+// feed of tonight's emitted events with a confirm-first retract. Score updates
+// also sync the events scoreboard server-side, so fans see them via the poller.
+function LiveConsole({
+  token,
+  eventId,
+  sponsorship,
+  initialHome,
+  initialAway,
+  homeLabel,
+  awayLabel,
+}: {
+  token: string;
+  eventId: string;
+  sponsorship: Sponsorship | null;
+  initialHome: number | null;
+  initialAway: number | null;
+  homeLabel: string;
+  awayLabel: string;
+}) {
+  const [home, setHome] = useState(initialHome ?? 0);
+  const [away, setAway] = useState(initialAway ?? 0);
+  // The Sync inputs are the PRIMARY control: editable drafts of each score,
+  // kept in step with the reconciled totals (history load, +N bumps, and the
+  // post-sync echo all flow through home/away) so the fields always show the
+  // live number until the rep types a new one.
+  const [homeDraft, setHomeDraft] = useState(String(initialHome ?? 0));
+  const [awayDraft, setAwayDraft] = useState(String(initialAway ?? 0));
+  const [feed, setFeed] = useState<LiveEvent[]>([]); // newest-first for display
+  const [bigPlay, setBigPlay] = useState('');
+  const [emitting, setEmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setHomeDraft(String(home));
+    setAwayDraft(String(away));
+  }, [home, away]);
+
+  // The rep has typed a score that differs from what's on the board -> Sync is
+  // meaningful (and enabled).
+  const scoreDirty = homeDraft !== String(home) || awayDraft !== String(away);
+
+  // Seed tonight's emitted events, and derive the running score from the last
+  // score_update (if any) so reopening the console mid-game shows the right
+  // total and history. Best-effort: a failed load just leaves an empty feed.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const history = await getLiveEvents(token, eventId);
+        if (cancelled) return;
+        const lastScore = [...history]
+          .reverse()
+          .find((e) => e.type === 'score_update');
+        if (lastScore) {
+          if (typeof lastScore.payload.homeScore === 'number') {
+            setHome(lastScore.payload.homeScore);
+          }
+          if (typeof lastScore.payload.awayScore === 'number') {
+            setAway(lastScore.payload.awayScore);
+          }
+        }
+        setFeed(history.slice().reverse());
+      } catch {
+        /* history is a convenience — leave the feed empty on failure */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, eventId]);
+
+  // Emit a non-score event, prepending the created row to the feed. Score
+  // updates use their own optimistic path (bumpScore) below.
+  async function emit(type: LiveEventType, payload?: Record<string, unknown>) {
+    setEmitting(true);
+    setError(null);
+    try {
+      const created = await createLiveEvent(token, eventId, { type, payload });
+      setFeed((f) => [created, ...f]);
+      return created;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to emit event');
+      return null;
+    } finally {
+      setEmitting(false);
+    }
+  }
+
+  // The one score path shared by Sync (direct entry) and +N (quick add): set the
+  // new totals optimistically, POST a single score_update, then reconcile from
+  // the echoed payload — reverting to the prior totals on failure. Buttons
+  // disable during the flight.
+  async function commitScore(nextHome: number, nextAway: number) {
+    const prevHome = home;
+    const prevAway = away;
+    setHome(nextHome);
+    setAway(nextAway);
+    setEmitting(true);
+    setError(null);
+    try {
+      const created = await createLiveEvent(token, eventId, {
+        type: 'score_update',
+        payload: { homeScore: nextHome, awayScore: nextAway },
+      });
+      if (typeof created.payload.homeScore === 'number') {
+        setHome(created.payload.homeScore);
+      }
+      if (typeof created.payload.awayScore === 'number') {
+        setAway(created.payload.awayScore);
+      }
+      setFeed((f) => [created, ...f]);
+    } catch (err) {
+      setHome(prevHome);
+      setAway(prevAway);
+      setError(err instanceof Error ? err.message : 'Failed to update score');
+    } finally {
+      setEmitting(false);
+    }
+  }
+
+  // PRIMARY: sync both scores at once from the editable inputs (the "glance at
+  // the gym board and match it" flow). Clamp to non-negative integers; bail on
+  // a non-numeric draft (type=number makes that unlikely, but be safe).
+  function syncScore() {
+    const nextHome = Math.max(0, Math.trunc(Number(homeDraft)));
+    const nextAway = Math.max(0, Math.trunc(Number(awayDraft)));
+    if (!Number.isFinite(nextHome) || !Number.isFinite(nextAway)) return;
+    void commitScore(nextHome, nextAway);
+  }
+
+  // SECONDARY: tap +1/+2/+3 for one team — a one-tap optimistic bump through the
+  // same commit/reconcile path.
+  function bumpScore(team: 'home' | 'away', points: number) {
+    const nextHome = team === 'home' ? home + points : home;
+    const nextAway = team === 'away' ? away + points : away;
+    void commitScore(nextHome, nextAway);
+  }
+
+  async function emitBigPlay(text: string) {
+    const t = text.trim();
+    if (t.length < 2) return;
+    const created = await emit('big_play', { text: t });
+    if (created) setBigPlay('');
+  }
+
+  async function retract(ev: LiveEvent) {
+    if (
+      !window.confirm(
+        "Retract this live event? Fans already on the game page won't see it removed until they reload.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      await deleteLiveEvent(token, eventId, ev.id);
+      setFeed((f) => f.filter((x) => x.id !== ev.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to retract event');
+    }
+  }
+
+  // Tonight's sponsor spots (newest-first), for the "aired at … · run N tonight".
+  const sponsorSpots = feed.filter((e) => e.type === 'sponsor_spot');
+  const lastSpot = sponsorSpots[0];
+
+  return (
+    <section className="card game ws-section console-card">
+      <div className="console-head">
+        <LiveBadge />
+        <span className="game-kicker">Live console · courtside</span>
+      </div>
+
+      {/* (a) PRIMARY — two-team scoreboard with editable scores + one Sync */}
+      <div className="console-board">
+        <div className="console-board__label console-board__label--home">
+          <span className="console-board__tag">Home</span>
+          <span className="console-board__name">{homeLabel}</span>
+        </div>
+        <div className="console-board__label console-board__label--away">
+          <span className="console-board__tag">Away</span>
+          <span className="console-board__name">{awayLabel}</span>
+        </div>
+        <input
+          type="number"
+          min="0"
+          inputMode="numeric"
+          className="console-board__score console-board__score--home"
+          aria-label={`${homeLabel} score`}
+          value={homeDraft}
+          disabled={emitting}
+          onChange={(e) => setHomeDraft(e.target.value)}
+          onFocus={(e) => e.target.select()}
+        />
+        <span className="console-board__dash" aria-hidden="true">
+          –
+        </span>
+        <input
+          type="number"
+          min="0"
+          inputMode="numeric"
+          className="console-board__score console-board__score--away"
+          aria-label={`${awayLabel} score`}
+          value={awayDraft}
+          disabled={emitting}
+          onChange={(e) => setAwayDraft(e.target.value)}
+          onFocus={(e) => e.target.select()}
+        />
+      </div>
+      <button
+        type="button"
+        className="console-sync"
+        disabled={emitting || !scoreDirty}
+        onClick={syncScore}
+      >
+        {emitting ? 'Syncing…' : 'Sync score'}
+      </button>
+
+      {/* (a2) SECONDARY — quick add (+1/+2/+3 per team), quieter than Sync */}
+      <div className="console-group">
+        <span className="console-label">Quick add</span>
+        <div className="console-quickadd">
+          {(['home', 'away'] as const).map((side) => (
+            <div key={side} className="console-quickadd__row">
+              <span className="console-quickadd__team">
+                {side === 'home' ? homeLabel : awayLabel}
+              </span>
+              <div className="console-bumps">
+                {[1, 2, 3].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className="console-bump"
+                    disabled={emitting}
+                    onClick={() => bumpScore(side, p)}
+                  >
+                    +{p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* (b) Period chips */}
+      <div className="console-group">
+        <span className="console-label">Period</span>
+        <div className="console-chips">
+          {PERIOD_LABELS.map((label) => (
+            <button
+              key={label}
+              type="button"
+              className="console-chip"
+              disabled={emitting}
+              onClick={() => emit('period', { label })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* (c) Big play */}
+      <div className="console-group">
+        <span className="console-label">Big play</span>
+        <div className="console-bigplay">
+          <input
+            value={bigPlay}
+            placeholder="Describe the moment…"
+            disabled={emitting}
+            onChange={(e) => setBigPlay(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') emitBigPlay(bigPlay);
+            }}
+          />
+          <button
+            type="button"
+            className="btn-inline"
+            disabled={emitting || bigPlay.trim().length < 2}
+            onClick={() => emitBigPlay(bigPlay)}
+          >
+            Emit
+          </button>
+        </div>
+        <div className="console-chips">
+          {BIG_PLAY_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className="console-chip"
+              disabled={emitting}
+              onClick={() => emitBigPlay(preset)}
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* (d) Timeout + (e) Sponsor spot */}
+      <div className="console-group console-actions">
+        <button
+          type="button"
+          className="btn-inline btn-ghost"
+          disabled={emitting}
+          onClick={() => emit('timeout', {})}
+        >
+          Timeout
+        </button>
+        {sponsorship && (
+          <div className="console-sponsor">
+            <button
+              type="button"
+              className="console-sponsor-btn"
+              disabled={emitting}
+              onClick={() => emit('sponsor_spot', { sponsorshipId: sponsorship.id })}
+            >
+              Run {sponsorship.businessName} spot
+            </button>
+            {lastSpot && (
+              <span className="console-sponsor-meta">
+                Aired at {formatClock(lastSpot.createdAt)} · run {sponsorSpots.length}{' '}
+                tonight
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {error && <div className="error">{error}</div>}
+
+      {/* (f) Emitted feed with retract */}
+      <div className="console-feed">
+        <span className="console-label">Tonight&apos;s feed</span>
+        {feed.length === 0 ? (
+          <p className="muted console-feed__empty">
+            No events yet — tap a control above to go on the air.
+          </p>
+        ) : (
+          <ul className="console-feed__list">
+            {feed.map((ev) => (
+              <li key={ev.id} className="console-feed__item">
+                <span className="console-feed__time">{formatClock(ev.createdAt)}</span>
+                <span className="console-feed__text">{liveEventSummary(ev)}</span>
+                <button
+                  type="button"
+                  className="console-retract"
+                  aria-label="Retract event"
+                  onClick={() => retract(ev)}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -551,6 +954,19 @@ function GameWorkspace({
 
   return (
     <>
+      {/* ---- Live console: courtside top priority, only while the game is live ---- */}
+      {isLive && (
+        <LiveConsole
+          token={token}
+          eventId={eventId}
+          sponsorship={sponsorship}
+          initialHome={result?.homeScore ?? null}
+          initialAway={result?.awayScore ?? null}
+          homeLabel={assignment.event.homeTeam ?? 'Home'}
+          awayLabel={assignment.event.awayTeam ?? 'Away'}
+        />
+      )}
+
       {/* ---- Header: matchup + meta on the left, status pills + public link ---- */}
       <header className="ws-header">
         <span className="game-kicker">{assignment.event.sport}</span>

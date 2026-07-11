@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
@@ -11,10 +11,12 @@ import {
   getEventContent,
   getPublishedContent,
   getEventSponsorship,
+  getLiveEvents,
   EventListItem,
   EventContentItem,
   FeedItem,
   Sponsorship,
+  LiveEvent,
 } from '../../api';
 import { toYouTubeEmbed } from '../../video';
 
@@ -158,11 +160,28 @@ function GameVideo({ event }: { event: EventListItem }) {
   );
 }
 
-// ---- Scoreboard strip: the visually dominant score line beneath the video. ----
-function Scoreboard({ event }: { event: EventListItem }) {
+// ---- Scoreboard strip: the visually dominant score line beneath the video.
+// While live, liveHome/liveAway (fed by the poller) override the event's static
+// scores, and scoreVersion bumps on each change to re-key the score span so the
+// pulse-flash animation replays. period renders a small label under the line. ----
+function Scoreboard({
+  event,
+  liveHome = null,
+  liveAway = null,
+  scoreVersion = 0,
+  period = null,
+}: {
+  event: EventListItem;
+  liveHome?: number | null;
+  liveAway?: number | null;
+  scoreVersion?: number;
+  period?: string | null;
+}) {
   const home = event.homeTeam ?? 'TBD';
   const away = event.awayTeam ?? 'TBD';
-  const hasScore = event.homeScore !== null && event.awayScore !== null;
+  const homeScore = liveHome ?? event.homeScore;
+  const awayScore = liveAway ?? event.awayScore;
+  const hasScore = homeScore !== null && awayScore !== null;
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';
 
@@ -173,8 +192,13 @@ function Scoreboard({ event }: { event: EventListItem }) {
       </span>
       <span className="game-scoreboard__center">
         {hasScore ? (
-          <span className="game-scoreboard__score">
-            {event.homeScore} — {event.awayScore}
+          <span
+            key={`score-${scoreVersion}`}
+            className={`game-scoreboard__score${
+              isLive && scoreVersion > 0 ? ' pulse-flash' : ''
+            }`}
+          >
+            {homeScore} — {awayScore}
           </span>
         ) : (
           <span className="game-scoreboard__vs">vs</span>
@@ -188,6 +212,7 @@ function Scoreboard({ event }: { event: EventListItem }) {
             {formatWhen(event.scheduledAt)}
           </span>
         )}
+        {isLive && period && <span className="pulse-period">{period}</span>}
       </span>
       <span className="game-scoreboard__team game-scoreboard__team--away">
         {away}
@@ -346,6 +371,209 @@ function RailGameCard({ event }: { event: EventListItem }) {
   );
 }
 
+// Time-of-day only, for the courtside feed timestamps ("7:04 PM").
+function formatClock(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+// Human line for a courtside feed event (big_play / timeout / status_note).
+function pulseFeedText(ev: LiveEvent): string {
+  if (ev.type === 'timeout') return 'Timeout on the floor';
+  return ev.payload.text ? String(ev.payload.text) : 'Courtside update';
+}
+
+// After a fan hits the X on a sponsor takeover, suppress any new takeovers for
+// this long — an X means "not now", and a fan doesn't want the next ad a second
+// later. New spots that arrive during the window are dropped, not queued.
+const TAKEOVER_COOLDOWN_MS = 60_000;
+
+// ---- The fan live pulse: full history first, then a 5s cursor poll while the
+// game is live. score_update drives the scoreboard override (+ a version bump to
+// flash it), period sets the label, big_play/timeout/status_note stack onto the
+// courtside feed (newest first), and sponsor_spot queues a takeover (one at a
+// time). The initial history seeds score/period/feed WITHOUT firing takeovers
+// for old spots. Polling stops on unmount and whenever `live` goes false. ----
+function useLivePulse(token: string | null, eventId: string, live: boolean) {
+  const [home, setHome] = useState<number | null>(null);
+  const [away, setAway] = useState<number | null>(null);
+  const [scoreVersion, setScoreVersion] = useState(0);
+  const [period, setPeriod] = useState<string | null>(null);
+  const [feed, setFeed] = useState<LiveEvent[]>([]); // newest-first
+  const [queue, setQueue] = useState<LiveEvent[]>([]); // pending sponsor spots
+  const [takeover, setTakeover] = useState<LiveEvent | null>(null);
+  const cursorRef = useRef<string | null>(null);
+  // Epoch-ms of the last manual (X) dismissal; 0 = never. Read at apply time to
+  // enforce TAKEOVER_COOLDOWN_MS. A ref, not state, so it never re-renders.
+  const dismissedAtRef = useRef(0);
+
+  // Apply an ascending batch. `isHistory` seeds state on first load without
+  // queueing takeovers (we don't replay old sponsor spots as overlays).
+  const apply = useCallback((batch: LiveEvent[], isHistory: boolean) => {
+    if (batch.length === 0) return;
+    const newFeed: LiveEvent[] = [];
+    const newSpots: LiveEvent[] = [];
+    for (const ev of batch) {
+      switch (ev.type) {
+        case 'score_update':
+          if (typeof ev.payload.homeScore === 'number') setHome(ev.payload.homeScore);
+          if (typeof ev.payload.awayScore === 'number') setAway(ev.payload.awayScore);
+          setScoreVersion((v) => v + 1);
+          break;
+        case 'period':
+          if (ev.payload.label) setPeriod(String(ev.payload.label));
+          break;
+        case 'sponsor_spot':
+          if (!isHistory) newSpots.push(ev);
+          break;
+        case 'big_play':
+        case 'timeout':
+        case 'status_note':
+          newFeed.push(ev);
+          break;
+      }
+    }
+    // Ascending -> reverse so newest sits at the head of the feed.
+    if (newFeed.length) setFeed((f) => [...newFeed.reverse(), ...f]);
+    // Collapse the whole batch to at most ONE takeover — several sponsor_spot
+    // events in a single poll are the same ad, and stacking them is spam. Keep
+    // the latest. Drop it entirely while a manual dismissal is still cooling
+    // down. (History never reaches here: those spots aren't pushed above.)
+    if (newSpots.length) {
+      const withinCooldown =
+        Date.now() - dismissedAtRef.current < TAKEOVER_COOLDOWN_MS;
+      if (!withinCooldown) {
+        const latest = newSpots[newSpots.length - 1];
+        setQueue((q) => [...q, latest]);
+      }
+    }
+    cursorRef.current = batch[batch.length - 1].createdAt;
+  }, []);
+
+  // History-then-poll. Re-runs (and tears down) when the game stops being live.
+  useEffect(() => {
+    if (!token || !live) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    (async () => {
+      try {
+        const history = await getLiveEvents(token, eventId);
+        if (cancelled) return;
+        apply(history, true);
+      } catch {
+        /* a failed history load still lets polling pick up from now */
+      }
+      if (cancelled) return;
+      timer = setInterval(async () => {
+        try {
+          const batch = await getLiveEvents(
+            token,
+            eventId,
+            cursorRef.current ?? undefined,
+          );
+          if (!cancelled) apply(batch, false);
+        } catch {
+          /* transient poll error — try again on the next tick */
+        }
+      }, 5000);
+    })();
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [token, eventId, live, apply]);
+
+  // Promote the next queued sponsor spot when nothing is on screen.
+  useEffect(() => {
+    if (takeover || queue.length === 0) return;
+    setTakeover(queue[0]);
+    setQueue((q) => q.slice(1));
+  }, [takeover, queue]);
+
+  // Auto-hide the current takeover after ~12s. This just clears the current
+  // spot; the promote effect above advances to the next queued one (if any).
+  // It does NOT touch the queue or the cooldown — an unattended ad rotating on
+  // is fine; only a deliberate X means "stop".
+  useEffect(() => {
+    if (!takeover) return;
+    const t = setTimeout(() => setTakeover(null), 12000);
+    return () => clearTimeout(t);
+  }, [takeover]);
+
+  // A manual X is "not now": clear what's on screen, empty the whole pending
+  // queue so nothing replays, and start the cooldown so incoming spots are
+  // dropped for a while.
+  const dismissTakeover = useCallback(() => {
+    dismissedAtRef.current = Date.now();
+    setQueue([]);
+    setTakeover(null);
+  }, []);
+
+  return {
+    home,
+    away,
+    scoreVersion,
+    period,
+    feed,
+    takeover,
+    dismissTakeover,
+  };
+}
+
+// ---- "Live from courtside": the stacking play-by-play feed under the sponsor
+// strip. Newest first; each item gently animates in. ----
+function LiveFeed({ items }: { items: LiveEvent[] }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="pulse-feed">
+      <div className="pulse-feed__head">
+        <LiveBadge />
+        <h2 className="pulse-feed__title">Live from courtside</h2>
+      </div>
+      <ul className="pulse-feed__list">
+        {items.map((ev) => (
+          <li key={ev.id} className="pulse-feed__item">
+            <span className="pulse-feed__time">{formatClock(ev.createdAt)}</span>
+            <span className="pulse-feed__text">{pulseFeedText(ev)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// ---- The sponsor TAKEOVER: a gold-bordered card that slides over the video
+// area for ~12s. Never blocks the page (the wrapper is click-through; only the
+// card + X are interactive). businessName comes from the page's sponsorship. ----
+function SponsorTakeover({
+  businessName,
+  onDismiss,
+}: {
+  businessName: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="pulse-takeover" role="status" aria-live="polite">
+      <div className="pulse-takeover__card">
+        <button
+          type="button"
+          className="pulse-takeover__close"
+          aria-label="Dismiss sponsor spot"
+          onClick={onDismiss}
+        >
+          ×
+        </button>
+        <span className="pulse-takeover__kicker">
+          A word from our presenting sponsor
+        </span>
+        <span className="pulse-takeover__name">{businessName}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function GamePage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -444,6 +672,11 @@ export default function GamePage() {
       .slice(0, 8);
   }, [events, latest, id]);
 
+  // Fan live pulse: only polls while this game is live (the hook itself no-ops
+  // and tears down when `live` is false). Hooks run before the early returns.
+  const live = event?.status === 'live';
+  const pulse = useLivePulse(token, id, live);
+
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
@@ -480,10 +713,23 @@ export default function GamePage() {
 
       {!loading && !error && event && (
         <div className="game-layout">
-          <div className="game-main">
+          <div className="game-main game-main--live-anchor">
+            {live && pulse.takeover && (
+              <SponsorTakeover
+                businessName={sponsorship?.businessName ?? 'our presenting sponsor'}
+                onDismiss={pulse.dismissTakeover}
+              />
+            )}
             <GameVideo event={event} />
-            <Scoreboard event={event} />
+            <Scoreboard
+              event={event}
+              liveHome={live ? pulse.home : null}
+              liveAway={live ? pulse.away : null}
+              scoreVersion={pulse.scoreVersion}
+              period={live ? pulse.period : null}
+            />
             {sponsorship && <PresentingSponsorStrip sponsorship={sponsorship} />}
+            {live && <LiveFeed items={pulse.feed} />}
             <ShareRow event={event} />
 
             <section className="game-articles">
