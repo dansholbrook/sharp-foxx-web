@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
+import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
   getReviewQueue,
   publishContent,
@@ -12,7 +13,7 @@ import {
   ReviewQueueItem,
 } from '../api';
 
-// Full date + time — used in each card's "submitted" line.
+// Full date + time — used for the "submitted" column/line.
 function formatWhen(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
@@ -34,105 +35,26 @@ function matchup(item: ReviewQueueItem): string | null {
   return `${item.awayTeam} @ ${item.homeTeam}`;
 }
 
-// Send-back modal: an optional note textarea, then POST /content/:id/return.
-// On success the parent drops the card from the list.
-function SendBackModal({
-  item,
-  token,
-  onReturned,
-  onClose,
-}: {
-  item: ReviewQueueItem;
-  token: string;
-  onReturned: () => void;
-  onClose: () => void;
-}) {
-  const [note, setNote] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      // Send only a non-empty note; an empty box returns the draft with no note.
-      const trimmed = note.trim();
-      await returnContent(token, item.id, trimmed ? { note: trimmed } : {});
-      onReturned();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send back');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card card"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Send article back"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <span className="game-kicker">Send back</span>
-            <h2 style={{ margin: '2px 0 0' }}>{item.title}</h2>
-          </div>
-          <button type="button" className="link-btn modal-close" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <form onSubmit={onSubmit} className="rep-form">
-          <div className="field field--wide">
-            <label htmlFor="review-note">Note to the author (optional)</label>
-            <textarea
-              id="review-note"
-              value={note}
-              rows={5}
-              placeholder="What needs another pass before this can go live?"
-              onChange={(e) => setNote(e.target.value)}
-            />
-            <span className="muted sponsor-field-hint">
-              Returns the article to the author as a draft. They&apos;ll see this
-              note as an editor&apos;s note above the editor.
-            </span>
-          </div>
-
-          <div className="rep-form-actions">
-            <button type="submit" disabled={submitting}>
-              {submitting ? 'Sending back…' : 'Send back to draft'}
-            </button>
-          </div>
-
-          {error && <div className="error rep-form-msg">{error}</div>}
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// One review card: title + author, matchup/sport/date meta, submitted time, an
-// expandable HTML body preview, and the two editorial actions. Both actions
-// remove the card from the queue on success (via onDecided).
-function ReviewCard({
+// The slide-over for one review item: the matchup context, the rendered article
+// body, and the two editorial actions. 'view' shows Approve & publish / Send
+// back; 'sendback' swaps the body for an inline note textarea (no second modal).
+// Both actions remove the item from the queue on success (via onDecided).
+function ReviewDetail({
   item,
   token,
   onDecided,
+  close,
 }: {
   item: ReviewQueueItem;
   token: string;
   onDecided: () => void;
+  close: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [showSendBack, setShowSendBack] = useState(false);
+  const [mode, setMode] = useState<'view' | 'sendback'>('view');
+  const [note, setNote] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const meta = [item.author, item.eventSport, matchup(item)].filter(Boolean);
 
   async function onPublish() {
     if (!window.confirm(`Approve and publish “${item.title}”?`)) return;
@@ -141,6 +63,7 @@ function ReviewCard({
     try {
       await publishContent(token, item.id);
       onDecided();
+      close();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to publish');
     } finally {
@@ -148,53 +71,102 @@ function ReviewCard({
     }
   }
 
-  return (
-    <article className="card game review-card">
-      <div className="applicant-head">
-        <div>
-          <span className="game-kicker">{item.eventSport ?? 'Feature'}</span>
-          <h2 className="applicant-name">{item.title}</h2>
-          <span className="applicant-meta muted">
-            {meta.length > 0 ? meta.join(' · ') : 'Unassigned'}
+  async function onSendBack(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      // Send only a non-empty note; an empty box returns the draft with no note.
+      const trimmed = note.trim();
+      await returnContent(token, item.id, trimmed ? { note: trimmed } : {});
+      onDecided();
+      close();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send back');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const body =
+    mode === 'sendback' ? (
+      <form id="sendback-form" onSubmit={onSendBack} className="rep-form">
+        <div className="field field--wide">
+          <label htmlFor="review-note">Note to the author (optional)</label>
+          <textarea
+            id="review-note"
+            value={note}
+            rows={5}
+            placeholder="What needs another pass before this can go live?"
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <span className="muted sponsor-field-hint">
+            Returns the article to the author as a draft. They&apos;ll see this
+            note as an editor&apos;s note above the editor.
           </span>
         </div>
-        <span className="pill pill--review">Submitted</span>
-      </div>
-
-      <div className="review-facts">
-        <span className="applicant-fact">
-          <span className="applicant-fact__label">Author</span>
-          {item.author ?? 'Unknown'}
-        </span>
-        <span className="applicant-fact">
-          <span className="applicant-fact__label">Submitted</span>
-          {formatWhen(item.createdAt)}
-        </span>
-        {item.eventScheduledAt && (
+        {error && <div className="error rep-form-msg">{error}</div>}
+      </form>
+    ) : (
+      <>
+        <div className="review-facts">
           <span className="applicant-fact">
-            <span className="applicant-fact__label">Game date</span>
-            {formatDate(item.eventScheduledAt)}
+            <span className="applicant-fact__label">Author</span>
+            {item.author ?? 'Unknown'}
           </span>
-        )}
-      </div>
+          {matchup(item) && (
+            <span className="applicant-fact">
+              <span className="applicant-fact__label">Matchup</span>
+              {matchup(item)}
+            </span>
+          )}
+          {item.eventSport && (
+            <span className="applicant-fact">
+              <span className="applicant-fact__label">Sport</span>
+              {item.eventSport}
+            </span>
+          )}
+          <span className="applicant-fact">
+            <span className="applicant-fact__label">Submitted</span>
+            {formatWhen(item.createdAt)}
+          </span>
+          {item.eventScheduledAt && (
+            <span className="applicant-fact">
+              <span className="applicant-fact__label">Game date</span>
+              {formatDate(item.eventScheduledAt)}
+            </span>
+          )}
+        </div>
 
-      {expanded ? (
         <div
           className="article-body review-body"
           dangerouslySetInnerHTML={{ __html: item.body ?? '' }}
         />
-      ) : (
-        <p className="muted review-collapsed">Preview hidden.</p>
-      )}
-      <button
-        type="button"
-        className="link-btn applicant-more"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        {expanded ? 'Hide preview' : 'Read preview'}
-      </button>
 
-      <div className="applicant-actions">
+        {error && <div className="error rep-form-msg">{error}</div>}
+      </>
+    );
+
+  const footer =
+    mode === 'sendback' ? (
+      <>
+        <button type="submit" form="sendback-form" disabled={submitting}>
+          {submitting ? 'Sending back…' : 'Send back to draft'}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={submitting}
+          onClick={() => {
+            setError(null);
+            setMode('view');
+          }}
+        >
+          Back
+        </button>
+      </>
+    ) : (
+      <>
         <button
           type="button"
           className="btn-inline"
@@ -207,26 +179,26 @@ function ReviewCard({
           type="button"
           className="btn-ghost"
           disabled={publishing}
-          onClick={() => setShowSendBack(true)}
+          onClick={() => {
+            setError(null);
+            setMode('sendback');
+          }}
         >
           Send back
         </button>
-      </div>
+      </>
+    );
 
-      {error && <div className="error rep-form-msg">{error}</div>}
-
-      {showSendBack && (
-        <SendBackModal
-          item={item}
-          token={token}
-          onReturned={() => {
-            setShowSendBack(false);
-            onDecided();
-          }}
-          onClose={() => setShowSendBack(false)}
-        />
-      )}
-    </article>
+  return (
+    <SlideOver
+      onClose={close}
+      kicker={mode === 'sendback' ? 'Send back' : item.eventSport ?? 'Feature'}
+      title={item.title}
+      footer={footer}
+      label="Article review"
+    >
+      {body}
+    </SlideOver>
   );
 }
 
@@ -268,6 +240,14 @@ export default function ReviewPage() {
     setItems((prev) => (prev ? prev.filter((i) => i.id !== id) : prev));
   }
 
+  const columns: Column<ReviewQueueItem>[] = [
+    { key: 'title', header: 'Title', cell: (i) => i.title },
+    { key: 'author', header: 'Author', cell: (i) => i.author ?? 'Unknown' },
+    { key: 'matchup', header: 'Matchup', cell: (i) => matchup(i) ?? '—' },
+    { key: 'sport', header: 'Sport', cell: (i) => i.eventSport ?? '—' },
+    { key: 'submitted', header: 'Submitted', cell: (i) => formatWhen(i.createdAt) },
+  ];
+
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
@@ -297,16 +277,20 @@ export default function ReviewPage() {
       {error && <div className="error">{error}</div>}
 
       {!loading && !error && items && items.length > 0 ? (
-        <div className="applicant-list">
-          {items.map((item) => (
-            <ReviewCard
-              key={item.id}
-              item={item}
+        <QueueTable
+          columns={columns}
+          rows={items}
+          rowKey={(i) => i.id}
+          ariaLabel="Articles awaiting review"
+          renderDetail={(i, close) => (
+            <ReviewDetail
+              item={i}
               token={token}
-              onDecided={() => removeItem(item.id)}
+              onDecided={() => removeItem(i.id)}
+              close={close}
             />
-          ))}
-        </div>
+          )}
+        />
       ) : (
         !loading &&
         !error && (

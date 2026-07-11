@@ -1,16 +1,18 @@
 'use client';
 
 // The staff NIL review queue (/nil-review): submitted deliverables awaiting a
-// decision. Cloned from the editorial /review pattern — a card per submission
-// with the athlete's name, the value, and the proof; Approve (a confirm modal
-// that RESTATES the money) or Send back (a note modal). Same gate as GET
-// /nil/review-queue (admin + regional_manager).
+// decision. A branded table (row per submission: athlete, deliverable, value,
+// submitted) whose rows open a right-side slide-over. Approve restates the money
+// INSIDE the panel (a fee-math confirm step) before releasing funds; Send back
+// takes an inline note. Same gate as GET /nil/review-queue (admin +
+// regional_manager).
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
+import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
   getNilReviewQueue,
   getNilPool,
@@ -41,23 +43,28 @@ function formatWhen(iso: string | null): string {
     : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-// Approve modal: restates the money before releasing funds. gross = the
-// deliverable's value; fee = value × the pool's rate; net = gross − fee. This is
-// a PREVIEW (the exact amounts are stamped server-side and returned on approve);
-// a 409 "Insufficient pool funds" is surfaced inline so staff can top up first.
-function ApproveModal({
+// The slide-over for one deliverable. 'view' shows the description, value, and
+// proof, with Approve / Send back. 'confirm' restates the money (gross / −fee /
+// net) before releasing; a 409 "Insufficient pool funds" surfaces inline.
+// 'sendback' swaps in an inline note textarea. Both decisions remove the item on
+// success; an approval also bubbles the release up for the banner.
+function NilReviewDetail({
   item,
   token,
   feeRate,
   onApproved,
-  onClose,
+  onReturned,
+  close,
 }: {
   item: NilReviewItem;
   token: string;
   feeRate: number;
   onApproved: (release: NilRelease) => void;
-  onClose: () => void;
+  onReturned: () => void;
+  close: () => void;
 }) {
+  const [mode, setMode] = useState<'view' | 'confirm' | 'sendback'>('view');
+  const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,12 +73,13 @@ function ApproveModal({
   const net = gross - fee;
   const who = item.athleteName ?? 'the athlete';
 
-  async function onConfirm() {
+  async function onApprove() {
     setSubmitting(true);
     setError(null);
     try {
       const { release } = await approveDeliverable(token, item.id);
       onApproved(release);
+      close();
     } catch (err) {
       // 409 "Insufficient pool funds" (and any other failure) -> inline.
       setError(err instanceof Error ? err.message : 'Failed to approve');
@@ -80,25 +88,27 @@ function ApproveModal({
     }
   }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card card"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Approve deliverable"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <span className="game-kicker">Approve &amp; release</span>
-            <h2 style={{ margin: '2px 0 0' }}>{item.title}</h2>
-          </div>
-          <button type="button" className="link-btn modal-close" onClick={onClose}>
-            Close
-          </button>
-        </div>
+  async function onSendBack(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const trimmed = note.trim();
+      await returnDeliverable(token, item.id, trimmed ? { note: trimmed } : {});
+      onReturned();
+      close();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send back');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
+  // ---- Body per mode ----
+  let body: React.ReactNode;
+  if (mode === 'confirm') {
+    body = (
+      <>
         <p className="nil-restate">
           Release <strong>{usdCents(gross)}</strong> — {usdCents(fee)} platform
           fee, <strong>{usdCents(net)}</strong> to {who}?
@@ -124,209 +134,157 @@ function ApproveModal({
           on approval and paid from the school&apos;s pool.
         </p>
 
-        <div className="rep-form-actions">
-          <button type="button" disabled={submitting} onClick={onConfirm}>
-            {submitting ? 'Releasing…' : 'Approve & release funds'}
-          </button>
-        </div>
-
         {error && <div className="error rep-form-msg">{error}</div>}
-      </div>
-    </div>
-  );
-}
-
-// Send-back modal: an optional note, then POST /nil/deliverables/:id/return. On
-// success the parent drops the card from the queue.
-function SendBackModal({
-  item,
-  token,
-  onReturned,
-  onClose,
-}: {
-  item: NilReviewItem;
-  token: string;
-  onReturned: () => void;
-  onClose: () => void;
-}) {
-  const [note, setNote] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      const trimmed = note.trim();
-      await returnDeliverable(token, item.id, trimmed ? { note: trimmed } : {});
-      onReturned();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send back');
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card card"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Send deliverable back"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-head">
-          <div>
-            <span className="game-kicker">Send back</span>
-            <h2 style={{ margin: '2px 0 0' }}>{item.title}</h2>
-          </div>
-          <button type="button" className="link-btn modal-close" onClick={onClose}>
-            Close
-          </button>
-        </div>
-
-        <form onSubmit={onSubmit} className="rep-form">
-          <div className="field field--wide">
-            <label htmlFor="nil-return-note">Note to the athlete (optional)</label>
-            <textarea
-              id="nil-return-note"
-              value={note}
-              rows={5}
-              placeholder="What needs another pass before this can be approved?"
-              onChange={(e) => setNote(e.target.value)}
-            />
-            <span className="muted sponsor-field-hint">
-              Returns the deliverable to the athlete as an assignment. They&apos;ll
-              see this note as an editor&apos;s note on their card.
-            </span>
-          </div>
-
-          <div className="rep-form-actions">
-            <button type="submit" disabled={submitting}>
-              {submitting ? 'Sending back…' : 'Send back to athlete'}
-            </button>
-          </div>
-
-          {error && <div className="error rep-form-msg">{error}</div>}
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// One review card: athlete name + title, the value, a proof link (opens in a new
-// tab) + the athlete's note, and the two actions. Both actions remove the card on
-// success (via onDecided); an approval also bubbles the release up for the banner.
-function ReviewCard({
-  item,
-  token,
-  feeRate,
-  onApproved,
-  onReturned,
-}: {
-  item: NilReviewItem;
-  token: string;
-  feeRate: number;
-  onApproved: (release: NilRelease) => void;
-  onReturned: () => void;
-}) {
-  const [showApprove, setShowApprove] = useState(false);
-  const [showSendBack, setShowSendBack] = useState(false);
-
-  return (
-    <article className="card game nil-review-card">
-      <div className="applicant-head">
-        <div>
-          <span className="game-kicker">NIL deliverable</span>
-          <h2 className="applicant-name">{item.title}</h2>
-          <span className="applicant-meta muted">
-            {item.athleteName ?? 'Unknown athlete'}
+      </>
+    );
+  } else if (mode === 'sendback') {
+    body = (
+      <form id="nil-sendback-form" onSubmit={onSendBack} className="rep-form">
+        <div className="field field--wide">
+          <label htmlFor="nil-return-note">Note to the athlete (optional)</label>
+          <textarea
+            id="nil-return-note"
+            value={note}
+            rows={5}
+            placeholder="What needs another pass before this can be approved?"
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <span className="muted sponsor-field-hint">
+            Returns the deliverable to the athlete as an assignment. They&apos;ll
+            see this note as an editor&apos;s note on their card.
           </span>
         </div>
-        <span className="pill pill--review">Submitted</span>
-      </div>
+        {error && <div className="error rep-form-msg">{error}</div>}
+      </form>
+    );
+  } else {
+    // 'view'
+    body = (
+      <>
+        <div className="review-facts">
+          <span className="applicant-fact">
+            <span className="applicant-fact__label">Athlete</span>
+            {item.athleteName ?? 'Unknown'}
+          </span>
+          <span className="applicant-fact">
+            <span className="applicant-fact__label">Value</span>
+            {usdCents(item.valueCents)}
+          </span>
+          <span className="applicant-fact">
+            <span className="applicant-fact__label">Submitted</span>
+            {formatWhen(item.submittedAt)}
+          </span>
+        </div>
 
-      <div className="review-facts">
-        <span className="applicant-fact">
-          <span className="applicant-fact__label">Athlete</span>
-          {item.athleteName ?? 'Unknown'}
-        </span>
-        <span className="applicant-fact">
-          <span className="applicant-fact__label">Value</span>
-          {usdCents(item.valueCents)}
-        </span>
-        <span className="applicant-fact">
-          <span className="applicant-fact__label">Submitted</span>
-          {formatWhen(item.submittedAt)}
-        </span>
-      </div>
+        {item.description && <p className="applicant-pitch">{item.description}</p>}
 
-      {item.description && <p className="applicant-pitch">{item.description}</p>}
+        <div className="nil-review-proof">
+          {item.proofPublicUrl ? (
+            <a
+              href={item.proofPublicUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="nil-proof__link"
+            >
+              View proof →
+            </a>
+          ) : (
+            <span className="muted">No proof attached</span>
+          )}
+          {item.proofNote && (
+            <p className="nil-card__desc" style={{ margin: '8px 0 0' }}>
+              <span className="muted">Athlete&apos;s note: </span>
+              {item.proofNote}
+            </p>
+          )}
+        </div>
+      </>
+    );
+  }
 
-      <div className="nil-review-proof">
-        {item.proofPublicUrl ? (
-          <a
-            href={item.proofPublicUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nil-proof__link"
-          >
-            View proof →
-          </a>
-        ) : (
-          <span className="muted">No proof attached</span>
-        )}
-        {item.proofNote && (
-          <p className="nil-card__desc" style={{ margin: '8px 0 0' }}>
-            <span className="muted">Athlete&apos;s note: </span>
-            {item.proofNote}
-          </p>
-        )}
-      </div>
-
-      <div className="applicant-actions">
+  // ---- Footer per mode ----
+  let footer: React.ReactNode;
+  if (mode === 'confirm') {
+    footer = (
+      <>
+        <button type="button" disabled={submitting} onClick={onApprove}>
+          {submitting ? 'Releasing…' : 'Approve & release funds'}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={submitting}
+          onClick={() => {
+            setError(null);
+            setMode('view');
+          }}
+        >
+          Back
+        </button>
+      </>
+    );
+  } else if (mode === 'sendback') {
+    footer = (
+      <>
+        <button type="submit" form="nil-sendback-form" disabled={submitting}>
+          {submitting ? 'Sending back…' : 'Send back to athlete'}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={submitting}
+          onClick={() => {
+            setError(null);
+            setMode('view');
+          }}
+        >
+          Back
+        </button>
+      </>
+    );
+  } else {
+    footer = (
+      <>
         <button
           type="button"
           className="btn-inline"
-          onClick={() => setShowApprove(true)}
+          onClick={() => {
+            setError(null);
+            setMode('confirm');
+          }}
         >
           Approve
         </button>
         <button
           type="button"
           className="btn-ghost"
-          onClick={() => setShowSendBack(true)}
+          onClick={() => {
+            setError(null);
+            setMode('sendback');
+          }}
         >
           Send back
         </button>
-      </div>
+      </>
+    );
+  }
 
-      {showApprove && (
-        <ApproveModal
-          item={item}
-          token={token}
-          feeRate={feeRate}
-          onApproved={(release) => {
-            setShowApprove(false);
-            onApproved(release);
-          }}
-          onClose={() => setShowApprove(false)}
-        />
-      )}
-      {showSendBack && (
-        <SendBackModal
-          item={item}
-          token={token}
-          onReturned={() => {
-            setShowSendBack(false);
-            onReturned();
-          }}
-          onClose={() => setShowSendBack(false)}
-        />
-      )}
-    </article>
+  return (
+    <SlideOver
+      onClose={close}
+      kicker={
+        mode === 'confirm'
+          ? 'Approve & release'
+          : mode === 'sendback'
+            ? 'Send back'
+            : 'NIL deliverable'
+      }
+      title={item.title}
+      footer={footer}
+      label="NIL deliverable review"
+    >
+      {body}
+    </SlideOver>
   );
 }
 
@@ -393,6 +351,26 @@ export default function NilReviewPage() {
     return (id && feeRates[id]) || DEFAULT_FEE_RATE;
   }
 
+  const columns: Column<NilReviewItem>[] = [
+    {
+      key: 'athlete',
+      header: 'Athlete',
+      cell: (i) => i.athleteName ?? 'Unknown',
+    },
+    { key: 'title', header: 'Deliverable', cell: (i) => i.title },
+    {
+      key: 'value',
+      header: 'Value',
+      align: 'right',
+      cell: (i) => usdCents(i.valueCents),
+    },
+    {
+      key: 'submitted',
+      header: 'Submitted',
+      cell: (i) => formatWhen(i.submittedAt),
+    },
+  ];
+
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
@@ -424,28 +402,32 @@ export default function NilReviewPage() {
       {error && <div className="error">{error}</div>}
 
       {!loading && !error && items && items.length > 0 ? (
-        <div className="applicant-list">
-          {items.map((item) => (
-            <ReviewCard
-              key={item.id}
-              item={item}
+        <QueueTable
+          columns={columns}
+          rows={items}
+          rowKey={(i) => i.id}
+          ariaLabel="Deliverables awaiting review"
+          renderDetail={(i, close) => (
+            <NilReviewDetail
+              item={i}
               token={token}
-              feeRate={feeRateFor(item)}
+              feeRate={feeRateFor(i)}
               onApproved={(release) => {
                 setNotice(
                   `Released ${usdCents(release.netCents)} to ${
-                    item.athleteName ?? 'the athlete'
+                    i.athleteName ?? 'the athlete'
                   } (${usdCents(release.feeCents)} platform fee).`,
                 );
-                removeItem(item.id);
+                removeItem(i.id);
               }}
               onReturned={() => {
                 setNotice(null);
-                removeItem(item.id);
+                removeItem(i.id);
               }}
+              close={close}
             />
-          ))}
-        </div>
+          )}
+        />
       ) : (
         !loading &&
         !error && (

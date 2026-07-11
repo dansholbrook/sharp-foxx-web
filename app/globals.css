@@ -3954,3 +3954,169 @@ a.btn-inline:hover {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+
+/* =================================================================
+   Queue table + slide-over — shared by /applicants, /review, /nil-review
+   A compact branded table (row per queue item) whose rows open a
+   right-side detail panel. Reuses the table + modal + pill tokens; only
+   the row-as-button affordance and the sliding panel are new. Scoped via
+   .queue-* and .slideover-*.
+   ================================================================= */
+
+/* Horizontal scroll container so a wide table never pushes the page sideways. */
+.queue-table-wrap {
+  overflow-x: auto;
+}
+
+.queue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+/* Rows read as buttons: pointer cursor, subtle hover, keyboard focus ring. */
+.queue-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.queue-row:hover td {
+  background: rgba(201, 163, 78, 0.045);
+}
+
+/* Keyboard focus (and the currently-open row) get a gold left-edge marker. */
+.queue-row:focus-visible {
+  outline: none;
+}
+
+.queue-row:focus-visible td,
+.queue-row--on td {
+  background: rgba(201, 163, 78, 0.08);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Keep cells on one line so the table stays legible; the wrap scrolls if tight. */
+.queue-table th,
+.queue-table td {
+  white-space: nowrap;
+}
+
+/* "Show more" pager under the table. */
+.queue-more {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.queue-more__note {
+  font-size: 0.85rem;
+}
+
+/* ---- Slide-over: right-side detail panel over a dim backdrop ---- */
+.slideover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.6);
+  animation: slideover-fade 0.18s ease;
+}
+
+@keyframes slideover-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.slideover-panel {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  max-width: 100%;
+  height: 100%;
+  background: var(--panel);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -18px 0 44px rgba(0, 0, 0, 0.42);
+  animation: slideover-in 0.2s ease;
+}
+
+@keyframes slideover-in {
+  from {
+    transform: translateX(28px);
+    opacity: 0.5;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.slideover-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  padding: 24px 26px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.slideover-title {
+  margin: 2px 0 0;
+  font-size: 1.3rem;
+}
+
+/* Close reads as a muted glyph action, not a gold button (like .modal-close). */
+.slideover-close {
+  margin-top: 2px;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+/* Scrollable body between the sticky head and footer. */
+.slideover-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 22px 26px;
+}
+
+/* The body's article/pitch typography shouldn't be capped to reading width
+   inside the narrower panel -- let it use the full column. */
+.slideover-body .article-body {
+  max-width: none;
+}
+
+/* Sticky footer holding the action buttons. */
+.slideover-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 18px 26px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* A full-width block (e.g. the send-back textarea field) inside the footer. */
+.slideover-footer .field--wide {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .slideover-panel {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slideover-backdrop,
+  .slideover-panel {
+    animation: none;
+  }
+}
