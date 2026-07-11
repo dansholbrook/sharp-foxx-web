@@ -1103,3 +1103,173 @@ export const getGamePhotos = (token: string, eventId: string) =>
 // Delete a photo (uploader or admin, enforced server-side). 204, no body.
 export const deleteMedia = (token: string, mediaId: string) =>
   authDelete(`/media/${mediaId}`, token);
+
+// ---- NIL Phase 1: athlete deliverables + wallet, staff review queue + pools ----
+
+// The money math stamped on a deliverable when it's approved: the gross (the
+// deliverable's value), the platform fee taken from the school's pool, and the
+// net credited to the athlete. All *_Cents are integer cents (divide by 100 at
+// the render boundary); releasedAt is a timestamptz ISO string.
+export interface NilRelease {
+  grossCents: number;
+  feeCents: number;
+  netCents: number;
+  releasedAt: string;
+}
+
+// A deliverable as returned by GET /nil/my-deliverables (the athlete's own).
+// status walks assigned -> submitted -> approved. proofMediaId/proofPublicUrl are
+// the confirmed proof upload attached at submit (null on an unstarted assigned
+// card); reviewNote carries a staffer's send-back note on a returned (assigned)
+// card. release is non-null only once approved.
+export interface NilDeliverable {
+  id: string;
+  title: string;
+  description: string | null;
+  valueCents: number;
+  status: 'assigned' | 'submitted' | 'approved';
+  proofNote: string | null;
+  reviewNote: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+  proofMediaId: string | null;
+  proofPublicUrl: string | null;
+  release: NilRelease | null;
+}
+
+// One row in the athlete's wallet release history. Carries the same money math
+// as a deliverable's release, plus the deliverable's title/id for the list (both
+// optional -- the wallet is rendered defensively against the backend shape).
+export interface NilWalletRelease extends NilRelease {
+  id?: string;
+  deliverableId?: string;
+  title?: string | null;
+}
+
+// GET /nil/my-wallet (athlete). ledgerOnly is true in Phase 1 -- payouts are
+// tracked here, not processed -- and the wallet caption is honest about that.
+// totalNetCents is the sum of every release's net.
+export interface NilWallet {
+  totalNetCents: number;
+  ledgerOnly: boolean;
+  releases: NilWalletRelease[];
+}
+
+// A row in the staff NIL review queue (GET /nil/review-queue), one per submitted
+// deliverable awaiting a decision. Carries the athlete's name, the value, and the
+// proof (public URL + note) so a card renders without a follow-up lookup.
+// institutionId, when present, is used to look up the pool's platform fee rate
+// for the approve preview.
+export interface NilReviewItem {
+  id: string;
+  title: string;
+  description: string | null;
+  athleteName: string | null;
+  valueCents: number;
+  proofPublicUrl: string | null;
+  proofNote: string | null;
+  submittedAt: string | null;
+  institutionId?: string | null;
+}
+
+// POST /nil/deliverables/:id/approve response: the updated deliverable plus the
+// release math just stamped. A pool without enough balance comes back 409
+// "Insufficient pool funds" -> surfaced as "409 <message>".
+export interface NilApproveResponse {
+  deliverable: NilDeliverable;
+  release: NilRelease;
+}
+
+// GET /nil/pools/:institutionId (staff + that school's athletes). platformFeeRate
+// is a fraction (0.15 = 15%); balanceCents is the pool's remaining balance. A
+// school with no pool yet comes back with id null (zero-state). contributions/
+// releases aren't rendered here (only the fee rate feeds the approve preview), so
+// they're typed loosely.
+export interface NilPool {
+  id: string | null;
+  balanceCents: number;
+  platformFeeRate: number;
+  contributions: Array<Record<string, unknown>>;
+  releases: Array<Record<string, unknown>>;
+}
+
+// The athlete's own deliverables, any status, for the My NIL assignments board.
+export const getMyDeliverables = (token: string) =>
+  authGet<NilDeliverable[]>('/nil/my-deliverables', token);
+
+// Submit a deliverable for review (assigned -> submitted). proofMediaId must be a
+// CONFIRMED media_uploads row (purpose 'nil_proof'); a non-owner gets 403 and a
+// non-assigned/unconfirmed proof a 409/400 -- all "<status> <message>". Returns
+// the updated deliverable.
+export const submitDeliverable = (
+  token: string,
+  id: string,
+  input: { proofMediaId: string; proofNote?: string },
+) => authPost<NilDeliverable>(`/nil/deliverables/${id}/submit`, token, input);
+
+// The athlete's wallet: total net earned + the release ledger.
+export const getMyWallet = (token: string) =>
+  authGet<NilWallet>('/nil/my-wallet', token);
+
+// Staff NIL review queue: submitted deliverables awaiting a decision (admin,
+// regional_manager). A caller without that gate gets 403.
+export const getNilReviewQueue = (token: string) =>
+  authGet<NilReviewItem[]>('/nil/review-queue', token);
+
+// Approve a submitted deliverable -> releases the funds and returns the deliverable
+// + release math. 409 "Insufficient pool funds" when the pool can't cover it.
+export const approveDeliverable = (token: string, id: string) =>
+  authPost<NilApproveResponse>(`/nil/deliverables/${id}/approve`, token, {});
+
+// Return a submitted deliverable to the athlete (submitted -> assigned) with an
+// optional feedback note shown as an "editor's note" style callout on their card.
+export const returnDeliverable = (
+  token: string,
+  id: string,
+  input: { note?: string },
+) => authPost<NilDeliverable>(`/nil/deliverables/${id}/return`, token, input);
+
+// A school's NIL pool (staff + that school's athletes). Used by the review queue
+// to read platformFeeRate for the approve preview.
+export const getNilPool = (token: string, institutionId: string) =>
+  authGet<NilPool>(`/nil/pools/${institutionId}`, token);
+
+// Presign an upload slot for an NIL proof (image, video/mp4, or pdf, <=50MB --
+// backend-enforced). Same presign -> PUT -> confirm chain as game photos, just a
+// different purpose; reuse uploadToPresignedUrl(WithProgress) + confirmMedia.
+export const presignNilProof = (
+  token: string,
+  input: { fileName: string; contentType: string; sizeBytes: number },
+) =>
+  authPost<PresignResponse>('/media/presign', token, {
+    purpose: 'nil_proof',
+    ...input,
+  });
+
+// Same raw presigned PUT as uploadToPresignedUrl, but over XMLHttpRequest so the
+// caller can render a real upload progress bar (fetch can't report upload
+// progress). onProgress is called with an integer 0-100. No Authorization header
+// -- the URL is the credential -- and the Content-Type MUST match presign.
+export function uploadToPresignedUrlWithProgress(
+  uploadUrl: string,
+  file: Blob,
+  contentType: string,
+  onProgress?: (pct: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader('Content-Type', contentType);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`${xhr.status} upload failed`));
+    };
+    xhr.onerror = () => reject(new Error('upload failed'));
+    xhr.send(file);
+  });
+}

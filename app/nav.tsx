@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from './auth-context';
 import { navLinksFor } from './roles';
-import { getReviewQueue } from './api';
+import { getReviewQueue, getNilReviewQueue } from './api';
 
 // The header nav links, filtered to what the signed-in role can actually use
 // (see navLinksFor). Log Out is always present. Logout clears the in-memory
@@ -28,12 +28,22 @@ export function AppNav() {
     (r) => r === 'admin' || r === 'regional_manager',
   );
   const [reviewCount, setReviewCount] = useState<number | null>(null);
+  // The NIL review queue count gets the same best-effort badge treatment; the
+  // gate is identical (admin/regional_manager), so it rides on the same flag.
+  const [nilReviewCount, setNilReviewCount] = useState<number | null>(null);
   useEffect(() => {
     if (!token || !canReview) return;
     let cancelled = false;
     getReviewQueue(token)
       .then((items) => {
         if (!cancelled) setReviewCount(items.length);
+      })
+      .catch(() => {
+        /* leave the badge off on failure */
+      });
+    getNilReviewQueue(token)
+      .then((items) => {
+        if (!cancelled) setNilReviewCount(items.length);
       })
       .catch(() => {
         /* leave the badge off on failure */
@@ -51,6 +61,9 @@ export function AppNav() {
           {l.href === '/review' && reviewCount != null && reviewCount > 0 && (
             <span className="nav-badge">{reviewCount}</span>
           )}
+          {l.href === '/nil-review' &&
+            nilReviewCount != null &&
+            nilReviewCount > 0 && <span className="nav-badge">{nilReviewCount}</span>}
         </Link>
       ))}
       <Link href="/account/password" className="link-btn">

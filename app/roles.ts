@@ -4,7 +4,12 @@
 // the backend; the rest of this map mirrors what each surface actually needs so
 // a role never gets bounced to a raw 403.
 
-export type Role = 'admin' | 'regional_manager' | 'field_rep' | 'viewer';
+export type Role =
+  | 'admin'
+  | 'regional_manager'
+  | 'field_rep'
+  | 'athlete'
+  | 'viewer';
 
 // Every nav destination, in display order, tagged with the roles that may use
 // it. navLinksFor() filters this; page access reuses the same intent below.
@@ -15,10 +20,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  // The athlete's home. Listed first so it leads their (short) nav; filtered out
+  // for every other role, so it never reorders anyone else's links.
+  { href: '/nil', label: 'My NIL', roles: ['athlete'] },
   {
     href: '/feed',
     label: 'Feed',
-    roles: ['admin', 'regional_manager', 'field_rep', 'viewer'],
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
   {
     href: '/my-games',
@@ -37,6 +45,9 @@ const NAV_ITEMS: NavItem[] = [
   // Editorial review queue: submitted articles awaiting an editor. Same gate as
   // the backend GET /content/review-queue (admin + regional_manager).
   { href: '/review', label: 'Review', roles: ['admin', 'regional_manager'] },
+  // Staff NIL review queue: submitted deliverables awaiting approval. Same gate
+  // as the backend GET /nil/review-queue (admin + regional_manager).
+  { href: '/nil-review', label: 'NIL Review', roles: ['admin', 'regional_manager'] },
   { href: '/applicants', label: 'Applicants', roles: ['admin', 'regional_manager'] },
   { href: '/dashboard', label: 'Reports', roles: ['admin'] },
 ];
@@ -47,6 +58,7 @@ const LANDING: Array<{ role: Role; href: string }> = [
   { role: 'admin', href: '/dashboard' },
   { role: 'regional_manager', href: '/field-reps' },
   { role: 'field_rep', href: '/my-games' },
+  { role: 'athlete', href: '/nil' },
   { role: 'viewer', href: '/feed' },
 ];
 
@@ -78,6 +90,10 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   { match: (p) => p === '/applicants', roles: ['admin', 'regional_manager'] },
   // Editorial review queue -- same gate as the backend review-queue route.
   { match: (p) => p === '/review', roles: ['admin', 'regional_manager'] },
+  // The athlete's NIL home (deliverables + wallet) -- athlete-only.
+  { match: (p) => p === '/nil', roles: ['athlete'] },
+  // Staff NIL review queue -- same gate as GET /nil/review-queue.
+  { match: (p) => p === '/nil-review', roles: ['admin', 'regional_manager'] },
   { match: (p) => p.startsWith('/managers/'), roles: ['admin', 'regional_manager'] },
   // Rep drill-down, reached by clicking a rep on the roster page -- same gate as
   // the roster. The API still enforces roster membership per rep (a manager

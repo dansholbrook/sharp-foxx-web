@@ -3651,3 +3651,306 @@ a.btn-inline:hover {
   background: var(--panel-raised);
   color: var(--accent);
 }
+
+/* =================================================================
+   NIL Phase 1 — the athlete's My NIL board + wallet (/nil) and the
+   staff NIL review queue (/nil-review). Reuses .card.game, .pill,
+   .editor-note, .report-table, the modal + applicant-* primitives,
+   and the photos-pick upload chrome. Scoped via .nil-*.
+   ================================================================= */
+
+/* Assignments board: deliverable cards stacked with editorial rhythm. */
+.nil-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* A deliverable card sits inside the section, so it drops the card bottom margin
+   (the list gap owns spacing) and reads a touch tighter than a top-level card. */
+.nil-card {
+  margin-bottom: 0;
+}
+
+.nil-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.nil-card__title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.nil-card__desc {
+  margin: 12px 0 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* The deliverable's value: gold serif number, quieter than the wallet total. */
+.nil-card__value {
+  margin-top: 14px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Proof uploader (assigned card) ---- */
+.nil-proof {
+  margin-top: 18px;
+}
+
+.nil-proof__label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  margin-bottom: 8px;
+}
+
+/* The upload <label> reuses .photos-pick chrome; keep it inline-block. */
+.nil-proof__pick {
+  display: inline-block;
+}
+
+.nil-proof__hint {
+  display: block;
+  margin-top: 8px;
+}
+
+/* Attached-proof row: filename link beside a muted Remove. */
+.nil-proof__attached {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.nil-proof__link {
+  color: var(--accent);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.nil-proof__link:hover {
+  color: var(--accent-hover);
+}
+
+/* ---- Upload progress bar (real XHR progress) ---- */
+.nil-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nil-progress__track {
+  flex: 1 1 auto;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.nil-progress__bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.15s ease;
+}
+
+.nil-progress__pct {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 34px;
+  text-align: right;
+}
+
+/* Optional note textarea on an assigned card. */
+.nil-note-field {
+  margin-top: 18px;
+}
+
+.nil-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+/* ---- Submitted (locked) card: dimmed so it reads as out of the athlete's hands. */
+.nil-card--locked {
+  opacity: 0.92;
+}
+
+.nil-submitted-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ---- Approved card: a green accent to signal money released ---- */
+.nil-card--approved {
+  border-color: #2f5c3a;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28), inset 3px 0 0 #3f7a4e;
+}
+
+/* Green-tinted "Approved" pill (the shared .pill is gold). */
+.nil-pill--approved {
+  color: #b4e6c0;
+  background: rgba(63, 122, 78, 0.16);
+  border-color: #2f5c3a;
+}
+
+/* The payout block on an approved card: the net in large green serif. */
+.nil-earned {
+  margin-top: 16px;
+  padding: 16px 18px;
+  background: #17251a;
+  border: 1px solid #2f5c3a;
+  border-radius: 10px;
+}
+
+.nil-earned__label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #9ccfa8;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  margin-bottom: 6px;
+}
+
+.nil-earned__value {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 4vw, 2.2rem);
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: #b4e6c0;
+  font-variant-numeric: tabular-nums;
+}
+
+.nil-earned__sub {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #9ccfa8;
+}
+
+/* ---- Wallet: total earned in large serif + the ledger caption ---- */
+.nil-wallet {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.nil-wallet__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.nil-wallet__total {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2.4rem, 6vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.nil-wallet__caption {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.nil-ledger {
+  margin-top: 4px;
+}
+
+/* ---- Staff review card + approve-modal money restatement ---- */
+.nil-review-card {
+  margin-bottom: 0;
+}
+
+.nil-review-proof {
+  margin-top: 16px;
+}
+
+/* The plain-language restatement above the fee breakdown. */
+.nil-restate {
+  margin: 0 0 18px;
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.nil-restate strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Fee breakdown: gross / −fee / net in three cells, net emphasized. */
+.nil-mathrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.nil-mathrow__cell {
+  flex: 1 1 140px;
+  padding: 14px 16px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.nil-mathrow__cell--net {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.08);
+}
+
+.nil-mathrow__label {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 6px;
+}
+
+.nil-mathrow__value {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
