@@ -17,6 +17,7 @@ import { useAuth } from '../../auth-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { SlideOver } from '../../queue-table';
+import { FollowButton } from '../../follow-button';
 import {
   getAthleteProfile,
   getMyAthleteId,
@@ -25,6 +26,7 @@ import {
   uploadToPresignedUrlWithProgress,
   confirmMedia,
   AthleteProfile,
+  FollowMineEntry,
 } from '../../api';
 
 // Date-only formatting for reel/article/game metadata (mirrors the game page).
@@ -458,6 +460,21 @@ export default function AthletePage() {
     return parts;
   }, [identity]);
 
+  // A mine-shaped entry for the hero Follow button — identifies this athlete and
+  // enriches the feed carousel when followed. Hidden on your own profile below.
+  const followEntry = useMemo<FollowMineEntry | null>(() => {
+    if (!identity) return null;
+    return {
+      targetType: 'athlete',
+      followId: '',
+      createdAt: '',
+      athleteId: id,
+      name: `${identity.firstName} ${identity.lastName}`,
+      avatarUrl: identity.avatarUrl,
+      teamName: identity.team?.name ?? null,
+    };
+  }, [identity, id]);
+
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
@@ -560,6 +577,10 @@ export default function AthletePage() {
                       ),
                     )}
                   </p>
+                )}
+                {/* Follow lives on everyone's profile but your own. */}
+                {!isOwn && followEntry && (
+                  <FollowButton entry={followEntry} className="profile-follow" />
                 )}
               </div>
             </div>

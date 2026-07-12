@@ -887,37 +887,6 @@ tfoot td {
   color: var(--text);
 }
 
-/* ---- Coming-soon placeholder cards ---- */
-.tcard--soon {
-  opacity: 0.72;
-}
-
-.thumb--soon {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--panel) 0 12px,
-    var(--panel-raised) 12px 24px
-  );
-  border-style: dashed;
-  border-color: var(--border-strong);
-}
-
-.thumb--soon::after {
-  display: none;
-}
-
-.thumb-soon-label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--muted);
-  padding: 5px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  background: rgba(19, 17, 13, 0.5);
-}
-
 /* ---- Article reader: modal overlay reusing .story-* and .article-body ---- */
 .reader-overlay {
   position: fixed;
@@ -5335,5 +5304,401 @@ a.btn-inline:hover {
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+}
+
+/* ============================================================================
+   Follows — the shared Follow pill (+ count) and the homepage's personalized
+   band (carousel, suggestions, "from your follows" cards). Scoped .follow-* /
+   .ffeed-* on the existing tokens.
+   ============================================================================ */
+
+/* ---- The Follow button + follower count ---- */
+.follow-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Pill: gold OUTLINE in the default "Follow" state — overrides the global
+   filled-gold button. */
+.follow-btn {
+  margin: 0;
+  padding: 9px 20px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}
+
+.follow-btn:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.12);
+  border-color: var(--accent-hover);
+  color: var(--accent-hover);
+}
+
+/* "Following ✓" — subtle filled, panel-toned. */
+.follow-btn--on,
+.follow-btn--on:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.14);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.follow-btn--sm {
+  padding: 6px 14px;
+  font-size: 0.64rem;
+  letter-spacing: 0.09em;
+}
+
+.follow-count {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.follow-wrap--sm .follow-count {
+  font-size: 0.76rem;
+}
+
+/* Hero placements: sit the button a touch below the identity text. */
+.profile-follow {
+  margin-top: 14px;
+}
+.team-follow {
+  margin-top: 14px;
+}
+
+/* ---- Personalized band ---- */
+.follow-section {
+  margin-bottom: 46px;
+}
+
+.follow-sub {
+  margin: -8px 0 16px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.follow-subhead {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+  margin: 8px 0 14px;
+}
+
+/* Carousel of followed targets. */
+.follow-carousel {
+  gap: 22px;
+  margin-bottom: 12px;
+}
+
+.follow-carousel__item {
+  flex: 0 0 auto;
+  width: 92px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.follow-carousel__item--nolink {
+  cursor: default;
+}
+
+.follow-carousel__name {
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.follow-carousel__item:hover .follow-carousel__name {
+  color: var(--accent);
+}
+
+/* Avatar / monogram disc, shared across carousel + suggestions. */
+.follow-disc {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.follow-carousel__item:hover .follow-disc {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.follow-disc--lg {
+  width: 72px;
+  height: 72px;
+}
+
+.follow-disc--sm {
+  width: 44px;
+  height: 44px;
+}
+
+.follow-disc__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.follow-disc__mono {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.follow-disc--lg .follow-disc__mono {
+  font-size: 1.5rem;
+}
+
+.follow-disc--sm .follow-disc__mono {
+  font-size: 0.95rem;
+}
+
+/* Team monogram discs read as square-ish "crests" — a subtly different tone. */
+.follow-disc--team {
+  background:
+    radial-gradient(115% 130% at 12% 8%, rgba(201, 163, 78, 0.28), rgba(201, 163, 78, 0) 55%),
+    linear-gradient(135deg, #2a2418 0%, #1c1912 60%, #13110d 100%);
+}
+
+/* ---- Suggested strip (shown beneath the carousel when already following) ---- */
+.follow-sugstrip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 4px;
+  margin-bottom: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.follow-sugstrip__label {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.follow-sugstrip__track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.follow-sugchip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.follow-sugchip__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 160px;
+}
+
+.follow-sugchip__name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+a.follow-sugchip__name:hover {
+  color: var(--accent);
+}
+
+.follow-sugchip__reason {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Suggested-for-you cards (empty state row) ---- */
+.follow-sugrow {
+  gap: 16px;
+}
+
+.follow-sugcard {
+  flex: 0 0 200px;
+  width: 200px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.follow-sugcard__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.follow-sugcard__name:hover {
+  color: var(--accent);
+}
+
+.follow-sugcard__reason {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.follow-sugcard .follow-wrap {
+  margin-top: 4px;
+  justify-content: center;
+}
+
+/* ---- "From your follows" content cards ---- */
+.ffeed-card {
+  flex: 0 0 260px;
+  width: 260px;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.ffeed-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
+}
+
+.ffeed-card--article {
+  background:
+    radial-gradient(120% 90% at 20% 0%, rgba(201, 163, 78, 0.1), transparent 60%),
+    var(--panel);
+}
+
+.ffeed-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 24px;
+}
+
+.ffeed-pill {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+
+.ffeed-pill--soon {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.ffeed-card__score {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #efece4;
+}
+
+.ffeed-card__kind {
+  align-self: flex-start;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.ffeed-card__matchup,
+.ffeed-card__title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  color: #efece4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ffeed-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: auto;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.ffeed-card__src {
+  color: var(--accent-dim);
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .follow-wrap {
+    gap: 10px;
+  }
+
+  .follow-sugchip__body {
+    max-width: 130px;
   }
 }

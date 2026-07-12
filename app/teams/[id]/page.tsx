@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { useAuth } from '../../auth-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
+import { FollowButton } from '../../follow-button';
 import {
   getTeam,
   getTeamRoster,
@@ -29,6 +30,7 @@ import {
   EventListItem,
   FeedItem,
   GamePhoto,
+  FollowMineEntry,
 } from '../../api';
 
 // ---- formatting helpers (mirror the game / athlete-profile pages) ----
@@ -448,6 +450,21 @@ export default function TeamPage() {
     ].filter(Boolean);
   }, [team]);
 
+  // A mine-shaped entry for the hero Follow button — identifies this team and
+  // enriches the feed carousel when followed.
+  const followEntry = useMemo<FollowMineEntry | null>(() => {
+    if (!team) return null;
+    return {
+      targetType: 'team',
+      followId: '',
+      createdAt: '',
+      teamId: id,
+      name: team.name,
+      sport: team.sport,
+      institutionName: team.institution?.name ?? null,
+    };
+  }, [team, id]);
+
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
@@ -503,6 +520,9 @@ export default function TeamPage() {
                     </span>
                   ))}
                 </p>
+              )}
+              {followEntry && (
+                <FollowButton entry={followEntry} className="team-follow" />
               )}
             </div>
           </section>

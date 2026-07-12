@@ -1458,3 +1458,158 @@ export const presignAthleteImage = (
   purpose: 'athlete_avatar' | 'athlete_cover',
   input: { fileName: string; contentType: string; sizeBytes: number },
 ) => authPost<PresignResponse>('/media/presign', token, { purpose, ...input });
+
+// ---- Follows: follow athletes/teams/correspondents; personalized feed + suggestions ----
+
+// The three things a user can follow. correspondent is followable via the API but
+// has no dedicated page in this app yet, so no hero Follow button hosts it here.
+export type FollowTargetType = 'athlete' | 'team' | 'correspondent';
+
+// GET /follows/mine — the caller's follows, enriched and discriminated on
+// targetType. Every entry carries followId + createdAt; the per-type fields
+// identify the target and label it in the UI. URL fields are null-safe.
+export type FollowMineEntry =
+  | {
+      targetType: 'athlete';
+      followId: string;
+      createdAt: string;
+      athleteId: string;
+      name: string;
+      avatarUrl: string | null;
+      teamName: string | null;
+    }
+  | {
+      targetType: 'team';
+      followId: string;
+      createdAt: string;
+      teamId: string;
+      name: string;
+      sport: string;
+      institutionName: string | null;
+    }
+  | {
+      targetType: 'correspondent';
+      followId: string;
+      createdAt: string;
+      repId: string;
+      displayName: string;
+    };
+
+// GET /follows/suggestions — the same shape as /mine plus a human-readable reason
+// ("On a team you follow", etc.). Assignable to FollowMineEntry, so the shared
+// FollowButton / carousel helpers accept a suggestion directly.
+export type FollowSuggestion = FollowMineEntry & { reason: string };
+
+// GET /follows/feed — the personalized content stream, discriminated on kind,
+// newest-first and capped at 50. source is the follow that surfaced the entry
+// (e.g. { type: 'team', name: 'Lincoln Lions' }) for the "via …" tag.
+export type FollowFeedEntry =
+  | {
+      kind: 'game';
+      id: string;
+      matchup: string;
+      homeTeamId: string | null;
+      awayTeamId: string | null;
+      homeScore: number | null;
+      awayScore: number | null;
+      status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
+      scheduledAt: string;
+      source: { type: FollowTargetType; name: string };
+    }
+  | {
+      kind: 'article';
+      id: string;
+      title: string;
+      publishedAt: string | null;
+      eventId: string | null;
+      source: { type: FollowTargetType; name: string };
+    };
+
+// The POST/DELETE body — the target to (un)follow.
+export interface FollowTargetInput {
+  targetType: FollowTargetType;
+  targetId: string;
+}
+
+// The stable target id out of a discriminated mine/suggestion entry (the id the
+// follow rows on, per type). Used to key the carousel and build follow bodies.
+export function followTargetId(
+  entry: FollowMineEntry | FollowSuggestion,
+): string {
+  switch (entry.targetType) {
+    case 'athlete':
+      return entry.athleteId;
+    case 'team':
+      return entry.teamId;
+    case 'correspondent':
+      return entry.repId;
+  }
+}
+
+// The display label out of a discriminated mine/suggestion entry.
+export function followTargetName(
+  entry: FollowMineEntry | FollowSuggestion,
+): string {
+  return entry.targetType === 'correspondent' ? entry.displayName : entry.name;
+}
+
+// The caller's follows, enriched. Fetch ONCE per session and share (see
+// follows-context.tsx) — never per Follow button.
+export const getMyFollows = (token: string) =>
+  authGet<FollowMineEntry[]>('/follows/mine', token);
+
+// The personalized content stream from everything the caller follows.
+export const getFollowFeed = (token: string) =>
+  authGet<FollowFeedEntry[]>('/follows/feed', token);
+
+// Who to follow next — /mine-shaped entries each with a reason string.
+export const getFollowSuggestions = (token: string) =>
+  authGet<FollowSuggestion[]>('/follows/suggestions', token);
+
+// The follower count for one target, for the "N followers" line beside a button.
+export const getFollowCount = (
+  token: string,
+  targetType: FollowTargetType,
+  targetId: string,
+) =>
+  authGet<{ count: number }>(
+    `/follows/count?targetType=${targetType}&targetId=${encodeURIComponent(
+      targetId,
+    )}`,
+    token,
+  );
+
+// POST /follows — idempotent 200 (re-following is a no-op), so the body isn't
+// read. Following yourself comes back 409 -> "409 <message>"; the optimistic
+// toggle reverts on that.
+export async function followTarget(
+  token: string,
+  input: FollowTargetInput,
+): Promise<void> {
+  const res = await fetch(`${BASE}/follows`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await toAuthError(res);
+}
+
+// DELETE /follows — 204, no body back. Unlike the other DELETEs this one carries
+// a JSON body (the target), so it can't use the shared bodyless authDelete.
+export async function unfollowTarget(
+  token: string,
+  input: FollowTargetInput,
+): Promise<void> {
+  const res = await fetch(`${BASE}/follows`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await toAuthError(res);
+}

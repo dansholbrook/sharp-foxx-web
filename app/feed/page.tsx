@@ -4,12 +4,21 @@ import { useEffect, useMemo, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
+import { useFollows } from '../follows-context';
+import { FollowButton } from '../follow-button';
 import { AppNav } from '../nav';
 import {
   getPublishedContent,
   getEvents,
+  getFollowFeed,
+  getFollowSuggestions,
+  followTargetId,
+  followTargetName,
   FeedItem,
   EventListItem,
+  FollowMineEntry,
+  FollowSuggestion,
+  FollowFeedEntry,
 } from '../api';
 
 // Format the timestamptz string the API returns; fall back to the raw value if
@@ -204,33 +213,295 @@ function ArticleThumb({ item }: { item: FeedItem }) {
   );
 }
 
-// ---- Coming-soon placeholder card: shows the vision without fake data. ----
-function ComingSoonCard() {
+// ---- Follows experience ----------------------------------------------------
+// The homepage's personalized band: a carousel of who you follow + a "From your
+// follows" content row, or a "Suggested for you" row when you follow nobody yet.
+
+// Up to two initials from a "First Last" (or single-word) display name.
+function followInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.charAt(0) ?? '';
+  const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+  return `${first}${last}`.toUpperCase() || '—';
+}
+
+// Where a followed/suggested target links (correspondents have no page yet).
+function followHref(
+  entry: FollowMineEntry | FollowSuggestion,
+): string | null {
+  if (entry.targetType === 'athlete') return `/athletes/${entry.athleteId}`;
+  if (entry.targetType === 'team') return `/teams/${entry.teamId}`;
+  return null;
+}
+
+// Avatar (athletes with a photo) or a monogram disc (teams, correspondents, or
+// avatar-less athletes). Sized by the caller via a modifier class.
+function FollowDisc({
+  entry,
+  size,
+}: {
+  entry: FollowMineEntry | FollowSuggestion;
+  size: 'lg' | 'sm';
+}) {
+  const name = followTargetName(entry);
+  const avatarUrl = entry.targetType === 'athlete' ? entry.avatarUrl : null;
   return (
-    <article className="tcard tcard--soon" aria-hidden="true">
-      <div className="thumb thumb--soon">
-        <span className="thumb-soon-label">Coming soon</span>
+    <span
+      className={`follow-disc follow-disc--${size} follow-disc--${entry.targetType}`}
+    >
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatarUrl} alt={name} loading="lazy" className="follow-disc__img" />
+      ) : (
+        <span className="follow-disc__mono" aria-hidden="true">
+          {followInitials(name)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// One tile in the "Following" carousel — disc + name, linking to the page.
+function CarouselItem({ entry }: { entry: FollowMineEntry }) {
+  const name = followTargetName(entry);
+  const href = followHref(entry);
+  const inner = (
+    <>
+      <FollowDisc entry={entry} size="lg" />
+      <span className="follow-carousel__name">{name}</span>
+    </>
+  );
+  return href ? (
+    <Link href={href} className="follow-carousel__item">
+      {inner}
+    </Link>
+  ) : (
+    <span className="follow-carousel__item follow-carousel__item--nolink">
+      {inner}
+    </span>
+  );
+}
+
+// A compact suggestion in the "Suggested" strip shown beneath the carousel.
+function SuggestionChip({ s }: { s: FollowSuggestion }) {
+  const name = followTargetName(s);
+  const href = followHref(s);
+  return (
+    <div className="follow-sugchip">
+      <FollowDisc entry={s} size="sm" />
+      <div className="follow-sugchip__body">
+        {href ? (
+          <Link href={href} className="follow-sugchip__name">
+            {name}
+          </Link>
+        ) : (
+          <span className="follow-sugchip__name">{name}</span>
+        )}
+        <span className="follow-sugchip__reason">{s.reason}</span>
       </div>
-      <div className="tcard-body">
-        <div className="tcard-meta">
-          <span className="tcard-meta__seg">Personalized picks</span>
-        </div>
-      </div>
+      <FollowButton entry={s} showCount={false} size="sm" />
+    </div>
+  );
+}
+
+// A full suggestion card for the empty-state "Suggested for you" row.
+function SuggestionCard({ s }: { s: FollowSuggestion }) {
+  const name = followTargetName(s);
+  const href = followHref(s);
+  return (
+    <article className="follow-sugcard">
+      <FollowDisc entry={s} size="lg" />
+      {href ? (
+        <Link href={href} className="follow-sugcard__name">
+          {name}
+        </Link>
+      ) : (
+        <span className="follow-sugcard__name">{name}</span>
+      )}
+      <span className="follow-sugcard__reason">{s.reason}</span>
+      <FollowButton entry={s} showCount={false} size="sm" />
     </article>
+  );
+}
+
+// A game from your follows: matchup, a live/final/score pill, and a "via …"
+// source tag. Links to the game watch page.
+function FollowGameCard({ entry }: { entry: Extract<FollowFeedEntry, { kind: 'game' }> }) {
+  const hasScore = entry.homeScore !== null && entry.awayScore !== null;
+  const isLive = entry.status === 'live';
+  const isFinal = entry.status === 'final';
+  return (
+    <Link href={`/games/${entry.id}`} className="ffeed-card">
+      <div className="ffeed-card__top">
+        {isLive ? (
+          <LiveBadge />
+        ) : isFinal ? (
+          <span className="ffeed-pill">Final</span>
+        ) : (
+          <span className="ffeed-pill ffeed-pill--soon">Upcoming</span>
+        )}
+        {hasScore && (
+          <span className="ffeed-card__score">
+            {entry.homeScore} – {entry.awayScore}
+          </span>
+        )}
+      </div>
+      <div className="ffeed-card__matchup">{entry.matchup}</div>
+      <div className="ffeed-card__meta">
+        <span className="ffeed-card__src">via {entry.source.name}</span>
+        <span className="ffeed-card__date">{formatDate(entry.scheduledAt)}</span>
+      </div>
+    </Link>
+  );
+}
+
+// An article from your follows: title, date, and a "via …" source tag. Links to
+// the article page.
+function FollowArticleCard({
+  entry,
+}: {
+  entry: Extract<FollowFeedEntry, { kind: 'article' }>;
+}) {
+  return (
+    <Link href={`/articles/${entry.id}`} className="ffeed-card ffeed-card--article">
+      <span className="ffeed-card__kind">Article</span>
+      <div className="ffeed-card__title">{entry.title}</div>
+      <div className="ffeed-card__meta">
+        <span className="ffeed-card__src">via {entry.source.name}</span>
+        {entry.publishedAt && (
+          <span className="ffeed-card__date">{formatDate(entry.publishedAt)}</span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+// How many "From your follows" cards to show before the Show-more expander.
+const FOLLOW_FEED_CAP = 8;
+
+// The whole personalized band. Chooses Following vs Suggested from the shared
+// follows membership; renders nothing until that has loaded, and nothing in the
+// empty state when there aren't even suggestions to offer.
+function FollowingSection({
+  mine,
+  followFeed,
+  suggestions,
+}: {
+  mine: FollowMineEntry[];
+  followFeed: FollowFeedEntry[] | null;
+  suggestions: FollowSuggestion[] | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Empty state -> "Suggested for you" (or nothing to show at all).
+  if (mine.length === 0) {
+    const sugs = suggestions ?? [];
+    if (sugs.length === 0) return null;
+    return (
+      <section className="row follow-section">
+        <h2 className="row-title">Suggested for you</h2>
+        <p className="follow-sub">
+          Follow athletes and teams to build your personalized feed.
+        </p>
+        <div className="row-track follow-sugrow">
+          {sugs.map((s) => (
+            <SuggestionCard
+              key={`${s.targetType}:${followTargetId(s)}`}
+              s={s}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  // Following state -> carousel + optional Suggested strip + content row.
+  const feed = followFeed ?? [];
+  const shown = expanded ? feed : feed.slice(0, FOLLOW_FEED_CAP);
+  const stripSuggestions = (suggestions ?? []).slice(0, 5);
+
+  return (
+    <section className="row follow-section">
+      <h2 className="row-title">Following</h2>
+      <div className="row-track follow-carousel">
+        {mine.map((e) => (
+          <CarouselItem key={`${e.targetType}:${followTargetId(e)}`} entry={e} />
+        ))}
+      </div>
+
+      {stripSuggestions.length > 0 && (
+        <div className="follow-sugstrip">
+          <span className="follow-sugstrip__label">Suggested</span>
+          <div className="follow-sugstrip__track">
+            {stripSuggestions.map((s) => (
+              <SuggestionChip
+                key={`${s.targetType}:${followTargetId(s)}`}
+                s={s}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <h3 className="follow-subhead">From your follows</h3>
+      {shown.length > 0 ? (
+        <div className="row-track">
+          {shown.map((entry) =>
+            entry.kind === 'game' ? (
+              <FollowGameCard key={`g-${entry.id}`} entry={entry} />
+            ) : (
+              <FollowArticleCard key={`a-${entry.id}`} entry={entry} />
+            ),
+          )}
+        </div>
+      ) : (
+        <div className="row-empty">
+          New games and articles from teams and athletes you follow will show up
+          here.
+        </div>
+      )}
+      {feed.length > FOLLOW_FEED_CAP && (
+        <button
+          type="button"
+          className="show-all"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'Show less' : `Show all (${feed.length})`}
+        </button>
+      )}
+    </section>
   );
 }
 
 export default function FeedPage() {
   const router = useRouter();
   const { token, user } = useAuth();
+  const { mine, loaded: followsLoaded } = useFollows();
 
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [articles, setArticles] = useState<FeedItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // The personalized band's data — loaded separately from the browse rows and
+  // re-fetched whenever the set of follows changes (follow/unfollow), so "From
+  // your follows" and the suggestions stay in sync after a toggle.
+  const [followFeed, setFollowFeed] = useState<FollowFeedEntry[] | null>(null);
+  const [suggestions, setSuggestions] = useState<FollowSuggestion[] | null>(null);
+
   // Active sport filter (ALL = show everything). Client-side over fetched data.
   const [sport, setSport] = useState<string>(ALL);
+
+  // A stable signature of the current follows so the personalized fetch below
+  // re-runs on follow/unfollow (membership changes) but not on every render.
+  const followsSignature = useMemo(
+    () =>
+      mine
+        .map((e) => `${e.targetType}:${followTargetId(e)}`)
+        .sort()
+        .join(','),
+    [mine],
+  );
 
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
@@ -268,6 +539,30 @@ export default function FeedPage() {
       cancelled = true;
     };
   }, [token, router]);
+
+  // Personalized band: the follows feed + suggestions. Best-effort (a failure
+  // just hides the band), and keyed on followsSignature so a follow/unfollow
+  // refreshes it. followsLoaded gates the first run so we don't fetch before we
+  // know whether the user follows anything.
+  useEffect(() => {
+    if (!token || !followsLoaded) return;
+    let cancelled = false;
+    (async () => {
+      const [feed, sugs] = await Promise.all([
+        getFollowFeed(token).catch(() => [] as FollowFeedEntry[]),
+        getFollowSuggestions(token).catch(() => [] as FollowSuggestion[]),
+      ]);
+      if (!cancelled) {
+        setFollowFeed(feed);
+        setSuggestions(sugs);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // followsSignature stands in for the identity of the follow set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, followsLoaded, followsSignature]);
 
   // Sports present across BOTH rows — the union drives which chips to show.
   // Games carry a non-null sport enum; articles carry a nullable eventSport.
@@ -315,6 +610,16 @@ export default function FeedPage() {
       </div>
 
       <SearchBar />
+
+      {/* Personalized band — the real "following" experience. Renders once the
+          shared follows membership has loaded; picks Following vs Suggested. */}
+      {followsLoaded && (
+        <FollowingSection
+          mine={mine}
+          followFeed={followFeed}
+          suggestions={suggestions}
+        />
+      )}
 
       {!loading && !error && availableSports.length > 0 && (
         <div className="filter-row" role="group" aria-label="Filter by sport">
@@ -385,12 +690,6 @@ export default function FeedPage() {
                   : `No articles for ${sport}`}
               </div>
             )}
-          </Row>
-
-          <Row title="Recommended for you">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <ComingSoonCard key={i} />
-            ))}
           </Row>
         </>
       )}
