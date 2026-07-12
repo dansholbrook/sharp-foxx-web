@@ -21,14 +21,6 @@ function formatDate(iso: string): string {
     : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
 }
 
-// Full date + time — used in the article reader byline.
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
 // The shared pulsing LIVE badge (dot + wordmark) — same scoped .live-badge
 // treatment used on the game page, search cards, and the rail.
 function LiveBadge({ className }: { className?: string }) {
@@ -181,23 +173,17 @@ function GameCard({ event }: { event: EventListItem }) {
 }
 
 // ---- Article thumbnail card: branded block with the title; author/sport/date
-// beneath. Clicking opens the reader (keeps the read-the-body behavior). ----
-function ArticleThumb({
-  item,
-  onOpen,
-}: {
-  item: FeedItem;
-  onOpen: () => void;
-}) {
+// beneath. The whole card links to the article's own page at /articles/[id]. ----
+function ArticleThumb({ item }: { item: FeedItem }) {
   const meta = [item.author, item.eventSport, formatDate(item.publishedAt)].filter(
     Boolean,
   );
 
   return (
     <article className="tcard">
-      <button
+      <Link
         className="tcard-open"
-        onClick={onOpen}
+        href={`/articles/${item.id}`}
         aria-label={`Read article: ${item.title}`}
       >
         <div className={`${thumbClass(item.eventSport)} thumb--article`}>
@@ -213,7 +199,7 @@ function ArticleThumb({
             ))}
           </div>
         </div>
-      </button>
+      </Link>
     </article>
   );
 }
@@ -234,68 +220,6 @@ function ComingSoonCard() {
   );
 }
 
-// ---- Article reader: modal overlay that renders the trusted HTML body via
-// dangerouslySetInnerHTML (same pipeline/behavior as the old inline card). ----
-function ArticleReader({
-  item,
-  onClose,
-}: {
-  item: FeedItem;
-  onClose: () => void;
-}) {
-  // Close on Escape; lock body scroll while open.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
-
-  const matchup =
-    item.homeTeam && item.awayTeam ? `${item.awayTeam} @ ${item.homeTeam}` : null;
-  const meta = [
-    item.author,
-    item.eventSport,
-    matchup,
-    formatWhen(item.publishedAt),
-  ].filter(Boolean);
-
-  return (
-    <div className="reader-overlay" onClick={onClose}>
-      <div
-        className="reader"
-        role="dialog"
-        aria-modal="true"
-        aria-label={item.title}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button className="reader-close" onClick={onClose} aria-label="Close article">
-          ✕
-        </button>
-        <span className="story-kicker">{item.eventSport ?? 'Feature'}</span>
-        <h1 className="reader-title">{item.title}</h1>
-        <div className="story-meta reader-meta">
-          {meta.map((seg, i) => (
-            <span key={i} className="story-meta__seg">
-              {seg}
-            </span>
-          ))}
-        </div>
-        <div
-          className="article-body"
-          dangerouslySetInnerHTML={{ __html: item.body }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export default function FeedPage() {
   const router = useRouter();
   const { token, user } = useAuth();
@@ -304,9 +228,6 @@ export default function FeedPage() {
   const [articles, setArticles] = useState<FeedItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Which article is open in the reader (null = closed).
-  const [active, setActive] = useState<FeedItem | null>(null);
 
   // Active sport filter (ALL = show everything). Client-side over fetched data.
   const [sport, setSport] = useState<string>(ALL);
@@ -455,11 +376,7 @@ export default function FeedPage() {
           <Row title="Latest Articles">
             {visibleArticles.length > 0 ? (
               visibleArticles.map((item) => (
-                <ArticleThumb
-                  key={item.id}
-                  item={item}
-                  onOpen={() => setActive(item)}
-                />
+                <ArticleThumb key={item.id} item={item} />
               ))
             ) : (
               <div className="row-empty">
@@ -476,10 +393,6 @@ export default function FeedPage() {
             ))}
           </Row>
         </>
-      )}
-
-      {active && (
-        <ArticleReader item={active} onClose={() => setActive(null)} />
       )}
     </main>
   );

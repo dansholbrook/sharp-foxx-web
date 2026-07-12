@@ -316,33 +316,6 @@ function ShareRow({ event }: { event: EventListItem }) {
   );
 }
 
-// ---- One published article, rendered inline (not a modal). Reuses the reader
-// typography (.story-* + .article-body) so it reads like the article modal. ----
-function Article({ item }: { item: EventContentItem }) {
-  const meta = [item.author, formatWhen(item.publishedAt ?? item.createdAt)].filter(
-    Boolean,
-  );
-  return (
-    <article className="game-article">
-      <span className="story-kicker">{item.eventSport ?? 'Coverage'}</span>
-      <h2 className="story-title">{item.title}</h2>
-      <div className="story-meta">
-        {meta.map((seg, i) => (
-          <span key={i} className="story-meta__seg">
-            {seg}
-          </span>
-        ))}
-      </div>
-      {item.body && (
-        <div
-          className="article-body"
-          dangerouslySetInnerHTML={{ __html: item.body }}
-        />
-      )}
-    </article>
-  );
-}
-
 // ---- Right-rail game card: a compact matchup + score/date/venue that links to
 // that game's page. ----
 function RailGameCard({ event }: { event: EventListItem }) {
@@ -524,10 +497,15 @@ function useLivePulse(token: string | null, eventId: string, live: boolean) {
   };
 }
 
-// ---- "Live from courtside": the stacking play-by-play feed under the sponsor
-// strip. Newest first; each item gently animates in. ----
+// ---- "Live from courtside": the stacking play-by-play feed. Newest first; each
+// item gently animates in. Capped at the latest 10 with a "Show all (N)" text
+// expander so a long game doesn't dominate the page. ----
+const LIVE_FEED_CAP = 10;
+
 function LiveFeed({ items }: { items: LiveEvent[] }) {
+  const [expanded, setExpanded] = useState(false);
   if (items.length === 0) return null;
+  const shown = expanded ? items : items.slice(0, LIVE_FEED_CAP);
   return (
     <section className="pulse-feed">
       <div className="pulse-feed__head">
@@ -535,13 +513,22 @@ function LiveFeed({ items }: { items: LiveEvent[] }) {
         <h2 className="pulse-feed__title">Live from courtside</h2>
       </div>
       <ul className="pulse-feed__list">
-        {items.map((ev) => (
+        {shown.map((ev) => (
           <li key={ev.id} className="pulse-feed__item">
             <span className="pulse-feed__time">{formatClock(ev.createdAt)}</span>
             <span className="pulse-feed__text">{pulseFeedText(ev)}</span>
           </li>
         ))}
       </ul>
+      {items.length > LIVE_FEED_CAP && (
+        <button
+          type="button"
+          className="show-all"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'Show less' : `Show all (${items.length})`}
+        </button>
+      )}
     </section>
   );
 }
@@ -738,29 +725,26 @@ export default function GamePage() {
     const notLive = others.filter((e) => e.status !== 'live');
     const same = notLive.filter((e) => e.sport === event.sport);
     const rest = notLive.filter((e) => e.sport !== event.sport);
-    return [...live, ...same, ...rest].slice(0, 10);
+    return [...live, ...same, ...rest].slice(0, 5);
   }, [events, event, id]);
 
-  // "Latest articles": resolve each published feed item to a game page via the
-  // matchup+time key, drop the current game's own articles and any that don't
-  // resolve to a game, keep the newest handful.
+  // "Latest articles": each links straight to its own /articles/[id] page now, so
+  // no game-resolution is needed. Drop this game's OWN coverage (matched on the
+  // matchup+time key) to avoid repeating what the Coverage section already lists,
+  // then keep the newest five.
   const latestArticles = useMemo(() => {
-    if (!events || !latest) return [];
-    const idByKey = new Map(
-      events.map((e) => [eventKey(e.homeTeam, e.awayTeam, e.scheduledAt), e.id]),
-    );
+    if (!latest) return [];
+    const currentKey = event
+      ? eventKey(event.homeTeam, event.awayTeam, event.scheduledAt)
+      : null;
     return latest
-      .map((a) => ({
-        item: a,
-        eventId: idByKey.get(
-          eventKey(a.homeTeam, a.awayTeam, a.eventScheduledAt),
-        ),
-      }))
-      .filter((r): r is { item: FeedItem; eventId: string } =>
-        Boolean(r.eventId && r.eventId !== id),
+      .filter(
+        (a) =>
+          !currentKey ||
+          eventKey(a.homeTeam, a.awayTeam, a.eventScheduledAt) !== currentKey,
       )
-      .slice(0, 8);
-  }, [events, latest, id]);
+      .slice(0, 5);
+  }, [latest, event]);
 
   // Fan live pulse: only polls while this game is live (the hook itself no-ops
   // and tears down when `live` is false). Hooks run before the early returns.
@@ -819,13 +803,29 @@ export default function GamePage() {
               period={live ? pulse.period : null}
             />
             {sponsorship && <PresentingSponsorStrip sponsorship={sponsorship} />}
+            {/* Photos ride directly under the video area (single column on
+                mobile puts them right beneath the player). */}
+            <GamePhotos token={token} eventId={id} />
             {live && <LiveFeed items={pulse.feed} />}
             <ShareRow event={event} />
 
             <section className="game-articles">
               <h2 className="game-articles__head">Coverage</h2>
               {articles && articles.length > 0 ? (
-                articles.map((a) => <Article key={a.id} item={a} />)
+                <div className="game-covlist">
+                  {articles.map((a) => (
+                    <Link
+                      key={a.id}
+                      href={`/articles/${a.id}`}
+                      className="game-covrow"
+                    >
+                      <span className="game-covrow__title">{a.title}</span>
+                      <span className="game-covrow__date">
+                        {formatDate(a.publishedAt ?? a.createdAt)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
               ) : (
                 <div className="results-empty">
                   <p className="results-empty__title">No coverage published yet</p>
@@ -836,8 +836,6 @@ export default function GamePage() {
                 </div>
               )}
             </section>
-
-            <GamePhotos token={token} eventId={id} />
           </div>
 
           <aside className="game-rail">
@@ -848,15 +846,18 @@ export default function GamePage() {
               ) : (
                 <p className="muted">No other games right now.</p>
               )}
+              <Link href="/feed" className="game-rail-more">
+                More games →
+              </Link>
             </section>
 
             <section className="game-rail-section">
               <h2 className="game-rail-title">Latest articles</h2>
               {latestArticles.length > 0 ? (
-                latestArticles.map(({ item, eventId }) => (
+                latestArticles.map((item) => (
                   <Link
                     key={item.id}
-                    href={`/games/${eventId}`}
+                    href={`/articles/${item.id}`}
                     className="game-railrow"
                   >
                     <span className="game-railrow__title">{item.title}</span>
