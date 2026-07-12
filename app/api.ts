@@ -506,6 +506,30 @@ async function toError(res: Response): Promise<Error> {
   return new Error(`${res.status} ${detail}`);
 }
 
+// ---- Central 401 handling ----
+//
+// JWTs expire (1h). A token that's restored-but-expired, or simply invalidated
+// mid-session, first shows up as a 401 on an authed call. Rather than have every
+// caller re-check for that, the auth layer registers ONE handler here (see
+// auth-context.tsx) that tears the session down (clear storage + state) and
+// bounces to login. toAuthError() invokes it before surfacing the error, so the
+// teardown happens in exactly one place.
+type UnauthorizedHandler = () => void;
+let onUnauthorized: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorized = handler;
+}
+
+// Like toError, but for AUTHED calls: a 401 here means an expired/invalid token,
+// so fire the central teardown first. Deliberately NOT used by the public calls
+// (login/apply) or by changePassword -- there a 401 is a bad credential / wrong
+// current password, not an expired session, and must not sign the user out.
+async function toAuthError(res: Response): Promise<Error> {
+  if (res.status === 401) onUnauthorized?.();
+  return toError(res);
+}
+
 // Real sign-in: email + password. The backend returns the usual token/user
 // payload plus mustChangePassword (true when the account is still on a temp
 // password). A bad credential comes back 401 -> "401 <message>", surfaced
@@ -566,7 +590,7 @@ async function authGet<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw await toError(res);
+  if (!res.ok) throw await toAuthError(res);
   return res.json();
 }
 
@@ -579,7 +603,7 @@ async function authPost<T>(path: string, token: string, body: unknown): Promise<
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw await toError(res);
+  if (!res.ok) throw await toAuthError(res);
   return res.json();
 }
 
@@ -592,7 +616,7 @@ async function authPatch<T>(path: string, token: string, body: unknown): Promise
     },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw await toError(res);
+  if (!res.ok) throw await toAuthError(res);
   return res.json();
 }
 
@@ -602,7 +626,7 @@ async function authDelete(path: string, token: string): Promise<void> {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw await toError(res);
+  if (!res.ok) throw await toAuthError(res);
 }
 
 export const getCommissions = (token: string) =>
@@ -1125,7 +1149,7 @@ export async function confirmMedia(token: string, mediaId: string): Promise<void
     },
     body: JSON.stringify({}),
   });
-  if (!res.ok) throw await toError(res);
+  if (!res.ok) throw await toAuthError(res);
 }
 
 // Confirmed photos for a game, viewer-allowed (any authenticated role). Used by

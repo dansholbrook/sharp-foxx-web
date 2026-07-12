@@ -23,7 +23,7 @@ function ChangePasswordInner() {
   const router = useRouter();
   const params = useSearchParams();
   const forced = params.get('first') === '1';
-  const { token, user } = useAuth();
+  const { token, user, clearMustChangePassword } = useAuth();
 
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -57,6 +57,9 @@ function ChangePasswordInner() {
     setBusy(true);
     try {
       await changePassword(token, { currentPassword: current, newPassword: next });
+      // The temp password is gone -- drop the forced-change flag from the
+      // persisted session so a reload doesn't route back into this flow.
+      clearMustChangePassword();
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to change password.');
