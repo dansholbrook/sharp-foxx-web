@@ -244,6 +244,7 @@ function LiveConsole({
   initialAway,
   homeLabel,
   awayLabel,
+  onEndGame,
 }: {
   token: string;
   eventId: string;
@@ -252,6 +253,11 @@ function LiveConsole({
   initialAway: number | null;
   homeLabel: string;
   awayLabel: string;
+  // End the game from the console (marks it final with the live scores). The
+  // standalone Live & Result section doesn't render while live, so End Game
+  // lives here — the console is the page courtside. Resolves once the PATCH
+  // lands; throws so the console can surface the failure on its own error line.
+  onEndGame: (homeScore: number, awayScore: number) => Promise<void>;
 }) {
   const [home, setHome] = useState(initialHome ?? 0);
   const [away, setAway] = useState(initialAway ?? 0);
@@ -262,8 +268,10 @@ function LiveConsole({
   const [homeDraft, setHomeDraft] = useState(String(initialHome ?? 0));
   const [awayDraft, setAwayDraft] = useState(String(initialAway ?? 0));
   const [feed, setFeed] = useState<LiveEvent[]>([]); // newest-first for display
+  const [showAllFeed, setShowAllFeed] = useState(false);
   const [bigPlay, setBigPlay] = useState('');
   const [emitting, setEmitting] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -396,9 +404,36 @@ function LiveConsole({
     }
   }
 
+  // End the game from courtside: confirm, then hand the live scores up to the
+  // workspace's PATCH. Owns its own busy/error state so a failure shows on the
+  // console's error line (the Live & Result section isn't on screen while live).
+  async function handleEndGame() {
+    if (
+      !window.confirm(
+        'End this game and mark it final? The current live score will be published as the final result.',
+      )
+    ) {
+      return;
+    }
+    setEnding(true);
+    setError(null);
+    try {
+      await onEndGame(home, away);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to end game');
+    } finally {
+      setEnding(false);
+    }
+  }
+
   // Tonight's sponsor spots (newest-first), for the "aired at … · run N tonight".
   const sponsorSpots = feed.filter((e) => e.type === 'sponsor_spot');
   const lastSpot = sponsorSpots[0];
+
+  // Keep the feed calm courtside: show only the latest 8 until the rep expands
+  // it. Retract still works on every shown row.
+  const FEED_CAP = 8;
+  const shownFeed = showAllFeed ? feed : feed.slice(0, FEED_CAP);
 
   return (
     <section className="card game ws-section console-card">
@@ -534,7 +569,7 @@ function LiveConsole({
         </div>
       </div>
 
-      {/* (d) Timeout + (e) Sponsor spot */}
+      {/* (d) Timeout + (e) Sponsor spot + (g) End game */}
       <div className="console-group console-actions">
         <button
           type="button"
@@ -543,6 +578,14 @@ function LiveConsole({
           onClick={() => emit('timeout', {})}
         >
           Timeout
+        </button>
+        <button
+          type="button"
+          className="btn-inline btn-ghost console-endgame"
+          disabled={emitting || ending}
+          onClick={handleEndGame}
+        >
+          {ending ? 'Ending…' : 'End Game (Final)'}
         </button>
         {sponsorship && (
           <div className="console-sponsor">
@@ -574,22 +617,33 @@ function LiveConsole({
             No events yet — tap a control above to go on the air.
           </p>
         ) : (
-          <ul className="console-feed__list">
-            {feed.map((ev) => (
-              <li key={ev.id} className="console-feed__item">
-                <span className="console-feed__time">{formatClock(ev.createdAt)}</span>
-                <span className="console-feed__text">{liveEventSummary(ev)}</span>
-                <button
-                  type="button"
-                  className="console-retract"
-                  aria-label="Retract event"
-                  onClick={() => retract(ev)}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="console-feed__list">
+              {shownFeed.map((ev) => (
+                <li key={ev.id} className="console-feed__item">
+                  <span className="console-feed__time">{formatClock(ev.createdAt)}</span>
+                  <span className="console-feed__text">{liveEventSummary(ev)}</span>
+                  <button
+                    type="button"
+                    className="console-retract"
+                    aria-label="Retract event"
+                    onClick={() => retract(ev)}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {feed.length > FEED_CAP && (
+              <button
+                type="button"
+                className="link-btn console-feed__more"
+                onClick={() => setShowAllFeed((v) => !v)}
+              >
+                {showAllFeed ? 'Show less' : `Show all (${feed.length})`}
+              </button>
+            )}
+          </>
         )}
       </div>
     </section>
@@ -612,10 +666,13 @@ type PhotoUpload = {
   error?: string;
 };
 
-// The workspace Photos section: a multi-file picker that runs each file through
+// The workspace Photos body: a multi-file picker that runs each file through
 // the presign -> PUT -> confirm chain with per-file state, plus a grid of the
 // game's confirmed photos with an owner-only delete (×). Best-effort load; a
 // failed initial fetch just leaves an empty grid and never breaks the page.
+// Renders body-only — the surrounding collapsible Section owns the card chrome,
+// and stays mounted (hidden, not unmounted) while collapsed so an in-flight
+// upload survives a collapse/expand.
 function PhotosSection({
   token,
   eventId,
@@ -728,10 +785,7 @@ function PhotosSection({
   const isEmpty = !loading && photos.length === 0 && uploads.length === 0;
 
   return (
-    <section className="card game ws-section">
-      <span className="game-kicker">Gallery</span>
-      <h2 className="ws-section__title">Photos</h2>
-
+    <>
       <div className="photos-upload">
         <label className="photos-pick">
           Add photos
@@ -812,7 +866,106 @@ function PhotosSection({
           ))}
         </div>
       )}
+    </>
+  );
+}
+
+// The collapsible section primitive for the game workspace. Header row is a
+// button (kicker + title + chevron); the body mounts on open and unmounts on
+// close — EXCEPT when `keepMounted` is set, where the body stays mounted and is
+// hidden via [hidden], so a section whose form must survive a collapse (Photos,
+// mid-upload) keeps its state. Persists nothing: `defaultOpen` re-derives from
+// the game's status on each load (each shape keys its sections by status, so a
+// go-live / end-game transition remounts them with fresh defaults).
+function Section({
+  kicker,
+  title,
+  defaultOpen = true,
+  keepMounted = false,
+  children,
+}: {
+  kicker: string;
+  title: string;
+  defaultOpen?: boolean;
+  keepMounted?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section
+      className={`card game ws-section wsx-section${open ? ' wsx-section--open' : ''}`}
+    >
+      <button
+        type="button"
+        className="wsx-head"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="wsx-head__text">
+          <span className="wsx-kicker">{kicker}</span>
+          <span className="wsx-title">{title}</span>
+        </span>
+        <span className="wsx-chevron" aria-hidden="true">
+          ›
+        </span>
+      </button>
+      {keepMounted ? (
+        <div className="wsx-body" hidden={!open}>
+          {children}
+        </div>
+      ) : (
+        open && <div className="wsx-body">{children}</div>
+      )}
     </section>
+  );
+}
+
+// One collapsible entry in the live strip. Shape mirrors a Section body.
+type StripSection = {
+  id: string;
+  kicker: string;
+  title: string;
+  body: React.ReactNode;
+};
+
+// The live "everything else" strip: a compact wrapping row of section-header
+// tabs below the console, one open at a time (tapping the open one closes it).
+// EVERY body stays mounted and is toggled with [hidden] rather than unmounted,
+// so switching tabs never drops a mid-upload photo or an unsaved article edit.
+function LiveStrip({ sections }: { sections: StripSection[] }) {
+  const [active, setActive] = useState<string | null>(null);
+  return (
+    <div className="wsx-strip">
+      <div className="wsx-strip__tabs">
+        {sections.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            className={`wsx-strip__tab${
+              active === s.id ? ' wsx-strip__tab--active' : ''
+            }`}
+            aria-expanded={active === s.id}
+            onClick={() => setActive((a) => (a === s.id ? null : s.id))}
+          >
+            {s.title}
+            <span className="wsx-strip__chev" aria-hidden="true">
+              ›
+            </span>
+          </button>
+        ))}
+      </div>
+      {sections.map((s) => (
+        <section
+          key={s.id}
+          className="card game ws-section wsx-strip__panel"
+          hidden={active !== s.id}
+        >
+          <span className="wsx-kicker">{s.kicker}</span>
+          <h2 className="ws-section__title">{s.title}</h2>
+          {s.body}
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -935,7 +1088,6 @@ function GameWorkspace({
   // loading/error state so neither blocks the plain score save.
   const [liveSaving, setLiveSaving] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
-  const [endSaving, setEndSaving] = useState(false);
   // Set when Go Live is pressed with an empty video field: the stream URL must
   // be pasted BEFORE going live, so we prompt for it inline instead of PATCHing.
   const [needsUrl, setNeedsUrl] = useState(false);
@@ -947,7 +1099,7 @@ function GameWorkspace({
   const isScheduled = currentStatus === 'scheduled';
   const isLive = currentStatus === 'live';
   const isFinal = currentStatus === 'final';
-  const resultBusy = resultSaving || endSaving || liveSaving;
+  const resultBusy = resultSaving || liveSaving;
 
   // At least one field must be sent (empty body -> 400), so gate Save on that.
   const resultHasInput =
@@ -1048,7 +1200,8 @@ function GameWorkspace({
 
   // Report/update the score. Build the body from only the filled-in fields so a
   // rep can save just a score, just a video link, or both -- and NEVER changes
-  // status (when live this is the "Update Score" running-score save).
+  // status. Only reachable pre-game and post-game (the result body doesn't
+  // render while live; the console owns the running score courtside).
   async function saveResult() {
     const body: UpdateEventResultInput = {};
     if (homeScoreDraft.trim() !== '') body.homeScore = Number(homeScoreDraft);
@@ -1100,30 +1253,17 @@ function GameWorkspace({
     }
   }
 
-  // End a live game: PATCH { status: 'final' } together with whatever scores are
-  // in the inputs, after a confirm. Reuses the result error line for failures.
-  async function endGame() {
-    if (
-      !window.confirm(
-        'End this game and mark it final? The score in the inputs will be published as the final result.',
-      )
-    ) {
-      return;
-    }
-    const body: UpdateEventResultInput = { status: 'final' };
-    if (homeScoreDraft.trim() !== '') body.homeScore = Number(homeScoreDraft);
-    if (awayScoreDraft.trim() !== '') body.awayScore = Number(awayScoreDraft);
-    setEndSaving(true);
-    setResultError(null);
-    setResultNotice(null);
-    try {
-      const updated = await updateEventResult(token, eventId, body);
-      applyResult(updated, 'Game ended — marked final.');
-    } catch (err) {
-      setResultError(err instanceof Error ? err.message : 'Failed to end game');
-    } finally {
-      setEndSaving(false);
-    }
+  // End a live game: PATCH { status: 'final' } with the live scores handed up
+  // from the console (the console owns the confirm + busy/error state). Throws
+  // on failure so the console can surface it; applyResult flips the page to its
+  // final shape in place.
+  async function endGame(homeScore: number, awayScore: number) {
+    const updated = await updateEventResult(token, eventId, {
+      status: 'final',
+      homeScore,
+      awayScore,
+    });
+    applyResult(updated, 'Game ended — marked final.');
   }
 
   // Draft a recap from the current notes text. Uses whatever is in the notes
@@ -1220,6 +1360,340 @@ function GameWorkspace({
     }
   }
 
+  // ---- Section bodies, extracted so each lifecycle shape (scheduled / live /
+  // final) can place them in its own order and open-state without duplicating
+  // markup. Every internal behavior is unchanged — this only lifts the body out
+  // of its old fixed <section> wrapper so a collapsible Section (or the live
+  // strip) can own the card chrome around it. ----
+
+  // Result: score inputs + video URL + Save, plus Go Live pre-game. The live
+  // running-score / End Game controls live in the console instead, so this body
+  // only renders in the scheduled and final shapes (never while live).
+  const resultBody = (
+    <>
+      <div className="result-row">
+        <div className="result-scores">
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            className="result-score-input"
+            aria-label={`${assignment.event.homeTeam ?? 'Home'} score`}
+            placeholder="Home"
+            value={homeScoreDraft}
+            disabled={resultBusy}
+            onChange={(e) => {
+              setHomeScoreDraft(e.target.value);
+              setResultNotice(null);
+            }}
+          />
+          <span className="result-dash" aria-hidden="true">
+            –
+          </span>
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            className="result-score-input"
+            aria-label={`${assignment.event.awayTeam ?? 'Away'} score`}
+            placeholder="Away"
+            value={awayScoreDraft}
+            disabled={resultBusy}
+            onChange={(e) => {
+              setAwayScoreDraft(e.target.value);
+              setResultNotice(null);
+            }}
+          />
+        </div>
+        <input
+          type="url"
+          className="result-video-input"
+          aria-label={isScheduled ? 'Stream URL' : 'Video URL'}
+          placeholder={
+            isScheduled
+              ? 'Stream URL (https://…) — paste before going live'
+              : 'Video URL (https://…)'
+          }
+          value={videoUrlDraft}
+          disabled={resultBusy}
+          onChange={(e) => {
+            setVideoUrlDraft(e.target.value);
+            setResultNotice(null);
+            setNeedsUrl(false);
+          }}
+        />
+        <button
+          className="btn-inline"
+          disabled={resultBusy || !resultHasInput}
+          onClick={saveResult}
+        >
+          {resultSaving ? 'Saving…' : 'Save result'}
+        </button>
+        {isScheduled && (
+          <button className="btn-inline" disabled={resultBusy} onClick={goLive}>
+            {liveSaving ? 'Going live…' : 'Go Live'}
+          </button>
+        )}
+      </div>
+      {needsUrl && (
+        <p className="game-hint">
+          Paste the stream URL above first — it needs to be set before the game
+          goes live.
+        </p>
+      )}
+      {result && result.homeScore != null && result.awayScore != null && (
+        <p className="result-current">
+          {result.status === 'final' && <span className="pill">Final</span>}
+          {result.status === 'live' && <LiveBadge />}
+          <span className="result-current__score">
+            {result.homeScore} – {result.awayScore}
+          </span>
+        </p>
+      )}
+      {resultNotice && !resultError && <div className="success">{resultNotice}</div>}
+      {resultError && <div className="error">{resultError}</div>}
+      {liveError && <div className="error">{liveError}</div>}
+    </>
+  );
+
+  // Status & notes.
+  const notesBody = (
+    <>
+      <div className="game-status ws-field">
+        <label className="game-field-label">Assignment status</label>
+        <select
+          value={assignmentStatus}
+          disabled={saving}
+          onChange={(e) => save({ status: e.target.value as MyAssignment['status'] })}
+        >
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="ws-field">
+        <label className="game-field-label">Notes</label>
+        <div className="game-notes-row">
+          <input
+            value={notesDraft}
+            placeholder="Add notes…"
+            disabled={saving}
+            onChange={(e) => setNotesDraft(e.target.value)}
+          />
+          <button
+            className="btn-inline"
+            disabled={saving || !notesDirty}
+            onClick={() => save({ notes: notesDraft })}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        <p className="game-hint">
+          Notes are the source material the AI recap is drafted from.
+        </p>
+      </div>
+      {error && <div className="error">{error}</div>}
+    </>
+  );
+
+  // AI article editor / editorial review states.
+  const articleBody = loadingArticle ? (
+    <p className="muted">Loading article…</p>
+  ) : (
+    <>
+      {!draft && (
+        <div className="ws-generate">
+          <button
+            className="btn-inline"
+            disabled={generating || !canGenerate}
+            onClick={generate}
+          >
+            {generating ? 'Generating…' : 'Generate article from notes'}
+          </button>
+          {!canGenerate && (
+            <p className="game-hint">
+              Add notes above first — the recap is drafted from them.
+            </p>
+          )}
+        </div>
+      )}
+
+      {generating && (
+        <p className="game-generating">
+          Generating article… (this can take a few seconds)
+        </p>
+      )}
+      {genError && <div className="error">{genError}</div>}
+
+      {draft && (
+        <div className="article-panel">
+          <div className="article-panel__head">
+            <span className="article-panel__label">Article</span>
+            {draft.status === 'submitted' ? (
+              <span className="pill pill--review">Submitted — awaiting review</span>
+            ) : (
+              <span className="pill">{draft.status}</span>
+            )}
+          </div>
+
+          {/* Send-back feedback loop: an editor's note on a returned draft,
+              shown only while draft (never stale on published). */}
+          {draft.status === 'draft' && draft.reviewNote && (
+            <div className="editor-note">
+              <span className="editor-note__label">Editor&apos;s note</span>
+              <p className="editor-note__body">{draft.reviewNote}</p>
+            </div>
+          )}
+
+          {repReadOnly ? (
+            // Locked while in the editors' queue: read-only render only.
+            <div className="article-review-lock">
+              <p className="game-hint" style={{ marginTop: 0 }}>
+                This article is in review — editing is locked until an editor
+                publishes it or sends it back.
+              </p>
+              <h3 className="article-review-lock__title">{draft.title}</h3>
+              <div
+                className="article-body"
+                dangerouslySetInnerHTML={{ __html: draft.body ?? '' }}
+              />
+            </div>
+          ) : (
+            <>
+              <label style={{ marginTop: 16 }}>Title</label>
+              <input
+                value={titleDraft}
+                disabled={editSaving}
+                onChange={(e) => setTitleDraft(e.target.value)}
+              />
+
+              <label style={{ marginTop: 16 }}>Body (HTML)</label>
+              <textarea
+                value={bodyDraft}
+                disabled={editSaving}
+                onChange={(e) => setBodyDraft(e.target.value)}
+                rows={10}
+                className="mono"
+              />
+
+              <div className="article-actions">
+                <button
+                  className="btn-inline"
+                  disabled={editSaving || !draftDirty}
+                  onClick={saveDraft}
+                >
+                  {editSaving ? 'Saving…' : 'Save changes'}
+                </button>
+
+                {canPublishDirectly ? (
+                  // Staff publish/unpublish directly.
+                  <button
+                    className="btn-inline"
+                    disabled={publishing}
+                    onClick={togglePublish}
+                  >
+                    {publishing
+                      ? draft.status === 'published'
+                        ? 'Unpublishing…'
+                        : 'Publishing…'
+                      : draft.status === 'published'
+                        ? 'Unpublish'
+                        : 'Publish'}
+                  </button>
+                ) : (
+                  // A field_rep submits a draft for review; on a published item
+                  // they get no second action (Unpublish is staff-only).
+                  draft.status === 'draft' && (
+                    <button
+                      className="btn-inline"
+                      disabled={publishing}
+                      onClick={submitForReview}
+                    >
+                      {publishing ? 'Submitting…' : 'Submit for review'}
+                    </button>
+                  )
+                )}
+              </div>
+
+              {editError && <div className="error">{editError}</div>}
+              {publishError && <div className="error">{publishError}</div>}
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  // Presenting sponsor (rep's own view only). Null when the viewer can't sponsor
+  // so callers can skip rendering the section entirely.
+  const sponsorBody = canSponsor ? (
+    <>
+      {loadingSponsor ? (
+        <p className="muted">Loading sponsor…</p>
+      ) : sponsorship ? (
+        <div className="ws-sponsor">
+          <p className="game-sponsor-line" style={{ marginTop: 0 }}>
+            Presented by{' '}
+            <span className="game-sponsor-line__name">{sponsorship.businessName}</span>
+          </p>
+          {attachedByMe ? (
+            <button
+              type="button"
+              className="link-btn"
+              disabled={removing}
+              onClick={removeSponsor}
+            >
+              {removing ? 'Removing…' : 'Remove sponsor'}
+            </button>
+          ) : (
+            <p className="game-hint">This game already has a presenting sponsor.</p>
+          )}
+        </div>
+      ) : (
+        <div className="ws-sponsor">
+          <p className="game-hint" style={{ marginTop: 0 }}>
+            No presenting sponsor yet. Attach one of your own sales.
+          </p>
+          <button
+            type="button"
+            className="btn-inline btn-ghost"
+            onClick={() => setShowAttach(true)}
+          >
+            Attach sponsor
+          </button>
+        </div>
+      )}
+      {sponsorError && <div className="error">{sponsorError}</div>}
+    </>
+  ) : null;
+
+  // Photos. Kept mounted while collapsed (keepMounted / the live strip's hidden
+  // panels) so an in-flight upload survives.
+  const photosBody = (
+    <PhotosSection token={token} eventId={eventId} myUserId={authorId} />
+  );
+
+  // The live "everything else" strip below the console: notes, article, sponsor
+  // (rep only), photos — one open at a time.
+  const stripSections: StripSection[] = [
+    { id: 'notes', kicker: 'Assignment', title: 'Status & notes', body: notesBody },
+    { id: 'article', kicker: 'Coverage', title: 'Article', body: articleBody },
+    ...(canSponsor
+      ? [
+          {
+            id: 'sponsor',
+            kicker: 'Presenting sponsor',
+            title: 'Sponsor',
+            body: sponsorBody,
+          },
+        ]
+      : []),
+    { id: 'photos', kicker: 'Gallery', title: 'Photos', body: photosBody },
+  ];
+
   return (
     <>
       {/* ---- Live console: courtside top priority, only while the game is live ---- */}
@@ -1232,6 +1706,7 @@ function GameWorkspace({
           initialAway={result?.awayScore ?? null}
           homeLabel={assignment.event.homeTeam ?? 'Home'}
           awayLabel={assignment.event.awayTeam ?? 'Away'}
+          onEndGame={endGame}
         />
       )}
 
@@ -1266,337 +1741,85 @@ function GameWorkspace({
         </div>
       </header>
 
-      {/* ---- (a) Live & Result ---- */}
-      <section className="card game ws-section">
-        <span className="game-kicker">
-          {isLive ? 'Live now' : isFinal ? 'Final' : 'Live & result'}
-        </span>
-        <h2 className="ws-section__title">
-          {isLive ? 'Live score' : 'Report result'}
-        </h2>
-        <div className="result-row">
-          <div className="result-scores">
-            <input
-              type="number"
-              min="0"
-              inputMode="numeric"
-              className="result-score-input"
-              aria-label={`${assignment.event.homeTeam ?? 'Home'} score`}
-              placeholder="Home"
-              value={homeScoreDraft}
-              disabled={resultBusy}
-              onChange={(e) => {
-                setHomeScoreDraft(e.target.value);
-                setResultNotice(null);
-              }}
-            />
-            <span className="result-dash" aria-hidden="true">
-              –
-            </span>
-            <input
-              type="number"
-              min="0"
-              inputMode="numeric"
-              className="result-score-input"
-              aria-label={`${assignment.event.awayTeam ?? 'Away'} score`}
-              placeholder="Away"
-              value={awayScoreDraft}
-              disabled={resultBusy}
-              onChange={(e) => {
-                setAwayScoreDraft(e.target.value);
-                setResultNotice(null);
-              }}
-            />
-          </div>
-          <input
-            type="url"
-            className="result-video-input"
-            aria-label={isScheduled ? 'Stream URL' : 'Video URL'}
-            placeholder={
-              isScheduled
-                ? 'Stream URL (https://…) — paste before going live'
-                : 'Video URL (https://…)'
-            }
-            value={videoUrlDraft}
-            disabled={resultBusy}
-            onChange={(e) => {
-              setVideoUrlDraft(e.target.value);
-              setResultNotice(null);
-              setNeedsUrl(false);
-            }}
-          />
-          <button
-            className="btn-inline"
-            disabled={resultBusy || !resultHasInput}
-            onClick={saveResult}
+      {/* ---- SCHEDULED (pre-game): Go-Live is the job. Notes + Sponsor open
+           for prep; Article + Photos collapsed (mostly post-game work). ---- */}
+      {isScheduled && (
+        <>
+          <Section key="sched-result" kicker="Live & result" title="Report result">
+            {resultBody}
+          </Section>
+          <Section key="sched-notes" kicker="Assignment" title="Status & notes">
+            {notesBody}
+          </Section>
+          <Section
+            key="sched-article"
+            kicker="Coverage"
+            title="Article"
+            defaultOpen={false}
           >
-            {resultSaving ? 'Saving…' : isLive ? 'Update Score' : 'Save result'}
-          </button>
-          {isScheduled && (
-            <button className="btn-inline" disabled={resultBusy} onClick={goLive}>
-              {liveSaving ? 'Going live…' : 'Go Live'}
-            </button>
-          )}
-          {isLive && (
-            <button
-              className="btn-inline btn-ghost"
-              disabled={resultBusy}
-              onClick={endGame}
+            {articleBody}
+          </Section>
+          {canSponsor && (
+            <Section
+              key="sched-sponsor"
+              kicker="Presenting sponsor"
+              title="Sponsor"
             >
-              {endSaving ? 'Ending…' : 'End Game (Final)'}
-            </button>
+              {sponsorBody}
+            </Section>
           )}
-        </div>
-        {needsUrl && (
-          <p className="game-hint">
-            Paste the stream URL above first — it needs to be set before the game
-            goes live.
-          </p>
-        )}
-        {result && result.homeScore != null && result.awayScore != null && (
-          <p className="result-current">
-            {result.status === 'final' && <span className="pill">Final</span>}
-            {result.status === 'live' && <LiveBadge />}
-            <span className="result-current__score">
-              {result.homeScore} – {result.awayScore}
-            </span>
-          </p>
-        )}
-        {resultNotice && !resultError && <div className="success">{resultNotice}</div>}
-        {resultError && <div className="error">{resultError}</div>}
-        {liveError && <div className="error">{liveError}</div>}
-      </section>
-
-      {/* ---- (b) Assignment ---- */}
-      <section className="card game ws-section">
-        <span className="game-kicker">Assignment</span>
-        <h2 className="ws-section__title">Status & notes</h2>
-
-        <div className="game-status ws-field">
-          <label className="game-field-label">Assignment status</label>
-          <select
-            value={assignmentStatus}
-            disabled={saving}
-            onChange={(e) => save({ status: e.target.value as MyAssignment['status'] })}
+          <Section
+            key="sched-photos"
+            kicker="Gallery"
+            title="Photos"
+            defaultOpen={false}
+            keepMounted
           >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ws-field">
-          <label className="game-field-label">Notes</label>
-          <div className="game-notes-row">
-            <input
-              value={notesDraft}
-              placeholder="Add notes…"
-              disabled={saving}
-              onChange={(e) => setNotesDraft(e.target.value)}
-            />
-            <button
-              className="btn-inline"
-              disabled={saving || !notesDirty}
-              onClick={() => save({ notes: notesDraft })}
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          <p className="game-hint">
-            Notes are the source material the AI recap is drafted from.
-          </p>
-        </div>
-        {error && <div className="error">{error}</div>}
-      </section>
-
-      {/* ---- (c) Article ---- */}
-      <section className="card game ws-section">
-        <span className="game-kicker">Coverage</span>
-        <h2 className="ws-section__title">Article</h2>
-
-        {loadingArticle ? (
-          <p className="muted">Loading article…</p>
-        ) : (
-          <>
-            {!draft && (
-              <div className="ws-generate">
-                <button
-                  className="btn-inline"
-                  disabled={generating || !canGenerate}
-                  onClick={generate}
-                >
-                  {generating ? 'Generating…' : 'Generate article from notes'}
-                </button>
-                {!canGenerate && (
-                  <p className="game-hint">
-                    Add notes above first — the recap is drafted from them.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {generating && (
-              <p className="game-generating">
-                Generating article… (this can take a few seconds)
-              </p>
-            )}
-            {genError && <div className="error">{genError}</div>}
-
-            {draft && (
-              <div className="article-panel">
-                <div className="article-panel__head">
-                  <span className="article-panel__label">Article</span>
-                  {draft.status === 'submitted' ? (
-                    <span className="pill pill--review">
-                      Submitted — awaiting review
-                    </span>
-                  ) : (
-                    <span className="pill">{draft.status}</span>
-                  )}
-                </div>
-
-                {/* Send-back feedback loop: an editor's note on a returned
-                    draft, shown only while draft (never stale on published). */}
-                {draft.status === 'draft' && draft.reviewNote && (
-                  <div className="editor-note">
-                    <span className="editor-note__label">Editor&apos;s note</span>
-                    <p className="editor-note__body">{draft.reviewNote}</p>
-                  </div>
-                )}
-
-                {repReadOnly ? (
-                  // Locked while in the editors' queue: read-only render only.
-                  <div className="article-review-lock">
-                    <p className="game-hint" style={{ marginTop: 0 }}>
-                      This article is in review — editing is locked until an
-                      editor publishes it or sends it back.
-                    </p>
-                    <h3 className="article-review-lock__title">{draft.title}</h3>
-                    <div
-                      className="article-body"
-                      dangerouslySetInnerHTML={{ __html: draft.body ?? '' }}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <label style={{ marginTop: 16 }}>Title</label>
-                    <input
-                      value={titleDraft}
-                      disabled={editSaving}
-                      onChange={(e) => setTitleDraft(e.target.value)}
-                    />
-
-                    <label style={{ marginTop: 16 }}>Body (HTML)</label>
-                    <textarea
-                      value={bodyDraft}
-                      disabled={editSaving}
-                      onChange={(e) => setBodyDraft(e.target.value)}
-                      rows={10}
-                      className="mono"
-                    />
-
-                    <div className="article-actions">
-                      <button
-                        className="btn-inline"
-                        disabled={editSaving || !draftDirty}
-                        onClick={saveDraft}
-                      >
-                        {editSaving ? 'Saving…' : 'Save changes'}
-                      </button>
-
-                      {canPublishDirectly ? (
-                        // Staff publish/unpublish directly.
-                        <button
-                          className="btn-inline"
-                          disabled={publishing}
-                          onClick={togglePublish}
-                        >
-                          {publishing
-                            ? draft.status === 'published'
-                              ? 'Unpublishing…'
-                              : 'Publishing…'
-                            : draft.status === 'published'
-                              ? 'Unpublish'
-                              : 'Publish'}
-                        </button>
-                      ) : (
-                        // A field_rep submits a draft for review; on a published
-                        // item they get no second action (Unpublish is staff-only).
-                        draft.status === 'draft' && (
-                          <button
-                            className="btn-inline"
-                            disabled={publishing}
-                            onClick={submitForReview}
-                          >
-                            {publishing ? 'Submitting…' : 'Submit for review'}
-                          </button>
-                        )
-                      )}
-                    </div>
-
-                    {editError && <div className="error">{editError}</div>}
-                    {publishError && <div className="error">{publishError}</div>}
-                  </>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* ---- (d) Sponsor (rep's own view only) ---- */}
-      {canSponsor && (
-        <section className="card game ws-section">
-          <span className="game-kicker">Presenting sponsor</span>
-          <h2 className="ws-section__title">Sponsor</h2>
-
-          {loadingSponsor ? (
-            <p className="muted">Loading sponsor…</p>
-          ) : sponsorship ? (
-            <div className="ws-sponsor">
-              <p className="game-sponsor-line" style={{ marginTop: 0 }}>
-                Presented by{' '}
-                <span className="game-sponsor-line__name">
-                  {sponsorship.businessName}
-                </span>
-              </p>
-              {attachedByMe ? (
-                <button
-                  type="button"
-                  className="link-btn"
-                  disabled={removing}
-                  onClick={removeSponsor}
-                >
-                  {removing ? 'Removing…' : 'Remove sponsor'}
-                </button>
-              ) : (
-                <p className="game-hint">
-                  This game already has a presenting sponsor.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="ws-sponsor">
-              <p className="game-hint" style={{ marginTop: 0 }}>
-                No presenting sponsor yet. Attach one of your own sales.
-              </p>
-              <button
-                type="button"
-                className="btn-inline btn-ghost"
-                onClick={() => setShowAttach(true)}
-              >
-                Attach sponsor
-              </button>
-            </div>
-          )}
-          {sponsorError && <div className="error">{sponsorError}</div>}
-        </section>
+            {photosBody}
+          </Section>
+        </>
       )}
 
-      {/* ---- (e) Photos ---- */}
-      <PhotosSection token={token} eventId={eventId} myUserId={authorId} />
+      {/* ---- LIVE (courtside): the console above IS the page; everything else
+           collapses into a compact strip, one open at a time. The standalone
+           Live & Result section does not render — its live controls (running
+           score via the console board + Sync, End Game) live in the console. ---- */}
+      {isLive && <LiveStrip key="live-strip" sections={stripSections} />}
+
+      {/* ---- FINAL (post-game): writing the recap + uploading shots is the
+           job, so Article + Photos open; Result summary compact; notes +
+           sponsor collapsed. ---- */}
+      {isFinal && (
+        <>
+          <Section key="final-result" kicker="Final" title="Result summary">
+            {resultBody}
+          </Section>
+          <Section key="final-article" kicker="Coverage" title="Article">
+            {articleBody}
+          </Section>
+          <Section key="final-photos" kicker="Gallery" title="Photos" keepMounted>
+            {photosBody}
+          </Section>
+          <Section
+            key="final-notes"
+            kicker="Assignment"
+            title="Status & notes"
+            defaultOpen={false}
+          >
+            {notesBody}
+          </Section>
+          {canSponsor && (
+            <Section
+              key="final-sponsor"
+              kicker="Presenting sponsor"
+              title="Sponsor"
+              defaultOpen={false}
+            >
+              {sponsorBody}
+            </Section>
+          )}
+        </>
+      )}
 
       {showAttach && (
         <AttachSponsorForm

@@ -2508,6 +2508,187 @@ tfoot td {
 }
 
 /* =================================================================
+   Workspace collapsible sections (.wsx-*) — the lifecycle-aware game
+   workspace folds each section into a header row + reveal. Reuses the
+   .card.game shell and the existing gold palette; only the header
+   button, chevron, and the live strip are new chrome.
+   ================================================================= */
+
+/* The header IS a button, so it must shed the global gold-fill button rules
+   and read as a quiet, full-width tap target. */
+.wsx-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  color: inherit;
+}
+
+.wsx-head:hover:not(:disabled) {
+  background: none;
+}
+
+.wsx-head__text {
+  display: block;
+}
+
+/* Kicker + title stacked, matching .game-kicker / .ws-section__title so a
+   collapsed section header is indistinguishable from an open section's top. */
+.wsx-kicker {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin-bottom: 8px;
+}
+
+.wsx-title {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.35rem, 3vw, 1.7rem);
+  line-height: 1.15;
+  color: var(--accent);
+}
+
+/* Chevron points right when closed, rotates down when open. */
+.wsx-chevron {
+  flex: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--accent-dim);
+  transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.wsx-head:hover .wsx-chevron {
+  color: var(--accent);
+}
+
+.wsx-section--open .wsx-chevron {
+  transform: rotate(90deg);
+}
+
+/* The revealed body sits below the header with the same rhythm the old
+   fixed title had. Fades/rises in when it mounts. */
+.wsx-body {
+  margin-top: 18px;
+  animation: wsx-reveal 0.2s ease;
+}
+
+.wsx-body[hidden] {
+  display: none;
+}
+
+@keyframes wsx-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Live strip: the compact "everything else" rail below the console. A
+   wrapping row of quiet header tabs; the open one's panel shows beneath. ---- */
+.wsx-strip {
+  margin-bottom: 20px;
+}
+
+.wsx-strip__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+/* Each tab sheds the global button fill and reads as a pill of the section
+   name; the active one lifts to the gold hairline. */
+.wsx-strip__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 14px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.wsx-strip__tab:hover:not(:disabled) {
+  background: var(--panel);
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.wsx-strip__tab--active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.wsx-strip__chev {
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.wsx-strip__tab--active .wsx-strip__chev {
+  transform: rotate(90deg);
+}
+
+.wsx-strip__panel[hidden] {
+  display: none;
+}
+
+/* ---- Console End Game: quiet ghost that reads distinct from Timeout via a
+   faint danger tint, so ending the game isn't a same-weight neighbor. ---- */
+.console-endgame {
+  border-color: #5c2b2b;
+  color: #f0b4ac;
+}
+
+.console-endgame:hover:not(:disabled) {
+  border-color: #7a3a3a;
+  color: #f6c6bf;
+}
+
+/* Feed "Show all (N)" / "Show less" toggle under the capped list. */
+.console-feed__more {
+  margin-top: 12px;
+  font-size: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wsx-body {
+    animation: none;
+  }
+  .wsx-chevron,
+  .wsx-strip__chev {
+    transition: none;
+  }
+}
+
+/* =================================================================
    Application flow — public /apply, staff /applicants, training gate,
    and the roster Activate action. Reuses the shared palette + card /
    masthead / pill primitives; scoped via .apply-* / .applicant-* /
