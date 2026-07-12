@@ -130,6 +130,16 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p.startsWith('/games/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'viewer'],
   },
+  // The public athlete profile (/athletes/:id) is open to every authenticated
+  // role incl. viewer/fans -- reached by name links from the NIL review queue,
+  // an athlete's own "View my public profile" link, and (later) team rosters.
+  // There is deliberately NO nav item; it's a link-reached page. The backend
+  // GET /athletes/:id/profile carries the same gate and enforces what each read
+  // may expose. Athlete included so an athlete can open their own profile.
+  {
+    match: (p) => p.startsWith('/athletes/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
 ];
 
 export function canAccess(roles: string[], pathname: string): boolean {

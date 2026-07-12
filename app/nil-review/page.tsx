@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
@@ -43,6 +44,16 @@ function formatWhen(iso: string | null): string {
     : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+// Compose the athlete's display name from the review-queue's first/last fields;
+// null when both are missing (callers fall back to "Unknown"/"the athlete").
+function athleteNameOf(item: NilReviewItem): string | null {
+  const name = [item.athleteFirstName, item.athleteLastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  return name || null;
+}
+
 // The slide-over for one deliverable. 'view' shows the description, value, and
 // proof, with Approve / Send back. 'confirm' restates the money (gross / −fee /
 // net) before releasing; a 409 "Insufficient pool funds" surfaces inline.
@@ -71,7 +82,7 @@ function NilReviewDetail({
   const gross = item.valueCents;
   const fee = Math.round(gross * feeRate);
   const net = gross - fee;
-  const who = item.athleteName ?? 'the athlete';
+  const who = athleteNameOf(item) ?? 'the athlete';
 
   async function onApprove() {
     setSubmitting(true);
@@ -164,7 +175,12 @@ function NilReviewDetail({
         <div className="review-facts">
           <span className="applicant-fact">
             <span className="applicant-fact__label">Athlete</span>
-            {item.athleteName ?? 'Unknown'}
+            <Link
+              href={`/athletes/${item.athleteId}`}
+              className="review-athlete-link"
+            >
+              {athleteNameOf(item) ?? 'Unknown'} →
+            </Link>
           </span>
           <span className="applicant-fact">
             <span className="applicant-fact__label">Value</span>
@@ -355,7 +371,7 @@ export default function NilReviewPage() {
     {
       key: 'athlete',
       header: 'Athlete',
-      cell: (i) => i.athleteName ?? 'Unknown',
+      cell: (i) => athleteNameOf(i) ?? 'Unknown',
     },
     { key: 'title', header: 'Deliverable', cell: (i) => i.title },
     {
@@ -415,7 +431,7 @@ export default function NilReviewPage() {
               onApproved={(release) => {
                 setNotice(
                   `Released ${usdCents(release.netCents)} to ${
-                    i.athleteName ?? 'the athlete'
+                    athleteNameOf(i) ?? 'the athlete'
                   } (${usdCents(release.feeCents)} platform fee).`,
                 );
                 removeItem(i.id);

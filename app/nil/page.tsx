@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
@@ -15,10 +16,12 @@ import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
   getMyDeliverables,
   getMyWallet,
+  getMyAthleteId,
   presignNilProof,
   uploadToPresignedUrlWithProgress,
   confirmMedia,
   submitDeliverable,
+  setDeliverablePublicity,
   NilDeliverable,
   NilWallet,
   NilWalletRelease,
@@ -201,6 +204,7 @@ function DeliverableCard({
 }) {
   const [proof, setProof] = useState<ConfirmedProof | null>(null);
   const [note, setNote] = useState('');
+  const [showOnProfile, setShowOnProfile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -213,6 +217,7 @@ function DeliverableCard({
       const updated = await submitDeliverable(token, deliverable.id, {
         proofMediaId: proof.mediaId,
         ...(trimmed ? { proofNote: trimmed } : {}),
+        showOnProfile,
       });
       onUpdated(updated);
     } catch (err) {
@@ -265,6 +270,18 @@ function DeliverableCard({
         />
       </div>
 
+      {/* B+ publicity opt-in: carried on submit, applied once the deliverable is
+          approved (the reel only shows approved + opted-in items). */}
+      <label className="nil-publicity-check">
+        <input
+          type="checkbox"
+          checked={showOnProfile}
+          disabled={submitting}
+          onChange={(e) => setShowOnProfile(e.target.checked)}
+        />
+        <span>Show this on my public profile once approved</span>
+      </label>
+
       <div className="nil-card__actions">
         <button
           type="button"
@@ -282,6 +299,67 @@ function DeliverableCard({
       </div>
       {error && <div className="error">{error}</div>}
     </article>
+  );
+}
+
+// The publicity toggle shown in the wallet release slide-over for an approved
+// deliverable: flips show_on_profile with an optimistic update (the parent's
+// applyUpdate reflects it instantly), reverting + surfacing an error if the PATCH
+// fails. "Shown on profile ✓" when public, "Hidden" otherwise.
+function PublicityToggle({
+  token,
+  deliverable,
+  onUpdated,
+}: {
+  token: string;
+  deliverable: NilDeliverable;
+  onUpdated: (updated: NilDeliverable) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const shown = deliverable.showOnProfile;
+
+  async function toggle() {
+    const next = !shown;
+    setSaving(true);
+    setError(null);
+    // Optimistic: reflect the new state immediately, revert on failure.
+    onUpdated({ ...deliverable, showOnProfile: next });
+    try {
+      const updated = await setDeliverablePublicity(token, deliverable.id, next);
+      onUpdated(updated);
+    } catch (err) {
+      onUpdated({ ...deliverable, showOnProfile: shown });
+      setError(err instanceof Error ? err.message : 'Failed to update');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="nil-publicity">
+      <div className="nil-publicity__text">
+        <span className="nil-publicity__label">Public profile</span>
+        <span className="muted nil-publicity__hint">
+          {shown
+            ? 'Fans can see this deliverable on your profile reel.'
+            : 'Hidden from your public profile.'}
+        </span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={shown}
+        className={
+          shown ? 'nil-toggle nil-toggle--on' : 'nil-toggle'
+        }
+        disabled={saving}
+        onClick={toggle}
+      >
+        {shown ? 'Shown on profile ✓' : 'Hidden'}
+      </button>
+      {error && <div className="error">{error}</div>}
+    </div>
   );
 }
 
@@ -316,10 +394,30 @@ export default function NilPage() {
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletLoading, setWalletLoading] = useState(true);
 
+  // The caller's own athlete id, so they can jump to their public profile. Best-
+  // effort; a failure just hides the link.
+  const [myAthleteId, setMyAthleteId] = useState<string | null>(null);
+
   // No token in memory (e.g. after a refresh) -> back to login.
   useEffect(() => {
     if (!token) router.replace('/');
   }, [token, router]);
+
+  // Resolve the athlete's own id once, for the "View my public profile" link.
+  useEffect(() => {
+    if (!token || !allowed) return;
+    let cancelled = false;
+    getMyAthleteId(token)
+      .then((r) => {
+        if (!cancelled) setMyAthleteId(r.athleteId);
+      })
+      .catch(() => {
+        /* no athlete row / failure — leave the profile link hidden */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, allowed]);
 
   const loadDeliverables = useCallback(async (t: string) => {
     setDelivLoading(true);
@@ -399,6 +497,11 @@ export default function NilPage() {
           on your plate. Submit proof for each one; once an editor approves it,
           the release lands in your wallet.
         </p>
+        {myAthleteId && (
+          <Link href={`/athletes/${myAthleteId}`} className="nil-profile-link">
+            View my public profile →
+          </Link>
+        )}
       </div>
 
       {/* ---- (a) My Wallet — the money first ---- */}
@@ -504,6 +607,17 @@ export default function NilPage() {
                           <span className="muted">Your note: </span>
                           {d.proofNote}
                         </p>
+                      )}
+
+                      {/* Publicity control for the approved deliverable behind
+                          this release. Only shown when we can join the full
+                          deliverable (it carries show_on_profile). */}
+                      {d && (
+                        <PublicityToggle
+                          token={token}
+                          deliverable={d}
+                          onUpdated={applyUpdate}
+                        />
                       )}
                     </SlideOver>
                   );

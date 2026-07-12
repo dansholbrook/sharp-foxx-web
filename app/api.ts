@@ -1135,6 +1135,11 @@ export interface NilDeliverable {
   proofMediaId: string | null;
   proofPublicUrl: string | null;
   release: NilRelease | null;
+  // Whether an approved/submitted deliverable is surfaced on the athlete's public
+  // profile reel. Toggled at submit (showOnProfile on submit) or later via
+  // setDeliverablePublicity. Only 'approved' + true items actually appear on the
+  // profile, but the flag rides on every deliverable so the UI can reflect it.
+  showOnProfile: boolean;
 }
 
 // One row in the athlete's wallet release history. Carries the same money math
@@ -1164,7 +1169,13 @@ export interface NilReviewItem {
   id: string;
   title: string;
   description: string | null;
-  athleteName: string | null;
+  // The submitting athlete: id (for a profile link) + first/last name, as the
+  // review-queue query returns them (athletes is inner-joined, so athleteId is
+  // always present; the names are non-null columns). Compose the display name at
+  // the render boundary.
+  athleteId: string;
+  athleteFirstName: string | null;
+  athleteLastName: string | null;
   valueCents: number;
   proofPublicUrl: string | null;
   proofNote: string | null;
@@ -1204,8 +1215,20 @@ export const getMyDeliverables = (token: string) =>
 export const submitDeliverable = (
   token: string,
   id: string,
-  input: { proofMediaId: string; proofNote?: string },
+  input: { proofMediaId: string; proofNote?: string; showOnProfile?: boolean },
 ) => authPost<NilDeliverable>(`/nil/deliverables/${id}/submit`, token, input);
+
+// Toggle whether a submitted/approved deliverable shows on the athlete's public
+// profile reel (athlete owner only). Optimistic on the client; returns the
+// updated deliverable. A non-owner gets 403 -> "403 <message>".
+export const setDeliverablePublicity = (
+  token: string,
+  id: string,
+  showOnProfile: boolean,
+) =>
+  authPatch<NilDeliverable>(`/nil/deliverables/${id}/publicity`, token, {
+    showOnProfile,
+  });
 
 // The athlete's wallet: total net earned + the release ledger.
 export const getMyWallet = (token: string) =>
@@ -1273,3 +1296,105 @@ export function uploadToPresignedUrlWithProgress(
     xhr.send(file);
   });
 }
+
+// ---- Athlete public profile: the social-style profile aggregate + owner edits ----
+
+// GET /athletes/:id/profile (any authenticated role incl. viewer). A read-only
+// aggregate assembled server-side from a few focused queries. EVERY URL field is
+// null-safe (leftJoins), and NOTHING private leaks here -- no user_id, email, or
+// money (the reel is the opted-in public subset only). Mirrors
+// athletes.service.ts getProfile(). team/institution are null when unset.
+export interface AthleteProfile {
+  identity: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    bio: string | null;
+    jerseyNumber: string | null;
+    position: string | null;
+    classYear: string | null;
+    avatarUrl: string | null;
+    coverUrl: string | null;
+    team: { id: string; name: string; sport: string } | null;
+    institution: { id: string; name: string } | null;
+  };
+  stats: {
+    deliverablesCompleted: number;
+    articlesCount: number;
+    teamGamesCount: number;
+  };
+  // The public content reel: approved deliverables the athlete opted to show.
+  // proofContentType (e.g. 'image/jpeg', 'video/mp4', 'application/pdf') tells
+  // the UI how to render the proof; proofPublicUrl is the media. NO money here.
+  reel: Array<{
+    id: string;
+    title: string;
+    releasedAt: string | null;
+    proofPublicUrl: string | null;
+    proofContentType: string | null;
+  }>;
+  // Published articles tagged to this athlete, for linking to /articles/[id].
+  articles: Array<{ id: string; title: string; publishedAt: string | null }>;
+  // The team's last 5 final games, both side names + scores, for /games/[id].
+  recentGames: Array<{
+    id: string;
+    homeTeamName: string | null;
+    awayTeamName: string | null;
+    homeScore: number | null;
+    awayScore: number | null;
+    scheduledAt: string;
+  }>;
+}
+
+// The public profile aggregate for one athlete. Open to every authenticated role
+// (viewers/fans included). A bad id is a 404 -> "404 Athlete not found".
+export const getAthleteProfile = (token: string, id: string) =>
+  authGet<AthleteProfile>(`/athletes/${id}/profile`, token);
+
+// GET /athletes/me (athlete-only) -> the caller's OWN athlete id. The one read
+// that maps the signed-in user to their athlete row, so an athlete can link to
+// and detect their own public profile (the profile read omits user_id by
+// design). A caller with no athlete row (e.g. a bare admin) gets 404; callers
+// treat that as "not an athlete" and simply hide the self-profile affordances.
+export const getMyAthleteId = (token: string) =>
+  authGet<{ athleteId: string }>('/athletes/me', token);
+
+// PATCH /athletes/:id body (mirrors updateAthleteSchema). The athlete owner or an
+// admin may send any subset; the backend requires at least one field. bio caps at
+// 1000 chars ('' is a legit clear); jerseyNumber at 4; the media ids must be
+// CONFIRMED uploads owned by the caller with purpose athlete_avatar/athlete_cover.
+export interface UpdateAthleteInput {
+  bio?: string;
+  jerseyNumber?: string;
+  avatarMediaId?: string;
+  coverMediaId?: string;
+}
+
+// The bare athletes row returned by PATCH /athletes/:id (`.returning()`). Only
+// the fields the edit surface reads back after a save are typed here; a foreign
+// profile or bad media id surfaces as "<status> <message>".
+export interface UpdatedAthlete {
+  id: string;
+  bio: string | null;
+  jerseyNumber: string | null;
+  avatarMediaId: string | null;
+  coverMediaId: string | null;
+}
+
+// Edit one's own athlete profile (owner-or-admin, enforced server-side). Send
+// only changed fields; an empty body is a 400.
+export const updateAthlete = (
+  token: string,
+  id: string,
+  input: UpdateAthleteInput,
+) => authPatch<UpdatedAthlete>(`/athletes/${id}`, token, input);
+
+// Presign an upload slot for a profile avatar (image, <=5MB) or cover (image,
+// <=10MB) -- backend-enforced, athlete-only. Same presign -> PUT -> confirm chain
+// as game photos / NIL proofs; reuse uploadToPresignedUrlWithProgress +
+// confirmMedia, then PATCH the athlete with the returned mediaId.
+export const presignAthleteImage = (
+  token: string,
+  purpose: 'athlete_avatar' | 'athlete_cover',
+  input: { fileName: string; contentType: string; sizeBytes: number },
+) => authPost<PresignResponse>('/media/presign', token, { purpose, ...input });
