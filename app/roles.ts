@@ -42,6 +42,9 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
   { href: '/field-reps', label: 'Field reps', roles: ['admin', 'regional_manager'] },
+  // Read-only advertiser directory. Same gate as Field Reps -- staff who manage
+  // the territory book the ads (creation still happens via Log a Sale).
+  { href: '/advertisers', label: 'Advertisers', roles: ['admin', 'regional_manager'] },
   // Editorial review queue: submitted articles awaiting an editor. Same gate as
   // the backend GET /content/review-queue (admin + regional_manager).
   { href: '/review', label: 'Review', roles: ['admin', 'regional_manager'] },
@@ -85,6 +88,8 @@ export function navLinksFor(roles: string[]): Array<{ href: string; label: strin
 const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = [
   { match: (p) => p === '/dashboard', roles: ['admin'] },
   { match: (p) => p === '/field-reps', roles: ['admin', 'regional_manager'] },
+  // Read-only advertiser directory -- same gate as Field Reps.
+  { match: (p) => p === '/advertisers', roles: ['admin', 'regional_manager'] },
   // The staff review queue for the public /apply intake. Same gate as Field
   // Reps (the backend restricts GET/approve/reject to these two roles).
   { match: (p) => p === '/applicants', roles: ['admin', 'regional_manager'] },

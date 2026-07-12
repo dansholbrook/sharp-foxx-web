@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { AssignGameForm } from '../../assign-game-form';
 import { canAccess } from '../../roles';
+import { QueueTable, Column } from '../../queue-table';
 import {
   getManagerReps,
   getManagerSummary,
@@ -16,6 +16,10 @@ import {
   ManagerSummary,
   RepStatus,
 } from '../../api';
+
+// The territory dashboard shows the latest few recent orders inline; the rest
+// are one click away behind "Show all" so the strip stays compact.
+const RECENT_ACTIVITY_CAP = 8;
 
 const usd = (v: string) =>
   Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -71,6 +75,8 @@ export default function ManagerRosterPage() {
   // own territory and an admin loads whichever manager they opened.
   const [summary, setSummary] = useState<ManagerSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  // Recent activity is capped to the latest few until "Show all" is clicked.
+  const [showAllActivity, setShowAllActivity] = useState(false);
 
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
@@ -160,6 +166,82 @@ export default function ManagerRosterPage() {
     !!roster && roles.includes('regional_manager') && !roles.includes('admin');
   const managerName = ownRoster ? user?.displayName ?? null : null;
 
+  // Drill into a rep on click (a full page exists, so navigate rather than open a
+  // slide-over). The header stats seed from the roster row via query params so the
+  // drill-down renders instantly -- same link the old Name cell carried.
+  const openRep = (rep: ManagerRoster['reps'][number]) =>
+    router.push(
+      `/reps/${rep.repId}?name=${encodeURIComponent(
+        rep.displayName ?? '',
+      )}&commissions=${encodeURIComponent(rep.totalCommissions)}&adOrders=${
+        rep.adOrdersCount
+      }`,
+    );
+
+  // Reps table columns (Name · Status · aggregates the payload carries). The
+  // Assign cell keeps the per-rep Activate/Assign actions; it stops click/key
+  // propagation so pressing a button never also fires the row's navigation.
+  const repColumns: Column<ManagerRoster['reps'][number]>[] = [
+    { key: 'name', header: 'Field rep', cell: (rep) => rep.displayName ?? '—' },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (rep) => {
+        const st = statusByRep[rep.repId];
+        return st ? (
+          <span className="pill">{st}</span>
+        ) : (
+          <span className="muted">—</span>
+        );
+      },
+    },
+    {
+      key: 'orders',
+      header: 'Ad orders',
+      align: 'right',
+      cell: (rep) => rep.adOrdersCount,
+    },
+    {
+      key: 'commissions',
+      header: 'Total commissions',
+      align: 'right',
+      cell: (rep) => usd(rep.totalCommissions),
+    },
+    {
+      key: 'assign',
+      header: 'Assign',
+      cell: (rep) => (
+        <div
+          className="roster-actions"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          {statusByRep[rep.repId] === 'onboarding' && (
+            <button
+              type="button"
+              className="btn-inline roster-activate"
+              onClick={() => activateRep(rep.repId)}
+              disabled={activating[rep.repId]}
+            >
+              {activating[rep.repId] ? 'Activating…' : 'Activate'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="link-btn rep-roster-link"
+            onClick={() =>
+              setAssign({
+                rep: { id: rep.repId, name: rep.displayName ?? 'this rep' },
+              })
+            }
+          >
+            Assign game →
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <main className="feed-home">
       <div className="header-row">
@@ -243,30 +325,50 @@ export default function ManagerRosterPage() {
 
           <h3 className="territory-activity__head">Recent activity</h3>
           {summary.recentOrders.length > 0 ? (
-            <table className="report-table rep-table">
-              <thead>
-                <tr>
-                  <th>Advertiser</th>
-                  <th>Rep</th>
-                  <th className="num">Amount</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.recentOrders.map((o) => (
-                  <tr key={o.id}>
-                    <td>{o.businessName ?? 'Advertiser'}</td>
-                    <td>{o.repDisplayName ?? '—'}</td>
-                    <td className="num total">{usd(o.amount)}</td>
-                    <td>
-                      <span className="pill">{o.status}</span>
-                    </td>
-                    <td>{formatWhen(o.createdAt)}</td>
+            <>
+              <table className="report-table rep-table">
+                <thead>
+                  <tr>
+                    <th>Advertiser</th>
+                    <th>Rep</th>
+                    <th className="num">Amount</th>
+                    <th>Status</th>
+                    <th>Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {(showAllActivity
+                    ? summary.recentOrders
+                    : summary.recentOrders.slice(0, RECENT_ACTIVITY_CAP)
+                  ).map((o) => (
+                    <tr key={o.id}>
+                      <td>{o.businessName ?? 'Advertiser'}</td>
+                      <td>{o.repDisplayName ?? '—'}</td>
+                      <td className="num total">{usd(o.amount)}</td>
+                      <td>
+                        <span className="pill">{o.status}</span>
+                      </td>
+                      <td>{formatWhen(o.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!showAllActivity &&
+                summary.recentOrders.length > RECENT_ACTIVITY_CAP && (
+                  <div className="queue-more">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => setShowAllActivity(true)}
+                    >
+                      Show all
+                    </button>
+                    <span className="muted queue-more__note">
+                      Showing {RECENT_ACTIVITY_CAP} of {summary.recentOrders.length}
+                    </span>
+                  </div>
+                )}
+            </>
           ) : (
             <div className="results-empty">
               <p className="results-empty__title">No sales yet</p>
@@ -286,70 +388,13 @@ export default function ManagerRosterPage() {
         {error && <div className="error">{error}</div>}
         {activateError && <div className="error">{activateError}</div>}
         {!loading && !error && reps.length > 0 ? (
-          <table className="report-table rep-table">
-            <thead>
-              <tr>
-                <th>Field rep</th>
-                <th>Email</th>
-                <th className="num">Total commissions</th>
-                <th className="num">Ad orders</th>
-                <th>Assign</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reps.map((rep) => (
-                <tr key={rep.repId}>
-                  <td>
-                    {/* Drill into the rep. The header stats (name, commissions,
-                        ad orders) come straight off this roster row via query
-                        params so the drill-down needn't refetch them; the page
-                        resolves the rep's user id separately for its content. */}
-                    <Link
-                      href={`/reps/${rep.repId}?name=${encodeURIComponent(
-                        rep.displayName ?? '',
-                      )}&commissions=${encodeURIComponent(
-                        rep.totalCommissions,
-                      )}&adOrders=${rep.adOrdersCount}`}
-                      className="rep-roster-link"
-                    >
-                      {rep.displayName ?? '—'}
-                    </Link>
-                  </td>
-                  <td className="mono">{rep.email ?? '—'}</td>
-                  <td className="num">{usd(rep.totalCommissions)}</td>
-                  <td className="num">{rep.adOrdersCount}</td>
-                  <td>
-                    <div className="roster-actions">
-                      {statusByRep[rep.repId] === 'onboarding' && (
-                        <button
-                          type="button"
-                          className="btn-inline roster-activate"
-                          onClick={() => activateRep(rep.repId)}
-                          disabled={activating[rep.repId]}
-                        >
-                          {activating[rep.repId] ? 'Activating…' : 'Activate'}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="link-btn rep-roster-link"
-                        onClick={() =>
-                          setAssign({
-                            rep: {
-                              id: rep.repId,
-                              name: rep.displayName ?? 'this rep',
-                            },
-                          })
-                        }
-                      >
-                        Assign game →
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <QueueTable
+            columns={repColumns}
+            rows={reps}
+            rowKey={(rep) => rep.repId}
+            onRowActivate={openRep}
+            ariaLabel="Field reps on this roster"
+          />
         ) : (
           !loading && !error && (
             <div className="results-empty">

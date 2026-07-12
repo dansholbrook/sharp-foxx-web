@@ -39,6 +39,9 @@ export default function FieldRepsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  // The manual create form is demoted behind a toggle -- reps normally arrive via
+  // the public application funnel, so it stays hidden until explicitly opened.
+  const [showAddRep, setShowAddRep] = useState(false);
 
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
@@ -146,13 +149,26 @@ export default function FieldRepsPage() {
         />
       )}
 
-      {/* ---- Create a field rep ---- */}
+      {/* ---- Create a field rep (demoted: reps normally arrive via /apply) ---- */}
       <section className="card game">
         <span className="game-kicker">Onboard</span>
         <h2>Add a field rep</h2>
-        <p className="muted" style={{ marginTop: -6, marginBottom: 22, fontSize: '0.9rem' }}>
-          Creates a new user, then a rep linked to it.
+        <p className="muted" style={{ marginTop: -6, marginBottom: 18, fontSize: '0.9rem' }}>
+          Reps normally join via the application funnel (
+          <Link href="/apply" className="rep-roster-link">
+            /apply
+          </Link>
+          ).
         </p>
+        {!showAddRep ? (
+          <button
+            type="button"
+            className="btn-inline"
+            onClick={() => setShowAddRep(true)}
+          >
+            + Add manually
+          </button>
+        ) : (
         <form onSubmit={onCreate} className="rep-form">
           <div className="field">
             <label htmlFor="displayName">Display name</label>
@@ -216,6 +232,7 @@ export default function FieldRepsPage() {
           {formError && <div className="error rep-form-msg">{formError}</div>}
           {notice && <div className="success rep-form-msg">{notice}</div>}
         </form>
+        )}
       </section>
 
       {/* ---- Existing field reps ---- */}

@@ -95,10 +95,13 @@ export function SlideOver({
 
 // ---- QueueTable ----------------------------------------------------------
 // A compact table: one row per item, click (or Enter/Space on a focused row)
-// opens the slide-over rendered by renderDetail. Built-in client-side
-// pagination shows `pageSize` rows and appends `pageSize` more on "Show more"
-// (the queue APIs return full lists today; if a queue ever grows past a few
-// hundred rows this should move to server pagination).
+// either opens the slide-over rendered by renderDetail (the default) or, when
+// onRowActivate is given, navigates instead -- used by pages that already have
+// a full detail route (My Games' workspace, the rep drill-down) so a row reads
+// as a link rather than a dialog trigger. Built-in client-side pagination shows
+// `pageSize` rows and appends `pageSize` more on "Show more" (the queue APIs
+// return full lists today; if a queue ever grows past a few hundred rows this
+// should move to server pagination).
 
 export interface Column<T> {
   key: string;
@@ -113,6 +116,7 @@ export function QueueTable<T>({
   rows,
   rowKey,
   renderDetail,
+  onRowActivate,
   pageSize = 15,
   resetKey,
   ariaLabel,
@@ -120,9 +124,14 @@ export function QueueTable<T>({
   columns: Column<T>[];
   rows: T[];
   rowKey: (item: T) => string;
-  // Returns a <SlideOver> for the selected row; `close` closes it (and returns
-  // focus to the row). Action handlers live in here, in the calling page.
-  renderDetail: (item: T, close: () => void) => ReactNode;
+  // Slide-over mode (the default): returns a <SlideOver> for the selected row;
+  // `close` closes it (and returns focus to the row). Action handlers live in
+  // here, in the calling page. Optional -- omit it when using navigation mode.
+  renderDetail?: (item: T, close: () => void) => ReactNode;
+  // Navigation mode: given, a row click (or Enter/Space) calls this instead of
+  // opening a slide-over, and rows render as links. Use for pages that already
+  // have a full detail route to send the row to.
+  onRowActivate?: (item: T) => void;
   pageSize?: number;
   // Change this (e.g. the active status filter) to re-page back to the first
   // page; leave undefined for a single unfiltered list.
@@ -175,6 +184,10 @@ export function QueueTable<T>({
           <tbody>
             {shown.map((item) => {
               const key = rowKey(item);
+              // Navigation mode routes away; slide-over mode opens the panel.
+              const activate = onRowActivate
+                ? () => onRowActivate(item)
+                : () => open(item, key);
               return (
                 <tr
                   key={key}
@@ -183,16 +196,16 @@ export function QueueTable<T>({
                     else rowRefs.current.delete(key);
                   }}
                   tabIndex={0}
-                  role="button"
-                  aria-haspopup="dialog"
+                  role={onRowActivate ? 'link' : 'button'}
+                  aria-haspopup={onRowActivate ? undefined : 'dialog'}
                   className={
                     selectedKey === key ? 'queue-row queue-row--on' : 'queue-row'
                   }
-                  onClick={() => open(item, key)}
+                  onClick={activate}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      open(item, key);
+                      activate();
                     }
                   }}
                 >
@@ -223,7 +236,7 @@ export function QueueTable<T>({
         </div>
       )}
 
-      {selected && renderDetail(selected, close)}
+      {selected && renderDetail && renderDetail(selected, close)}
     </>
   );
 }

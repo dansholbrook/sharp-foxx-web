@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
@@ -130,11 +131,19 @@ export default function DashboardPage() {
                 <tbody>
                   {commissions.perRep.map((rep) => (
                     <tr key={rep.repId}>
-                      {rep.displayName ? (
-                        <td>{rep.displayName}</td>
-                      ) : (
-                        <td className="mono">{rep.repId}</td>
-                      )}
+                      {/* Drill into the rep. Seed the drill-down header with the
+                          name + commission total this row already has (it has no
+                          ad-order count, so that stat fills in after refetch). */}
+                      <td className={rep.displayName ? undefined : 'mono'}>
+                        <Link
+                          href={`/reps/${rep.repId}?name=${encodeURIComponent(
+                            rep.displayName ?? '',
+                          )}&commissions=${encodeURIComponent(rep.total)}`}
+                          className="rep-roster-link"
+                        >
+                          {rep.displayName ?? rep.repId}
+                        </Link>
+                      </td>
                       {SOURCE_KEYS.map((k) => (
                         <td key={k} className="num">
                           {usd(rep.bySource[k] ?? '0')}

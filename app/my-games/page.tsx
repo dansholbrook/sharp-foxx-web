@@ -6,6 +6,7 @@ import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { AddGameForm } from '../add-game-form';
 import { canAccess } from '../roles';
+import { QueueTable, Column } from '../queue-table';
 import { useOwnRep, TrainingGate } from '../training-gate';
 import {
   getMyAssignments,
@@ -198,6 +199,63 @@ export default function MyGamesPage() {
     });
   }, [games, statusOf]);
 
+  // Split the sorted schedule into two tables. sortedGames already orders live
+  // first, then upcoming ascending, then finals descending -- so filtering by
+  // bucket preserves the right per-table order (upcoming: live pinned on top,
+  // then soonest-first; past: newest-first).
+  const upcoming = sortedGames?.filter((g) => statusOf(g) !== 'final') ?? [];
+  const past = sortedGames?.filter((g) => statusOf(g) === 'final') ?? [];
+
+  // Shared columns for both schedule tables (same eight the flat table carried).
+  // Cells close over the freshest status + the best-effort sponsor/article maps.
+  const columns: Column<MyAssignment>[] = [
+    { key: 'when', header: 'Date / time', cell: (g) => formatWhen(g.event.scheduledAt) },
+    { key: 'matchup', header: 'Matchup', cell: (g) => matchup(g) ?? g.event.sport },
+    { key: 'venue', header: 'Venue', cell: (g) => g.event.venue ?? '—' },
+    { key: 'sport', header: 'Sport', cell: (g) => g.event.sport },
+    {
+      key: 'game',
+      header: 'Game',
+      cell: (g) => {
+        const status = statusOf(g);
+        return status === 'live' ? (
+          <LiveBadge />
+        ) : (
+          <span className="pill">{status === 'final' ? 'Final' : status}</span>
+        );
+      },
+    },
+    {
+      key: 'mine',
+      header: 'My status',
+      cell: (g) => <span className="pill">{g.status}</span>,
+    },
+    {
+      key: 'sponsor',
+      header: 'Sponsor',
+      cell: (g) => sponsorByEvent[g.event.id] ?? <span className="muted">—</span>,
+    },
+    {
+      key: 'article',
+      header: 'Article',
+      cell: (g) => {
+        const article = articleByEvent[g.event.id];
+        if (!article) return <span className="muted">—</span>;
+        return (
+          <span className={`pill${article === 'submitted' ? ' pill--review' : ''}`}>
+            {article === 'published'
+              ? 'Published'
+              : article === 'submitted'
+                ? 'In review'
+                : 'Draft'}
+          </span>
+        );
+      },
+    },
+  ];
+
+  const openGame = (g: MyAssignment) => router.push(`/my-games/${g.event.id}`);
+
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
   // An onboarding rep sees the Academy holding card instead of the schedule.
@@ -250,90 +308,55 @@ export default function MyGamesPage() {
       {loading && <div className="card muted">Loading games…</div>}
       {error && <div className="error">{error}</div>}
 
-      {!loading && !error && sortedGames && sortedGames.length > 0 ? (
-        <div className="card game sched-card">
-          <table className="report-table sched-table">
-            <thead>
-              <tr>
-                <th>Date / time</th>
-                <th>Matchup</th>
-                <th>Venue</th>
-                <th>Sport</th>
-                <th>Game</th>
-                <th>My status</th>
-                <th>Sponsor</th>
-                <th>Article</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedGames.map((g) => {
-                const status = statusOf(g);
-                const sponsor = sponsorByEvent[g.event.id];
-                const article = articleByEvent[g.event.id];
-                const open = () => router.push(`/my-games/${g.event.id}`);
-                return (
-                  <tr
-                    key={g.id}
-                    className="sched-row"
-                    role="link"
-                    tabIndex={0}
-                    onClick={open}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        open();
-                      }
-                    }}
-                  >
-                    <td>{formatWhen(g.event.scheduledAt)}</td>
-                    <td className="total">{matchup(g) ?? g.event.sport}</td>
-                    <td>{g.event.venue ?? '—'}</td>
-                    <td className="sched-sport">{g.event.sport}</td>
-                    <td>
-                      {status === 'live' ? (
-                        <LiveBadge />
-                      ) : (
-                        <span className="pill">
-                          {status === 'final' ? 'Final' : status}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <span className="pill">{g.status}</span>
-                    </td>
-                    <td>{sponsor ?? <span className="muted">—</span>}</td>
-                    <td>
-                      {article ? (
-                        <span
-                          className={`pill${article === 'submitted' ? ' pill--review' : ''}`}
-                        >
-                          {article === 'published'
-                            ? 'Published'
-                            : article === 'submitted'
-                              ? 'In review'
-                              : 'Draft'}
-                        </span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        !loading &&
-        !error && (
-          <div className="results-empty">
-            <p className="results-empty__title">No games assigned yet</p>
-            <p className="results-empty__hint">
-              When a manager assigns you a game — or you claim one — it will show
-              up here.
-            </p>
-          </div>
-        )
+      {!loading && !error && sortedGames && (
+        <>
+          {/* ---- Upcoming: live pinned on top, then soonest-first ---- */}
+          <section className="card game">
+            <span className="game-kicker">Schedule</span>
+            <h2>Upcoming</h2>
+            {upcoming.length > 0 ? (
+              <QueueTable
+                columns={columns}
+                rows={upcoming}
+                rowKey={(g) => g.id}
+                onRowActivate={openGame}
+                pageSize={10}
+                ariaLabel="Upcoming games"
+              />
+            ) : (
+              <div className="results-empty">
+                <p className="results-empty__title">No upcoming games — add one</p>
+                <p className="results-empty__hint">
+                  When a manager assigns you a game — or you claim one with “Add
+                  Game” — it will show up here.
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* ---- Past: finals, newest-first ---- */}
+          <section className="card game">
+            <span className="game-kicker">Schedule</span>
+            <h2>Past games</h2>
+            {past.length > 0 ? (
+              <QueueTable
+                columns={columns}
+                rows={past}
+                rowKey={(g) => g.id}
+                onRowActivate={openGame}
+                pageSize={10}
+                ariaLabel="Past games"
+              />
+            ) : (
+              <div className="results-empty">
+                <p className="results-empty__title">No completed games yet</p>
+                <p className="results-empty__hint">
+                  Once a game you covered is marked final, it will move here.
+                </p>
+              </div>
+            )}
+          </section>
+        </>
       )}
     </main>
   );
