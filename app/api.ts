@@ -775,11 +775,22 @@ export const getTeams = (token: string, sport: string) =>
 // every authenticated role incl. viewer. institution resolves via a null-safe
 // join server-side (pro teams have none). A bad id is a 404 -> "404 Team not
 // found". Distinct from the lean Team picker row: it adds the institution.
+// Social profile links, keyed by platform, value is the normalized public URL.
+// Only present platforms appear (server drops empty keys). Shared by the athlete
+// profile identity and the team hub; the edit form uses the same keys. Order here
+// mirrors the backend (common/social-links.ts) and the icon row.
+export const SOCIAL_PLATFORMS = [
+  'instagram', 'tiktok', 'x', 'facebook', 'youtube', 'linkedin',
+] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+export type SocialLinks = Partial<Record<SocialPlatform, string>>;
+
 export interface TeamDetail {
   id: string;
   name: string;
   sport: string;
   level: string;
+  socialLinks: SocialLinks;
   institution: { id: string; name: string } | null;
 }
 
@@ -1375,6 +1386,8 @@ export interface AthleteProfile {
     classYear: string | null;
     avatarUrl: string | null;
     coverUrl: string | null;
+    // Normalized social profile URLs, present platforms only (see SocialLinks).
+    socialLinks: SocialLinks;
     team: { id: string; name: string; sport: string } | null;
     institution: { id: string; name: string } | null;
   };
@@ -1428,6 +1441,25 @@ export interface UpdateAthleteInput {
   jerseyNumber?: string;
   avatarMediaId?: string;
   coverMediaId?: string;
+  // Partial map of platform -> handle-or-URL. '' deletes a link; absent keys are
+  // left untouched (backend merges). Values are validated/normalized server-side;
+  // a bad value comes back 400 with per-field messages under fieldErrors.socialLinks.
+  socialLinks?: SocialLinks;
+}
+
+// The zod flatten() body the athlete PATCH returns on a 400 (same shape as
+// ApplyValidationError). socialLinks sub-errors collapse to fieldErrors.socialLinks
+// as an array of messages, each prefixed with its platform label ("Instagram ...")
+// so the edit form can map them back to the right input.
+export class AthleteUpdateValidationError extends Error {
+  fieldErrors: Record<string, string[]>;
+  formErrors: string[];
+  constructor(fieldErrors: Record<string, string[]>, formErrors: string[]) {
+    super(formErrors[0] ?? 'Please fix the highlighted fields.');
+    this.name = 'AthleteUpdateValidationError';
+    this.fieldErrors = fieldErrors;
+    this.formErrors = formErrors;
+  }
 }
 
 // The bare athletes row returned by PATCH /athletes/:id (`.returning()`). Only
@@ -1439,15 +1471,36 @@ export interface UpdatedAthlete {
   jerseyNumber: string | null;
   avatarMediaId: string | null;
   coverMediaId: string | null;
+  // The merged social map after the PATCH (normalized URLs, present keys only).
+  socialLinks: SocialLinks;
 }
 
 // Edit one's own athlete profile (owner-or-admin, enforced server-side). Send
-// only changed fields; an empty body is a 400.
-export const updateAthlete = (
+// only changed fields; an empty body is a 400. A zod 400 (e.g. a bad social link)
+// throws AthleteUpdateValidationError with per-field messages so the edit form can
+// render them inline; any other failure surfaces as the shared "<status> <message>".
+export async function updateAthlete(
   token: string,
   id: string,
   input: UpdateAthleteInput,
-) => authPatch<UpdatedAthlete>(`/athletes/${id}`, token, input);
+): Promise<UpdatedAthlete> {
+  const res = await fetch(`${BASE}/athletes/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(input),
+  });
+  if (res.ok) return res.json();
+  if (res.status === 400) {
+    const body = await res.json().catch(() => null);
+    if (body && (body.fieldErrors || body.formErrors)) {
+      throw new AthleteUpdateValidationError(body.fieldErrors ?? {}, body.formErrors ?? []);
+    }
+  }
+  throw await toAuthError(res);
+}
 
 // Presign an upload slot for a profile avatar (image, <=5MB) or cover (image,
 // <=10MB) -- backend-enforced, athlete-only. Same presign -> PUT -> confirm chain

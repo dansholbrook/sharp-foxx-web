@@ -4549,6 +4549,65 @@ a.btn-inline:hover {
   color: var(--border-strong);
 }
 
+/* ---- Social links row (shared: athlete + team heroes) ---- */
+.social-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.social-link:hover,
+.social-link:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--panel);
+}
+
+.social-glyph {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* ---- Social links edit block (athlete slide-over) ---- */
+.social-edit__hint {
+  display: block;
+  margin: 0 0 10px;
+}
+
+.social-edit__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.social-edit__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.social-edit__error {
+  margin-top: 2px;
+  font-size: 0.8rem;
+}
+
 /* ---- Stat strip: three compact figures ---- */
 .profile-stats {
   display: flex;

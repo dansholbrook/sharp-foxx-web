@@ -19,6 +19,7 @@ import { useAuth } from '../../auth-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { FollowButton } from '../../follow-button';
+import { SocialLinksRow } from '../../social-links';
 import {
   getTeam,
   getTeamRoster,
@@ -521,6 +522,8 @@ export default function TeamPage() {
                   ))}
                 </p>
               )}
+              {/* Social links — present platforms only; hidden when empty. */}
+              <SocialLinksRow links={team.socialLinks} />
               {followEntry && (
                 <FollowButton entry={followEntry} className="team-follow" />
               )}

@@ -18,6 +18,7 @@ import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { SlideOver } from '../../queue-table';
 import { FollowButton } from '../../follow-button';
+import { SocialLinksRow, SOCIAL_LABELS } from '../../social-links';
 import {
   getAthleteProfile,
   getMyAthleteId,
@@ -26,7 +27,10 @@ import {
   uploadToPresignedUrlWithProgress,
   confirmMedia,
   AthleteProfile,
+  AthleteUpdateValidationError,
   FollowMineEntry,
+  SOCIAL_PLATFORMS,
+  SocialLinks,
 } from '../../api';
 
 // Date-only formatting for reel/article/game metadata (mirrors the game page).
@@ -167,13 +171,33 @@ function ImageUploader({
 }
 
 // What a successful save hands back to the page so the hero updates in place
-// without a full profile reload. Only touched fields are present.
+// without a full profile reload. Only touched fields are present. socialLinks is
+// the authoritative merged map returned by the PATCH.
 type ProfileEdits = {
   bio: string;
   jerseyNumber: string;
   avatarUrl?: string;
   coverUrl?: string;
+  socialLinks: SocialLinks;
 };
+
+// Map a flat fieldErrors.socialLinks message array (each prefixed with its
+// platform label, e.g. "Instagram URL must use https") back to per-platform
+// messages so each input can show its own error. Anything unmatched is dropped
+// into the form-level error instead.
+function mapSocialErrors(messages: string[]): {
+  perField: Partial<Record<(typeof SOCIAL_PLATFORMS)[number], string>>;
+  leftover: string[];
+} {
+  const perField: Partial<Record<(typeof SOCIAL_PLATFORMS)[number], string>> = {};
+  const leftover: string[] = [];
+  for (const msg of messages) {
+    const platform = SOCIAL_PLATFORMS.find((p) => msg.startsWith(`${SOCIAL_LABELS[p]} `));
+    if (platform && !perField[platform]) perField[platform] = msg;
+    else leftover.push(msg);
+  }
+  return { perField, leftover };
+}
 
 // The edit slide-over — the athlete's own edit surface. Bio (1000 max + counter),
 // jersey number, and avatar + cover uploaders. Save PATCHes only the changed
@@ -194,17 +218,42 @@ function EditProfile({
 }) {
   const initialBio = identity.bio ?? '';
   const initialJersey = identity.jerseyNumber ?? '';
+  // Social inputs are prefilled from the current normalized URLs; the user may
+  // paste a URL or type a bare @handle, and clearing a field deletes the link.
+  const initialSocial = useMemo(() => {
+    const seed: Record<string, string> = {};
+    for (const p of SOCIAL_PLATFORMS) seed[p] = identity.socialLinks?.[p] ?? '';
+    return seed as Record<(typeof SOCIAL_PLATFORMS)[number], string>;
+  }, [identity.socialLinks]);
+
   const [bio, setBio] = useState(initialBio);
   const [jersey, setJersey] = useState(initialJersey);
+  const [social, setSocial] = useState(initialSocial);
   // Newly-uploaded, confirmed media held between confirm and Save.
   const [avatar, setAvatar] = useState<ConfirmedImage | null>(null);
   const [cover, setCover] = useState<ConfirmedImage | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Per-platform validation messages from a 400, keyed by platform.
+  const [socialErrors, setSocialErrors] = useState<
+    Partial<Record<(typeof SOCIAL_PLATFORMS)[number], string>>
+  >({});
 
   const bioTrimmedLen = bio.length;
+  const socialDirty = SOCIAL_PLATFORMS.some((p) => social[p] !== initialSocial[p]);
   const dirty =
-    bio !== initialBio || jersey !== initialJersey || !!avatar || !!cover;
+    bio !== initialBio || jersey !== initialJersey || !!avatar || !!cover || socialDirty;
+
+  // Only the platforms whose input actually changed go in the patch. A cleared
+  // field sends '' (delete); a changed value sends the raw handle/URL for the
+  // backend to normalize. Untouched platforms are omitted (merge leaves them).
+  function buildSocialPatch(): SocialLinks | undefined {
+    const changed: SocialLinks = {};
+    for (const p of SOCIAL_PLATFORMS) {
+      if (social[p] !== initialSocial[p]) changed[p] = social[p];
+    }
+    return Object.keys(changed).length ? changed : undefined;
+  }
 
   async function onSave() {
     // Build the patch of only what changed. bio: '' is a legit clear, so compare
@@ -214,22 +263,38 @@ function EditProfile({
     if (jersey !== initialJersey) patch.jerseyNumber = jersey;
     if (avatar) patch.avatarMediaId = avatar.mediaId;
     if (cover) patch.coverMediaId = cover.mediaId;
+    const socialPatch = buildSocialPatch();
+    if (socialPatch) patch.socialLinks = socialPatch;
     if (Object.keys(patch).length === 0) {
       onClose();
       return;
     }
     setSaving(true);
     setError(null);
+    setSocialErrors({});
     try {
-      await updateAthlete(token, athleteId, patch);
+      const updated = await updateAthlete(token, athleteId, patch);
       onSaved({
         bio,
         jerseyNumber: jersey,
         ...(avatar ? { avatarUrl: avatar.publicUrl } : {}),
         ...(cover ? { coverUrl: cover.publicUrl } : {}),
+        socialLinks: updated.socialLinks,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save profile');
+      // A validation 400 carries per-field messages; map social ones to their
+      // inputs and surface anything else at the form level.
+      if (err instanceof AthleteUpdateValidationError) {
+        const { perField, leftover } = mapSocialErrors(err.fieldErrors.socialLinks ?? []);
+        setSocialErrors(perField);
+        const otherFields = Object.entries(err.fieldErrors)
+          .filter(([k]) => k !== 'socialLinks')
+          .flatMap(([, v]) => v);
+        const rest = [...err.formErrors, ...otherFields, ...leftover];
+        setError(rest[0] ?? (Object.keys(perField).length ? 'Please fix the highlighted links.' : 'Failed to save profile'));
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to save profile');
+      }
       setSaving(false);
     }
   }
@@ -312,6 +377,33 @@ function EditProfile({
             disabled={saving}
             onChange={(e) => setJersey(e.target.value)}
           />
+        </div>
+
+        {/* Social links — six labeled inputs; paste a URL or type an @handle.
+            Clearing a field removes the link. Per-field errors surface inline. */}
+        <div className="field field--wide social-edit">
+          <label>Social links</label>
+          <span className="game-hint social-edit__hint">
+            Paste a full URL or type an @handle. Leave blank to remove.
+          </span>
+          {SOCIAL_PLATFORMS.map((p) => (
+            <div key={p} className="social-edit__field">
+              <label htmlFor={`social-${p}`} className="social-edit__label">
+                {SOCIAL_LABELS[p]}
+              </label>
+              <input
+                id={`social-${p}`}
+                value={social[p]}
+                placeholder="@handle or full URL"
+                disabled={saving}
+                aria-invalid={socialErrors[p] ? true : undefined}
+                onChange={(e) => setSocial((s) => ({ ...s, [p]: e.target.value }))}
+              />
+              {socialErrors[p] && (
+                <span className="error social-edit__error">{socialErrors[p]}</span>
+              )}
+            </div>
+          ))}
         </div>
 
         {error && <div className="error">{error}</div>}
@@ -578,6 +670,8 @@ export default function AthletePage() {
                     )}
                   </p>
                 )}
+                {/* Social links — present platforms only; hidden when empty. */}
+                <SocialLinksRow links={identity.socialLinks} />
                 {/* Follow lives on everyone's profile but your own. */}
                 {!isOwn && followEntry && (
                   <FollowButton entry={followEntry} className="profile-follow" />
@@ -708,6 +802,7 @@ export default function AthletePage() {
                       jerseyNumber: edits.jerseyNumber,
                       avatarUrl: edits.avatarUrl ?? prev.identity.avatarUrl,
                       coverUrl: edits.coverUrl ?? prev.identity.coverUrl,
+                      socialLinks: edits.socialLinks,
                     },
                   }
                 : prev,
