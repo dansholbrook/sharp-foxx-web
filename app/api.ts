@@ -747,6 +747,42 @@ export const returnContent = (token: string, id: string, input: ReturnContentInp
 export const getTeams = (token: string, sport: string) =>
   authGet<Team[]>(`/teams?sport=${encodeURIComponent(sport)}`, token);
 
+// GET /teams/:id -- a single team for the team hub page (/teams/[id]). Open to
+// every authenticated role incl. viewer. institution resolves via a null-safe
+// join server-side (pro teams have none). A bad id is a 404 -> "404 Team not
+// found". Distinct from the lean Team picker row: it adds the institution.
+export interface TeamDetail {
+  id: string;
+  name: string;
+  sport: string;
+  level: string;
+  institution: { id: string; name: string } | null;
+}
+
+export const getTeam = (token: string, id: string) =>
+  authGet<TeamDetail>(`/teams/${encodeURIComponent(id)}`, token);
+
+// A roster row as returned by GET /athletes?teamId= (athletes.service.ts
+// listByTeam). name is composed server-side (first + last); position/classYear/
+// jerseyNumber/avatarUrl are all nullable (unset columns / no avatar). Ordered
+// by last then first name. Open to every authenticated role incl. viewer.
+export interface TeamRosterAthlete {
+  id: string;
+  name: string;
+  position: string | null;
+  classYear: string | null;
+  jerseyNumber: string | null;
+  avatarUrl: string | null;
+}
+
+// The team's roster, for the team hub's roster grid. Each card links to the
+// athlete's public profile (/athletes/[id]).
+export const getTeamRoster = (token: string, teamId: string) =>
+  authGet<TeamRosterAthlete[]>(
+    `/athletes?teamId=${encodeURIComponent(teamId)}`,
+    token,
+  );
+
 // Create a team (admin/manager/field_rep). A duplicate name within the sport
 // returns 409 -> "409 <message>", shown inline by the Add Game form.
 export const createTeam = (token: string, input: CreateTeamInput) =>

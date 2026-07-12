@@ -445,13 +445,16 @@ export default function AthletePage() {
     return parts.join(' · ');
   }, [identity]);
 
-  // "Team · Sport · Institution" — plain text; team pages come later.
+  // "Team · Sport · Institution" — the team segment links to its hub page; the
+  // rest stay plain text.
   const affiliation = useMemo(() => {
-    if (!identity) return [] as string[];
-    const parts: string[] = [];
-    if (identity.team?.name) parts.push(identity.team.name);
-    if (identity.team?.sport) parts.push(titleCase(identity.team.sport));
-    if (identity.institution?.name) parts.push(identity.institution.name);
+    if (!identity) return [] as Array<{ label: string; href?: string }>;
+    const parts: Array<{ label: string; href?: string }> = [];
+    if (identity.team?.name) {
+      parts.push({ label: identity.team.name, href: `/teams/${identity.team.id}` });
+    }
+    if (identity.team?.sport) parts.push({ label: titleCase(identity.team.sport) });
+    if (identity.institution?.name) parts.push({ label: identity.institution.name });
     return parts;
   }, [identity]);
 
@@ -541,11 +544,21 @@ export default function AthletePage() {
                 )}
                 {affiliation.length > 0 && (
                   <p className="profile-affil">
-                    {affiliation.map((seg, i) => (
-                      <span key={i} className="profile-affil__seg">
-                        {seg}
-                      </span>
-                    ))}
+                    {affiliation.map((seg, i) =>
+                      seg.href ? (
+                        <Link
+                          key={i}
+                          href={seg.href}
+                          className="profile-affil__seg profile-affil__seg--link"
+                        >
+                          {seg.label}
+                        </Link>
+                      ) : (
+                        <span key={i} className="profile-affil__seg">
+                          {seg.label}
+                        </span>
+                      ),
+                    )}
                   </p>
                 )}
               </div>

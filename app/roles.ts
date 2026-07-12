@@ -140,6 +140,15 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p.startsWith('/athletes/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // The team hub (/teams/:id) -- the fan surface tying games, articles, photos,
+  // and the roster together. Open to every authenticated role incl. viewer, same
+  // as the game and athlete pages it links between. NO nav item; link-reached
+  // (from athlete affiliations and game scoreboards). The backend GET /teams/:id
+  // and GET /athletes?teamId= carry the same all-roles gate.
+  {
+    match: (p) => p.startsWith('/teams/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
 ];
 
 export function canAccess(roles: string[], pathname: string): boolean {

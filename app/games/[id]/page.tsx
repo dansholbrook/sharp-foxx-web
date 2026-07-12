@@ -162,6 +162,28 @@ function GameVideo({ event }: { event: EventListItem }) {
   );
 }
 
+// A scoreboard team name: a link to the team hub when the events payload carries
+// that side's team id, else plain text (an unset FK / a name-only event). The
+// team pages are open to every authenticated role, same as this game page.
+function ScoreboardTeam({
+  name,
+  teamId,
+  side,
+}: {
+  name: string;
+  teamId: string | null;
+  side: 'home' | 'away';
+}) {
+  const cls = `game-scoreboard__team game-scoreboard__team--${side}`;
+  return teamId ? (
+    <Link href={`/teams/${teamId}`} className={`${cls} game-scoreboard__team--link`}>
+      {name}
+    </Link>
+  ) : (
+    <span className={cls}>{name}</span>
+  );
+}
+
 // ---- Scoreboard strip: the visually dominant score line beneath the video.
 // While live, liveHome/liveAway (fed by the poller) override the event's static
 // scores, and scoreVersion bumps on each change to re-key the score span so the
@@ -189,9 +211,7 @@ function Scoreboard({
 
   return (
     <div className="game-scoreboard">
-      <span className="game-scoreboard__team game-scoreboard__team--home">
-        {home}
-      </span>
+      <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" />
       <span className="game-scoreboard__center">
         {hasScore ? (
           <span
@@ -216,9 +236,7 @@ function Scoreboard({
         )}
         {isLive && period && <span className="pulse-period">{period}</span>}
       </span>
-      <span className="game-scoreboard__team game-scoreboard__team--away">
-        {away}
-      </span>
+      <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" />
     </div>
   );
 }
