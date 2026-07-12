@@ -12,12 +12,15 @@ import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { LogSaleForm } from '../log-sale-form';
 import { canAccess } from '../roles';
+import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
   getMyAdOrders,
   getAdvertisers,
+  getAdPackages,
   getFieldReps,
   getMyEarnings,
   AdOrder,
+  AdPackage,
   MyEarningsReport,
 } from '../api';
 
@@ -85,6 +88,9 @@ export default function MySalesPage() {
   // Sale confirmation. All best-effort -- a failure here must not break the page.
   const [sales, setSales] = useState<AdOrder[] | null>(null);
   const [advertisersById, setAdvertisersById] = useState<Record<string, string>>({});
+  // packageId -> package, so the sale detail can name the package + its run length
+  // (ad orders carry only the package UUID). Best-effort like the advertiser map.
+  const [packagesById, setPackagesById] = useState<Record<string, AdPackage>>({});
   const [salesError, setSalesError] = useState<string | null>(null);
   const [salesLoading, setSalesLoading] = useState(true);
   const [commissionRate, setCommissionRate] = useState<string | null>(null);
@@ -105,14 +111,16 @@ export default function MySalesPage() {
     setSalesLoading(true);
     setSalesError(null);
     try {
-      const [orders, advertisers] = await Promise.all([
+      const [orders, advertisers, packages] = await Promise.all([
         getMyAdOrders(t),
         getAdvertisers(t),
+        getAdPackages(t),
       ]);
       setSales(orders);
       setAdvertisersById(
         Object.fromEntries(advertisers.map((a) => [a.id, a.businessName])),
       );
+      setPackagesById(Object.fromEntries(packages.map((p) => [p.id, p])));
     } catch (err) {
       setSalesError(err instanceof Error ? err.message : 'Failed to load sales');
     } finally {
@@ -161,6 +169,52 @@ export default function MySalesPage() {
         .catch(() => {});
     }
   }, [token, router, allowed, loadSales, loadEarnings, user?.id]);
+
+  const advertiserName = (s: AdOrder) =>
+    advertisersById[s.advertiserId] ?? 'Advertiser';
+  const packageOf = (s: AdOrder) =>
+    s.packageId ? packagesById[s.packageId] : undefined;
+
+  // ---- My Sales table: one row per ad order; row click -> full sale detail. ----
+  const salesColumns: Column<AdOrder>[] = [
+    { key: 'advertiser', header: 'Advertiser', cell: advertiserName },
+    {
+      key: 'package',
+      header: 'Package',
+      cell: (s) => {
+        const pkg = packageOf(s);
+        if (pkg) return pkg.name;
+        return s.packageId ? <span className="muted">Custom</span> : <span className="muted">—</span>;
+      },
+    },
+    { key: 'amount', header: 'Amount', align: 'right', cell: (s) => usd(s.amount) },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (s) => <span className="pill">{s.status}</span>,
+    },
+    { key: 'date', header: 'Date', cell: (s) => formatEarned(s.createdAt) },
+  ];
+
+  // ---- Commission ledger table: one row per commission; row click -> detail. ----
+  const commissionColumns: Column<MyEarningsReport['commissions'][number]>[] = [
+    {
+      key: 'source',
+      header: 'Source',
+      cell: (c) => (
+        <span className="pill">
+          {SOURCE_LABELS_COMMISSION[c.sourceType] ?? c.sourceType}
+        </span>
+      ),
+    },
+    { key: 'amount', header: 'Amount', align: 'right', cell: (c) => usd(c.amount) },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (c) => <span className="pill">{c.status}</span>,
+    },
+    { key: 'date', header: 'Date', cell: (c) => formatEarned(c.earnedAt) },
+  ];
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
@@ -256,36 +310,49 @@ export default function MySalesPage() {
                 </div>
 
                 {earnings.commissions.length > 0 ? (
-                  <table className="report-table rep-table earnings-ledger">
-                    <thead>
-                      <tr>
-                        <th>Source</th>
-                        <th>Base × rate</th>
-                        <th className="num">Amount</th>
-                        <th>Status</th>
-                        <th>Earned</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {earnings.commissions.map((c) => (
-                        <tr key={c.id}>
-                          <td>
-                            <span className="pill">
-                              {SOURCE_LABELS_COMMISSION[c.sourceType] ?? c.sourceType}
+                  <QueueTable
+                    columns={commissionColumns}
+                    rows={earnings.commissions}
+                    rowKey={(c) => c.id}
+                    ariaLabel="Your commission ledger"
+                    renderDetail={(c, close) => (
+                      <SlideOver
+                        onClose={close}
+                        kicker={SOURCE_LABELS_COMMISSION[c.sourceType] ?? c.sourceType}
+                        title={usd(c.amount)}
+                        label="Commission detail"
+                      >
+                        <div className="review-facts">
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Source</span>
+                            {SOURCE_LABELS_COMMISSION[c.sourceType] ?? c.sourceType}
+                          </span>
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Base × rate</span>
+                            <span className="mono">
+                              {usd(c.baseAmount)} × {ratePct(c.rate)}
                             </span>
-                          </td>
-                          <td className="mono earnings-calc">
-                            {usd(c.baseAmount)} × {ratePct(c.rate)}
-                          </td>
-                          <td className="num total">{usd(c.amount)}</td>
-                          <td>
+                          </span>
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Amount</span>
+                            {usd(c.amount)}
+                          </span>
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Status</span>
                             <span className="pill">{c.status}</span>
-                          </td>
-                          <td>{formatEarned(c.earnedAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </span>
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Earned</span>
+                            {formatEarned(c.earnedAt)}
+                          </span>
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Paid</span>
+                            {formatEarned(c.paidAt)}
+                          </span>
+                        </div>
+                      </SlideOver>
+                    )}
+                  />
                 ) : (
                   <div className="results-empty">
                     <p className="results-empty__title">No commissions yet</p>
@@ -306,34 +373,84 @@ export default function MySalesPage() {
             {salesLoading && <p className="muted">Loading sales…</p>}
             {salesError && <div className="error">{salesError}</div>}
             {!salesLoading && !salesError && sales && sales.length > 0 ? (
-              <table className="report-table rep-table">
-                <thead>
-                  <tr>
-                    <th>Advertiser</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Dates</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.map((s) => (
-                    <tr key={s.id}>
-                      <td>{advertisersById[s.advertiserId] ?? 'Advertiser'}</td>
-                      <td>{usd(s.amount)}</td>
-                      <td>
-                        <span className="pill">{s.status}</span>
-                      </td>
-                      <td>
-                        {s.startsOn || s.endsOn ? (
-                          `${formatDate(s.startsOn)} – ${formatDate(s.endsOn)}`
-                        ) : (
-                          <span className="muted">—</span>
+              <QueueTable
+                columns={salesColumns}
+                rows={sales}
+                rowKey={(s) => s.id}
+                ariaLabel="Your logged sales"
+                renderDetail={(s, close) => {
+                  const advertiser = advertiserName(s);
+                  const pkg = packageOf(s);
+                  const runs =
+                    s.startsOn || s.endsOn
+                      ? `${formatDate(s.startsOn)} – ${formatDate(s.endsOn)}`
+                      : '—';
+                  // Estimated payout to the rep at their own commission rate. The
+                  // actual commission is credited server-side; this is the preview.
+                  const estCommission = commissionRate
+                    ? String(Number(s.amount) * Number(commissionRate))
+                    : null;
+                  return (
+                    <SlideOver
+                      onClose={close}
+                      kicker="Ad sale"
+                      title={advertiser}
+                      label="Sale detail"
+                      footer={
+                        <span className="muted">
+                          Sold by you · {formatEarned(s.createdAt)}
+                        </span>
+                      }
+                    >
+                      <div className="review-facts">
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Advertiser</span>
+                          {advertiser}
+                        </span>
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Package</span>
+                          {pkg
+                            ? `${pkg.name} · ${pkg.durationDays} days`
+                            : s.packageId
+                              ? 'Custom package'
+                              : 'No package'}
+                        </span>
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Amount</span>
+                          {usd(s.amount)}
+                        </span>
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Status</span>
+                          <span className="pill">{s.status}</span>
+                        </span>
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Runs</span>
+                          {runs}
+                        </span>
+                        {estCommission && (
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">
+                              Est. commission
+                            </span>
+                            {usd(estCommission)}
+                          </span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Logged</span>
+                          {formatEarned(s.createdAt)}
+                        </span>
+                      </div>
+                      {estCommission && (
+                        <p className="game-hint">
+                          Estimated at your {ratePct(commissionRate!)} rate — the
+                          actual commission is credited when the sale is booked and
+                          shows in My Earnings above.
+                        </p>
+                      )}
+                    </SlideOver>
+                  );
+                }}
+              />
             ) : (
               !salesLoading &&
               !salesError && (

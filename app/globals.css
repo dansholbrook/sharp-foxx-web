@@ -3892,6 +3892,18 @@ a.btn-inline:hover {
   margin-top: 4px;
 }
 
+/* Subsections inside My Assignments — "Needs your attention" (working cards) and
+   "In review" (the submitted queue table). Spaced apart; the label reads brighter
+   than a plain gold kicker so it lands as a group heading. */
+.nil-group {
+  margin-top: 22px;
+}
+
+.nil-group__label {
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
 /* ---- Staff review card + approve-modal money restatement ---- */
 .nil-review-card {
   margin-bottom: 0;

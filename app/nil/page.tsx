@@ -11,6 +11,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
+import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
   getMyDeliverables,
   getMyWallet,
@@ -20,6 +21,7 @@ import {
   submitDeliverable,
   NilDeliverable,
   NilWallet,
+  NilWalletRelease,
 } from '../api';
 
 // Integer cents -> a USD string (12750 -> "$127.50"). Money stays in cents until
@@ -183,12 +185,11 @@ function ProofUploader({
   );
 }
 
-// One deliverable, rendered by status:
-//  - assigned:  title/description/value, a proof uploader + optional note + Submit
-//               (disabled until a proof is confirmed). A reviewNote (sent back)
-//               shows as a gold editor's-note callout.
-//  - submitted: a locked card with an "Awaiting review" pill + a proof link.
-//  - approved:  a green-accent card showing the release math.
+// An assigned deliverable — the athlete's working area (this is the ONLY status
+// rendered as a card now; submitted items live in the "In review" table and
+// approved ones in the wallet). Title/description/value, a proof uploader +
+// optional note + Submit (disabled until a proof is confirmed). A reviewNote
+// (sent back) shows as a gold editor's-note callout.
 function DeliverableCard({
   deliverable,
   token,
@@ -219,76 +220,6 @@ function DeliverableCard({
     } finally {
       setSubmitting(false);
     }
-  }
-
-  // ---- Approved: the payout card ----
-  if (deliverable.status === 'approved' && deliverable.release) {
-    const { grossCents, feeCents, netCents, releasedAt } = deliverable.release;
-    return (
-      <article className="card game nil-card nil-card--approved">
-        <div className="nil-card__head">
-          <div>
-            <span className="game-kicker">Approved</span>
-            <h3 className="nil-card__title">{deliverable.title}</h3>
-          </div>
-          <span className="pill nil-pill--approved">Approved</span>
-        </div>
-        {deliverable.description && (
-          <p className="nil-card__desc">{deliverable.description}</p>
-        )}
-        <div className="nil-earned">
-          <span className="nil-earned__label">You earned</span>
-          <span className="nil-earned__value">{usdCents(netCents)}</span>
-          <span className="nil-earned__sub">
-            after a {usdCents(feeCents)} platform fee on {usdCents(grossCents)}
-          </span>
-        </div>
-        <p className="game-hint" style={{ marginTop: 0 }}>
-          Released {formatWhen(releasedAt)}
-        </p>
-      </article>
-    );
-  }
-
-  // ---- Submitted: locked, awaiting review ----
-  if (deliverable.status === 'submitted') {
-    return (
-      <article className="card game nil-card nil-card--locked">
-        <div className="nil-card__head">
-          <div>
-            <span className="game-kicker">In review</span>
-            <h3 className="nil-card__title">{deliverable.title}</h3>
-          </div>
-          <span className="pill pill--review">Awaiting review</span>
-        </div>
-        {deliverable.description && (
-          <p className="nil-card__desc">{deliverable.description}</p>
-        )}
-        <div className="nil-card__value">{usdCents(deliverable.valueCents)}</div>
-        <div className="nil-submitted-meta">
-          {deliverable.proofPublicUrl && (
-            <a
-              href={deliverable.proofPublicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="nil-proof__link"
-            >
-              View submitted proof →
-            </a>
-          )}
-          <span className="game-hint" style={{ margin: 0 }}>
-            Submitted {formatWhen(deliverable.submittedAt)} — an editor will review
-            it and release your funds.
-          </span>
-        </div>
-        {deliverable.proofNote && (
-          <p className="nil-card__desc" style={{ marginTop: 12 }}>
-            <span className="muted">Your note: </span>
-            {deliverable.proofNote}
-          </p>
-        )}
-      </article>
-    );
   }
 
   // ---- Assigned: work + submit ----
@@ -354,12 +285,22 @@ function DeliverableCard({
   );
 }
 
-// Status order for the assignments board: work first, then in-flight, then done.
-const STATUS_ORDER: Record<NilDeliverable['status'], number> = {
-  assigned: 0,
-  submitted: 1,
-  approved: 2,
-};
+// The wallet release table columns: gross/fee/net right-aligned money, released
+// date last. Defined at module level since it never closes over page state.
+const RELEASE_COLUMNS: Column<NilWalletRelease>[] = [
+  { key: 'title', header: 'Deliverable', cell: (r) => r.title ?? 'NIL deliverable' },
+  { key: 'gross', header: 'Gross', align: 'right', cell: (r) => usdCents(r.grossCents) },
+  { key: 'fee', header: 'Fee', align: 'right', cell: (r) => usdCents(r.feeCents) },
+  { key: 'net', header: 'Net', align: 'right', cell: (r) => usdCents(r.netCents) },
+  { key: 'released', header: 'Released', cell: (r) => formatWhen(r.releasedAt) },
+];
+
+// The "In review" table columns: title, value (right-aligned), submitted date.
+const SUBMITTED_COLUMNS: Column<NilDeliverable>[] = [
+  { key: 'title', header: 'Title', cell: (d) => d.title },
+  { key: 'value', header: 'Value', align: 'right', cell: (d) => usdCents(d.valueCents) },
+  { key: 'submitted', header: 'Submitted', cell: (d) => formatWhen(d.submittedAt) },
+];
 
 export default function NilPage() {
   const router = useRouter();
@@ -425,11 +366,17 @@ export default function NilPage() {
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
-  const sorted = deliverables
-    ? [...deliverables].sort(
-        (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status],
-      )
-    : null;
+  // Split the board by actionability. Assigned (incl. sent-back) are the working
+  // cards; submitted go to the compact "In review" table; approved are NOT shown
+  // as cards — they live only in the wallet release table below.
+  const assigned = deliverables?.filter((d) => d.status === 'assigned') ?? [];
+  const submitted = deliverables?.filter((d) => d.status === 'submitted') ?? [];
+  const hasAssignments = assigned.length > 0 || submitted.length > 0;
+  // A wallet release only carries the money + title; the full deliverable (with
+  // description, proof, notes) is joined in by id for the release slide-over.
+  const deliverablesById = new Map(
+    (deliverables ?? []).map((d) => [d.id, d] as const),
+  );
 
   return (
     <main className="feed-home">
@@ -448,49 +395,13 @@ export default function NilPage() {
         <span className="masthead-kicker">Name · Image · Likeness</span>
         <h1 className="masthead-title">My NIL</h1>
         <p className="masthead-standfirst">
-          Your NIL deliverables and the money they earn. Submit proof for each
-          assignment; once an editor approves it, your release lands in your
-          wallet below.
+          The money your NIL deliverables have earned, and the assignments still
+          on your plate. Submit proof for each one; once an editor approves it,
+          the release lands in your wallet.
         </p>
       </div>
 
-      {/* ---- (a) My Assignments ---- */}
-      <section className="card game">
-        <span className="game-kicker">Deliverables</span>
-        <h2>My Assignments</h2>
-        {delivLoading && <p className="muted">Loading assignments…</p>}
-        {delivError && <div className="error">{delivError}</div>}
-        {!delivLoading && !delivError && sorted && sorted.length > 0 ? (
-          <div className="nil-list">
-            {sorted.map((d) => (
-              <DeliverableCard
-                key={d.id}
-                deliverable={d}
-                token={token}
-                onUpdated={(updated) => {
-                  applyUpdate(updated);
-                  // A submit changes nothing in the wallet yet, but reloading it
-                  // is cheap and keeps an approval that landed meanwhile visible.
-                  loadWallet(token);
-                }}
-              />
-            ))}
-          </div>
-        ) : (
-          !delivLoading &&
-          !delivError && (
-            <div className="results-empty">
-              <p className="results-empty__title">No assignments yet</p>
-              <p className="results-empty__hint">
-                When your school assigns you an NIL deliverable, it will show up
-                here for you to complete and submit.
-              </p>
-            </div>
-          )
-        )}
-      </section>
-
-      {/* ---- (b) My Wallet ---- */}
+      {/* ---- (a) My Wallet — the money first ---- */}
       <section className="card game">
         <span className="game-kicker">Earnings</span>
         <h2>My Wallet</h2>
@@ -511,34 +422,206 @@ export default function NilPage() {
             </div>
 
             {wallet.releases.length > 0 ? (
-              <table className="report-table nil-ledger">
-                <thead>
-                  <tr>
-                    <th>Deliverable</th>
-                    <th className="num">Gross</th>
-                    <th className="num">Fee</th>
-                    <th className="num">Net</th>
-                    <th>Released</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {wallet.releases.map((r, i) => (
-                    <tr key={r.id ?? r.deliverableId ?? i}>
-                      <td>{r.title ?? 'NIL deliverable'}</td>
-                      <td className="num">{usdCents(r.grossCents)}</td>
-                      <td className="num">{usdCents(r.feeCents)}</td>
-                      <td className="num total">{usdCents(r.netCents)}</td>
-                      <td>{formatWhen(r.releasedAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <QueueTable
+                columns={RELEASE_COLUMNS}
+                rows={wallet.releases}
+                rowKey={(r) => r.id ?? r.deliverableId ?? r.releasedAt}
+                ariaLabel="Your release history"
+                renderDetail={(r, close) => {
+                  // Enrich the release with its full deliverable (description,
+                  // proof, notes) when we can join it by id.
+                  const d = r.deliverableId
+                    ? deliverablesById.get(r.deliverableId)
+                    : undefined;
+                  return (
+                    <SlideOver
+                      onClose={close}
+                      kicker="Release"
+                      title={r.title ?? d?.title ?? 'NIL deliverable'}
+                      label="Release detail"
+                      footer={
+                        <span className="muted">
+                          Released {formatWhen(r.releasedAt)}
+                        </span>
+                      }
+                    >
+                      {d?.description && (
+                        <p className="applicant-pitch">{d.description}</p>
+                      )}
+
+                      <div className="nil-mathrow">
+                        <div className="nil-mathrow__cell">
+                          <span className="nil-mathrow__label">Gross</span>
+                          <span className="nil-mathrow__value">
+                            {usdCents(r.grossCents)}
+                          </span>
+                        </div>
+                        <div className="nil-mathrow__cell">
+                          <span className="nil-mathrow__label">Platform fee</span>
+                          <span className="nil-mathrow__value">
+                            −{usdCents(r.feeCents)}
+                          </span>
+                        </div>
+                        <div className="nil-mathrow__cell nil-mathrow__cell--net">
+                          <span className="nil-mathrow__label">Net to you</span>
+                          <span className="nil-mathrow__value">
+                            {usdCents(r.netCents)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="review-facts">
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Released</span>
+                          {formatWhen(r.releasedAt)}
+                        </span>
+                        {d?.submittedAt && (
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Submitted</span>
+                            {formatWhen(d.submittedAt)}
+                          </span>
+                        )}
+                        {d && (
+                          <span className="applicant-fact">
+                            <span className="applicant-fact__label">Assigned</span>
+                            {formatWhen(d.createdAt)}
+                          </span>
+                        )}
+                      </div>
+
+                      {d?.proofPublicUrl && (
+                        <a
+                          href={d.proofPublicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="nil-proof__link"
+                        >
+                          View submitted proof →
+                        </a>
+                      )}
+                      {d?.proofNote && (
+                        <p className="nil-card__desc" style={{ marginTop: 12 }}>
+                          <span className="muted">Your note: </span>
+                          {d.proofNote}
+                        </p>
+                      )}
+                    </SlideOver>
+                  );
+                }}
+              />
             ) : (
               <div className="results-empty">
                 <p className="results-empty__title">No releases yet</p>
                 <p className="results-empty__hint">
                   Submit an assignment and, once an editor approves it, the money
                   you earn will show up here.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* ---- (b) My Assignments — by actionability ---- */}
+      <section className="card game">
+        <span className="game-kicker">Deliverables</span>
+        <h2>My Assignments</h2>
+        {delivLoading && <p className="muted">Loading assignments…</p>}
+        {delivError && <div className="error">{delivError}</div>}
+        {!delivLoading && !delivError && deliverables && (
+          <>
+            {/* Needs your attention: assigned + sent-back working cards. */}
+            {assigned.length > 0 && (
+              <div className="nil-group">
+                <span className="game-kicker nil-group__label">
+                  Needs your attention
+                </span>
+                <div className="nil-list">
+                  {assigned.map((d) => (
+                    <DeliverableCard
+                      key={d.id}
+                      deliverable={d}
+                      token={token}
+                      onUpdated={(updated) => {
+                        applyUpdate(updated);
+                        // A submit changes nothing in the wallet yet, but
+                        // reloading it is cheap and keeps an approval that
+                        // landed meanwhile visible.
+                        loadWallet(token);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* In review: submitted, read-only compact rows. */}
+            {submitted.length > 0 && (
+              <div className="nil-group">
+                <span className="game-kicker nil-group__label">In review</span>
+                <QueueTable
+                  columns={SUBMITTED_COLUMNS}
+                  rows={submitted}
+                  rowKey={(d) => d.id}
+                  ariaLabel="Deliverables in review"
+                  renderDetail={(d, close) => (
+                    <SlideOver
+                      onClose={close}
+                      kicker="In review"
+                      title={d.title}
+                      label="Submitted deliverable"
+                      footer={
+                        <span className="muted">
+                          Submitted {formatWhen(d.submittedAt)} — awaiting an
+                          editor&apos;s review.
+                        </span>
+                      }
+                    >
+                      <div className="review-facts">
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Value</span>
+                          {usdCents(d.valueCents)}
+                        </span>
+                        <span className="applicant-fact">
+                          <span className="applicant-fact__label">Submitted</span>
+                          {formatWhen(d.submittedAt)}
+                        </span>
+                      </div>
+
+                      {d.description && (
+                        <p className="applicant-pitch">{d.description}</p>
+                      )}
+
+                      {d.proofPublicUrl ? (
+                        <a
+                          href={d.proofPublicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="nil-proof__link"
+                        >
+                          View submitted proof →
+                        </a>
+                      ) : (
+                        <span className="muted">No proof attached</span>
+                      )}
+                      {d.proofNote && (
+                        <p className="nil-card__desc" style={{ marginTop: 12 }}>
+                          <span className="muted">Your note: </span>
+                          {d.proofNote}
+                        </p>
+                      )}
+                    </SlideOver>
+                  )}
+                />
+              </div>
+            )}
+
+            {!hasAssignments && (
+              <div className="results-empty">
+                <p className="results-empty__title">No assignments yet</p>
+                <p className="results-empty__hint">
+                  When your school assigns you an NIL deliverable, it will show up
+                  here for you to complete and submit.
                 </p>
               </div>
             )}
