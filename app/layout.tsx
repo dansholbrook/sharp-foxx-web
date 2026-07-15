@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from './auth-context';
 import { FollowsProvider } from './follows-context';
+import { PointsProvider } from './points-context';
 
 export const metadata: Metadata = {
   title: 'Sharp Foxx — Admin',
@@ -13,7 +14,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <AuthProvider>
-          <FollowsProvider>{children}</FollowsProvider>
+          <FollowsProvider>
+            <PointsProvider>{children}</PointsProvider>
+          </FollowsProvider>
         </AuthProvider>
       </body>
     </html>

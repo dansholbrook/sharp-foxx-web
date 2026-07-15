@@ -6793,3 +6793,938 @@ a.follow-sugcard__name:hover {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
+/* =================================================================
+   Prediction engine — the fan pick cards (/games/[id]), the courtside
+   prediction tool inside the live console, and the points identity
+   (nav chip, /picks, /leaderboard). Scoped under .predict-* / .points-*
+   and built from the shared palette tokens.
+
+   POINTS ONLY. Nothing here is money, so nothing here borrows the
+   money treatments: no usd(), no currency alignment. Gold still reads
+   as "this matters" — it's the app's one accent — but a WIN gets the
+   green from .success, deliberately outside the gold family, so a fan
+   can tell "you won" from "this is a label" at a glance.
+   ================================================================= */
+
+/* ---- The ⚡ chip: the fan's points identity, riding the nav on every
+   page. Sized to sit on the nav's baseline next to the uppercase links
+   without stretching the row. ---- */
+.points-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  background: rgba(201, 163, 78, 0.1);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  text-decoration: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.points-chip:hover {
+  background: rgba(201, 163, 78, 0.18);
+  border-color: var(--accent);
+}
+
+.points-chip__bolt {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.points-chip__value {
+  font-weight: 700;
+}
+
+.points-chip__unit {
+  color: var(--accent-dim);
+  font-size: 0.66rem;
+}
+
+/* =========================== Pick cards =========================== */
+
+.predict-section {
+  margin: 32px 0;
+}
+
+.predict-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.predict-section__title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.3rem;
+  color: var(--accent);
+  margin: 0;
+}
+
+.predict-section__link {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* The "no money here" line. Quiet, but it stays on the page — this is the
+   surface where that has to be unambiguous. */
+.predict-section__standfirst {
+  margin: 0 0 18px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.predict-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.predict-card {
+  padding: 20px 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+/* A settled question steps back — it's a record now, not a call to action. */
+.predict-card--settled {
+  background: var(--panel-raised);
+  border-color: var(--border-strong);
+}
+
+.predict-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.predict-card__question {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.08rem;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.predict-card__stake {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.predict-card__stake-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.predict-card__stake-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ---- Status pills. Shared by the fan card, the console board, and the
+   /picks history (where the keys are pick OUTCOMES rather than prediction
+   statuses — hence both key sets live here). ---- */
+.predict-pill {
+  text-transform: none;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.predict-pill--open,
+.predict-pill--pending {
+  color: var(--accent-hover);
+  background: rgba(201, 163, 78, 0.16);
+  border-color: var(--accent);
+}
+
+.predict-pill--locked,
+.predict-pill--voided,
+.predict-pill--refunded,
+.predict-pill--lost {
+  color: var(--muted);
+  background: none;
+  border-color: var(--border-strong);
+}
+
+/* The win pill borrows .success's green — the one non-gold "good" in the
+   palette, so it can't be mistaken for a neutral label. */
+.predict-pill--resolved,
+.predict-pill--won {
+  color: #b4e6c0;
+  background: #17251a;
+  border-color: #2f5c3a;
+}
+
+/* ---- The option buttons: the fun surface. Big tap targets with the
+   crowd's share painted in behind the label as a fill. ---- */
+.predict-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.predict-opt {
+  position: relative;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: default;
+  transition: border-color 0.18s ease, background 0.18s ease,
+    transform 0.12s ease, opacity 0.18s ease;
+}
+
+/* Only a pickable option behaves like a button. */
+.predict-opt--live {
+  cursor: pointer;
+}
+
+.predict-opt--live:hover {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.06);
+}
+
+/* The press itself — the tactile bit. Fires on the real tap, not on hover,
+   so it feels like the thumb did it. */
+.predict-opt--live:active {
+  transform: scale(0.985);
+}
+
+.predict-opt:disabled {
+  /* Disabled here means "already answered", not "broken" — so the card must
+     not gray out into unreadability the way a dead form control would. */
+  opacity: 1;
+}
+
+/* The crowd bar: a fill BEHIND the label, so share reads as weight and the
+   button stays one tap target. */
+.predict-opt__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: rgba(201, 163, 78, 0.1);
+  border-right: 1px solid rgba(201, 163, 78, 0.22);
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.predict-opt__body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  min-height: 54px;
+}
+
+.predict-opt__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.predict-opt__share {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.predict-opt__pct {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.predict-opt__count {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The fan's own pick: gold border + a brighter fill. */
+.predict-opt--mine {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.08);
+  animation: predict-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.predict-opt--mine .predict-opt__fill {
+  background: rgba(201, 163, 78, 0.18);
+}
+
+/* Everything that isn't the answer recedes once there IS an answer. */
+.predict-opt--dim {
+  opacity: 0.5;
+}
+
+.predict-opt--dim .predict-opt__pct {
+  color: var(--muted);
+}
+
+/* The winning option on a resolved question — green, and it announces itself
+   once on arrival. */
+.predict-opt--won {
+  border-color: #2f5c3a;
+  background: #17251a;
+  opacity: 1;
+  animation: predict-win 0.6s ease-out;
+}
+
+.predict-opt--won .predict-opt__fill {
+  background: rgba(47, 92, 58, 0.35);
+  border-right-color: rgba(180, 230, 192, 0.3);
+}
+
+.predict-opt--won .predict-opt__label,
+.predict-opt--won .predict-opt__pct {
+  color: #b4e6c0;
+}
+
+.predict-opt__check {
+  font-size: 0.85rem;
+  color: #b4e6c0;
+}
+
+/* The tap: a quick overshoot so a pick feels landed rather than submitted. */
+@keyframes predict-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* The resolve: one green pulse out of the winning row. */
+@keyframes predict-win {
+  0% {
+    box-shadow: 0 0 0 0 rgba(47, 92, 58, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(47, 92, 58, 0);
+  }
+}
+
+@keyframes predict-outcome-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* "Locked in — 100 points on Duke." */
+.predict-note {
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  color: var(--accent);
+}
+
+.predict-note--muted {
+  color: var(--muted);
+}
+
+/* ---- The outcome banner on a settled question ---- */
+.predict-outcome {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.88rem;
+  animation: predict-outcome-in 0.3s ease-out;
+}
+
+/* A win is the one thing on this surface that gets to shout. A loss stays in
+   the neutral treatment above — quiet, not a scolding. */
+.predict-outcome--won {
+  border-color: #2f5c3a;
+  background: #17251a;
+  color: #b4e6c0;
+  font-weight: 600;
+}
+
+.predict-error {
+  margin-top: 12px;
+}
+
+/* ============ Courtside prediction tool (live console) ============ */
+
+.predict-console {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+
+.predict-console__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.predict-console__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The selected kind. Also available to any other console chip group that
+   grows a selected state later. */
+.console-chip--on {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Needed at full specificity: the base .console-chip:hover:not(:disabled)
+   is 0,3,0 and would otherwise repaint the SELECTED chip back to the ghost
+   treatment on hover — i.e. the selection would vanish under the cursor. */
+.console-chip--on:hover:not(:disabled) {
+  color: var(--accent-text);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.predict-console__line {
+  width: 92px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* Exactly what the fan will see, shown before it goes live in front of them
+   — the labels are server-owned, so this mirrors the server's rules. */
+.predict-console__preview {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-raised);
+}
+
+.predict-console__preview-label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.predict-console__preview-opts {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.predict-console__preview-or {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.predict-console__open {
+  align-self: flex-start;
+}
+
+.predict-console__notice {
+  margin-top: 12px;
+}
+
+.predict-console__list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.predict-console__row {
+  padding: 12px 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.predict-console__row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.predict-console__q {
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.predict-console__meta {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.predict-console__actions,
+.predict-console__resolve {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.predict-console__resolve-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Naming the winner is the irreversible one — gold, unlike the ghost Lock /
+   Void beside it, so the thumb can tell them apart at speed. */
+.predict-console__winner {
+  padding: 9px 14px;
+}
+
+.predict-console__void:hover:not(:disabled) {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+/* ====================== /picks — points hero ====================== */
+
+.points-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  padding: 24px 26px;
+  margin-bottom: 28px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.points-hero__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.points-hero__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+/* The same serif-gold treatment as the NIL wallet total — the fan's number is
+   the fan's number. */
+.points-hero__value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2.4rem, 6vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lifetime is the brag, not the balance — same treatment, quieter. */
+.points-hero__value--minor {
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  color: var(--accent-dim);
+}
+
+.points-hero__unit {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+
+.points-hero__caption {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---- Pick history ---- */
+
+.points-history {
+  margin-top: 8px;
+}
+
+.points-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.points-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 10px;
+}
+
+/* A left rule carries the outcome, so the list scans down the edge without
+   the pills having to be read one by one. */
+.points-row--won {
+  border-left-color: #2f5c3a;
+}
+
+.points-row--pending {
+  border-left-color: var(--accent-dim);
+}
+
+.points-row--lost,
+.points-row--refunded {
+  border-left-color: var(--border-strong);
+}
+
+.points-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.points-row__question {
+  font-weight: 600;
+  font-size: 0.94rem;
+  line-height: 1.3;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.points-row__question:hover {
+  color: var(--accent);
+}
+
+.points-row__pick {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.points-row__pick strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.points-row__side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.points-row__net {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 62px;
+  text-align: right;
+}
+
+.points-row__net--up {
+  color: #b4e6c0;
+}
+
+.points-row__net--down {
+  color: var(--muted);
+}
+
+.points-row__net--flat {
+  color: var(--muted);
+}
+
+.points-row__when {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ==================== /leaderboard — the board ==================== */
+
+.points-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.points-tab {
+  margin: 0;
+  padding: 7px 16px;
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.points-tab:hover:not(.points-tab--on) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.08);
+}
+
+.points-tab--on {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.points-tabs__back {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.points-lb__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.points-lb__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* The fan's own row, wherever it lands — the thing they're scanning for. */
+.points-lb__row--me {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.08);
+}
+
+.points-lb__rank {
+  min-width: 30px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.points-lb__row--me .points-lb__rank {
+  color: var(--accent);
+}
+
+.points-lb__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.points-lb__you {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.points-lb__score {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex-shrink: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.points-lb__unit {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.points-lb__pending {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* The pinned "your rank" block, shown only when the fan missed the cut. The
+   dashed rule reads as "…and, further down:". */
+.points-lb__pin {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--border-strong);
+}
+
+.points-lb__pin-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.points-lb__hint {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+}
+
+/* ---- Phone: the pick cards are a thumb surface first ---- */
+@media (max-width: 560px) {
+  .predict-card {
+    padding: 16px 14px;
+  }
+
+  .predict-opt__body {
+    padding: 13px 14px;
+    min-height: 60px;
+  }
+
+  .points-hero {
+    gap: 22px;
+    padding: 20px 18px;
+  }
+
+  /* The history rows stop being two columns and stack, so a long question
+     isn't squeezed into a sliver beside the net. */
+  .points-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .points-row__side {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .points-row__net {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .points-lb__row {
+    gap: 10px;
+    padding: 11px 12px;
+  }
+}
+
+/* Motion here is celebration, not information — every animation above has a
+   static resting state that says the same thing, so all of it can go. The
+   width transition on the crowd bar goes too: it's the one that MOVES on a
+   poll tick, unprompted, which is exactly what reduced-motion is asking us
+   not to do. */
+@media (prefers-reduced-motion: reduce) {
+  .predict-opt,
+  .predict-opt--mine,
+  .predict-opt--won,
+  .predict-opt__fill,
+  .predict-outcome {
+    animation: none;
+    transition: none;
+  }
+
+  .predict-opt--live:active {
+    transform: none;
+  }
+}

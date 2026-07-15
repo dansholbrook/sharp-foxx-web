@@ -21,6 +21,7 @@ import {
   GamePhoto,
 } from '../../api';
 import { toYouTubeEmbed } from '../../video';
+import { PredictionsSection } from '../../predictions';
 
 // The shared pulsing LIVE badge (dot + wordmark). Styling/animation live in the
 // scoped .live-badge classes in globals.css so it reads identically here, on the
@@ -824,6 +825,11 @@ export default function GamePage() {
             {/* Photos ride directly under the video area (single column on
                 mobile puts them right beneath the player). */}
             <GamePhotos token={token} eventId={id} />
+            {/* Predictions sit ABOVE the courtside feed: after a pick is in,
+                the feed is what settles it, so the question has to come first.
+                It renders on every game (an upcoming one can carry open
+                questions pre-tip) but only polls while live — see POLL_MS. */}
+            <PredictionsSection token={token} eventId={id} live={live} />
             {live && <LiveFeed items={pulse.feed} />}
             <ShareRow event={event} />
 

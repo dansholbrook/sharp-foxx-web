@@ -2053,3 +2053,225 @@ export async function unfollowTarget(
   });
   if (!res.ok) throw await toAuthError(res);
 }
+
+// ============================================================================
+// Prediction engine — POINTS ONLY. NO CASH. NO WAGERING.
+//
+// Mirrors predictions.service.ts. `fan_points` is a closed-loop score with no
+// monetary value: never bought, never redeemed, never cashed out. The UI
+// language follows the backend's — "points", "picks", "stake". Never "bet",
+// "wager", or "odds".
+//
+// The client NEVER sends a stake or a payout; it sends a key. All points math is
+// server-side and atomic.
+// ============================================================================
+
+export type PredictionKind = 'winner' | 'yes_no' | 'over_under';
+export type PredictionStatus = 'open' | 'locked' | 'resolved' | 'voided';
+
+// A pick's outcome is DERIVED on the backend from its parent's status and its
+// payout (outcomeOf) — it is not a stored column. 'refunded' is a voided
+// question (payout stays null); 'lost' is a resolved one that paid 0.
+export type PickOutcome = 'pending' | 'won' | 'lost' | 'refunded';
+
+// An option as the fan-facing board returns it: the stored {key,label} plus the
+// crowd's distribution. `share` is a 0–1 fraction (4dp), already divided by
+// totalPicks server-side — 0 when nobody has picked yet.
+export interface PredictionOption {
+  key: string;
+  label: string;
+  count: number;
+  share: number;
+}
+
+// GET /events/:id/predictions — one game's board, newest question first.
+export interface Prediction {
+  id: string;
+  eventId: string;
+  question: string;
+  kind: PredictionKind;
+  // `numeric` at rest, so a STRING over the wire (over_under only, else null).
+  // Display-only here — never do math on it, same rule as money.
+  line: string | null;
+  stake: number;
+  status: PredictionStatus;
+  opensAt: string;
+  locksAt: string | null;
+  resolvedAt: string | null;
+  options: PredictionOption[];
+  totalPicks: number;
+  // Only ever set once resolved; null on open/locked/voided.
+  winningKey: string | null;
+  myPick: {
+    pickKey: string;
+    stake: number;
+    // null until the question settles (and stays null on a void — that's what
+    // separates 'refunded' from 'lost').
+    payout: number | null;
+    outcome: PickOutcome;
+  } | null;
+}
+
+// POST /predictions body. Labels are deliberately omitted: the backend owns them
+// (team names from the event for `winner`, "Over <line>"/"Under <line>",
+// "Yes"/"No"), and a client label is IGNORED for winner regardless. Sending keys
+// only keeps the server authoritative.
+export interface CreatePredictionInput {
+  eventId: string;
+  question: string;
+  kind: PredictionKind;
+  options: Array<{ key: string; label?: string }>;
+  line?: number;
+  stake?: number;
+  locksAt?: string;
+}
+
+// POST /predictions returns the RAW prediction row — no options distribution, no
+// myPick. It is not the board shape, so a caller that needs the board re-reads
+// GET /events/:id/predictions rather than splicing this in.
+export interface CreatedPrediction {
+  id: string;
+  eventId: string;
+  question: string;
+  kind: PredictionKind;
+  status: PredictionStatus;
+  stake: number;
+}
+
+// POST /predictions/:id/pick → the created pick row + the fan's NEW balance
+// (authoritative, straight out of the debit). 409s: already picked, insufficient
+// points, picks closed.
+export interface PredictionPickResult {
+  id: string;
+  predictionId: string;
+  pickKey: string;
+  stake: number;
+  balance: number;
+}
+
+// POST /predictions/:id/resolve → the settled row + what it paid out.
+export interface ResolvedPrediction {
+  id: string;
+  status: PredictionStatus;
+  winningKey: string | null;
+  tally: { picks: number; winners: number; pointsPaid: number };
+}
+
+// POST /predictions/:id/void → the voided row + what it refunded.
+export interface VoidedPrediction {
+  id: string;
+  status: PredictionStatus;
+  tally: { refunded: number; pointsRefunded: number };
+}
+
+// GET /predictions/my-picks — the caller's wallet + full pick history,
+// newest-first. `net` is what the pick did to the balance: a refund nets 0, a
+// still-pending pick reads as -stake (those points ARE debited right now).
+export interface MyPick {
+  pickId: string;
+  predictionId: string;
+  eventId: string;
+  question: string;
+  kind: PredictionKind;
+  pickKey: string;
+  pickLabel: string;
+  stake: number;
+  payout: number | null;
+  status: PredictionStatus;
+  winningKey: string | null;
+  pickedAt: string;
+  resolvedAt: string | null;
+  outcome: PickOutcome;
+  net: number;
+}
+
+// A fan who has never picked has no wallet row, which the backend reads as the
+// untouched 1,000-point starting grant — "hasn't played", not "broke".
+export interface MyPicksReport {
+  balance: number;
+  lifetimeEarned: number;
+  picks: MyPick[];
+}
+
+// GET /leaderboards/points. `pending` is event-scope only ("N picks still live").
+export interface LeaderboardEntry {
+  userId: string;
+  displayName: string | null;
+  score: number;
+  // null = not on this board at all yet (never picked / never picked on this
+  // game). Deliberately NOT the same as ranking last.
+  rank: number | null;
+  pending?: number;
+}
+
+// `top` is the top 20 by row_number; `me` is the caller's own row, pulled
+// alongside so a fan outside the cut still sees where they stand.
+export interface PointsLeaderboard {
+  scope: 'global' | 'event';
+  eventId?: string;
+  top: LeaderboardEntry[];
+  me: LeaderboardEntry;
+}
+
+// The fan-facing board for one game. Any authenticated role reads it.
+export const getEventPredictions = (token: string, eventId: string) =>
+  authGet<Prediction[]>(`/events/${eventId}/predictions`, token);
+
+// Make a pick. Sends a KEY and nothing else — stake and payout are server-owned.
+export const makePick = (token: string, predictionId: string, pickKey: string) =>
+  authPost<PredictionPickResult>(`/predictions/${predictionId}/pick`, token, {
+    pickKey,
+  });
+
+// ---- Staff (admin / regional_manager / field_rep) — the courtside controls ----
+
+export const createPrediction = (token: string, input: CreatePredictionInput) =>
+  authPost<CreatedPrediction>('/predictions', token, input);
+
+export const lockPrediction = (token: string, predictionId: string) =>
+  authPost<CreatedPrediction>(`/predictions/${predictionId}/lock`, token, {});
+
+// Pays out irreversibly — the console confirms before calling this.
+export const resolvePrediction = (
+  token: string,
+  predictionId: string,
+  winningKey: string,
+) =>
+  authPost<ResolvedPrediction>(`/predictions/${predictionId}/resolve`, token, {
+    winningKey,
+  });
+
+// The mercy switch: refunds every stake and settles nothing.
+export const voidPrediction = (token: string, predictionId: string) =>
+  authPost<VoidedPrediction>(`/predictions/${predictionId}/void`, token, {});
+
+// ---- Points identity ----
+
+export const getMyPicks = (token: string) =>
+  authGet<MyPicksReport>('/predictions/my-picks', token);
+
+export const getPointsLeaderboard = (
+  token: string,
+  scope: 'global' | 'event' = 'global',
+  eventId?: string,
+) =>
+  authGet<PointsLeaderboard>(
+    `/leaderboards/points?scope=${scope}${
+      eventId ? `&eventId=${encodeURIComponent(eventId)}` : ''
+    }`,
+    token,
+  );
+
+// Points are a plain integer count, never money — so they format as a grouped
+// count ("1,100"), never through usd(). The ⚡ chip and the picks hero append
+// the unit themselves.
+export function points(n: number): string {
+  return n.toLocaleString('en-US');
+}
+
+// Signed net for a pick row ("+200" / "−100" / "0"). Uses a real minus sign to
+// match the en-dash/typographic treatment used elsewhere in the app.
+export function signedPoints(n: number): string {
+  if (n === 0) return '0';
+  return n > 0 ? `+${points(n)}` : `−${points(Math.abs(n))}`;
+}

@@ -46,6 +46,13 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Games',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // The fan's pick history + points wallet, and the points leaderboard. Both
+  // PAGES are open to every role (staff can pick too — the backend deliberately
+  // allows it), but only the fan roles carry the nav LINKS: staff nav is already
+  // eleven items deep, and the ⚡ chip in the nav is their way into /picks, which
+  // links on to the leaderboard. See PAGE_ACCESS below, where both are open.
+  { href: '/picks', label: 'My picks', roles: ['athlete', 'viewer'] },
+  { href: '/leaderboard', label: 'Leaderboard', roles: ['athlete', 'viewer'] },
   {
     href: '/my-games',
     label: 'My games',
@@ -200,6 +207,21 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   // page that IS nav-reached, so the intent should be legible here.
   {
     match: (p) => p === '/discover',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
+  // The points surfaces. Open to EVERY authenticated role, deliberately wider
+  // than their nav links (fan roles only): the backend puts no @Roles on
+  // /predictions/my-picks or /leaderboards/points because any caller can pick,
+  // so a rep who followed their ⚡ chip here must not hit AccessDenied on their
+  // own points. Listed explicitly rather than left to the open-by-default
+  // fallback, since the nav/page split is exactly the thing worth being able to
+  // read here.
+  {
+    match: (p) => p === '/picks',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
+  {
+    match: (p) => p === '/leaderboard',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
 ];

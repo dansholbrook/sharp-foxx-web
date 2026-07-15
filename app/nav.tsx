@@ -4,8 +4,31 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from './auth-context';
+import { usePoints } from './points-context';
 import { navLinksFor } from './roles';
-import { getReviewQueue, getNilReviewQueue } from './api';
+import { getReviewQueue, getNilReviewQueue, points } from './api';
+
+// The fan's points identity: a compact ⚡ chip that rides the nav on every page
+// and links to their pick history. Renders only once the wallet has actually
+// loaded — never a placeholder "0 pts", which would misread as "you're broke" to
+// a fan who simply hasn't been fetched yet.
+//
+// Shown to EVERY role, not just fans: any authenticated caller can pick (the
+// backend deliberately allows staff to play along), so any of them can hold a
+// balance. It doubles as staff's way into /picks, which isn't in their nav.
+function PointsChip() {
+  const { balance } = usePoints();
+  if (balance === null) return null;
+  return (
+    <Link href="/picks" className="points-chip" title="Your points and picks">
+      <span className="points-chip__bolt" aria-hidden="true">
+        ⚡
+      </span>
+      <span className="points-chip__value">{points(balance)}</span>
+      <span className="points-chip__unit">pts</span>
+    </Link>
+  );
+}
 
 // The header nav links, filtered to what the signed-in role can actually use
 // (see navLinksFor). Log Out is always present. Logout clears the in-memory
@@ -55,6 +78,7 @@ export function AppNav() {
 
   return (
     <div className="nav-links">
+      <PointsChip />
       {links.map((l) => (
         <Link key={l.href} href={l.href} className="link-btn">
           {l.label}

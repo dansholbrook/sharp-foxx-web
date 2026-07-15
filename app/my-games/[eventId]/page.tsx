@@ -32,6 +32,14 @@ import {
   confirmMedia,
   getGamePhotos,
   deleteMedia,
+  getEventPredictions,
+  createPrediction,
+  lockPrediction,
+  resolvePrediction,
+  voidPrediction,
+  points,
+  Prediction,
+  PredictionKind,
   MyAssignment,
   ContentItem,
   EventContentItem,
@@ -230,6 +238,386 @@ function liveEventSummary(ev: LiveEvent): string {
   }
 }
 
+// ---- Predictions, courtside. POINTS ONLY — the rep opens a question, fans
+// stake points on it, the rep settles it. No money is involved and the copy must
+// never imply otherwise ("points"/"picks", never "bet"/"wager"/"odds").
+//
+// The three kinds and their key sets are fixed server-side (KIND_KEYS in
+// predictions.service.ts); this form mirrors them. LABELS are deliberately not
+// sent: the backend owns them — team names off the event for `winner` (a client
+// label there is ignored outright), "Yes"/"No", "Over <line>"/"Under <line>" —
+// so sending keys only keeps one authority.
+const PREDICTION_KINDS: Array<{ value: PredictionKind; label: string }> = [
+  { value: 'winner', label: 'Winner' },
+  { value: 'yes_no', label: 'Yes / No' },
+  { value: 'over_under', label: 'Over / Under' },
+];
+
+// Keys per kind, in the canonical order the backend stores them.
+const KIND_KEYS: Record<PredictionKind, [string, string]> = {
+  winner: ['home', 'away'],
+  yes_no: ['yes', 'no'],
+  over_under: ['over', 'under'],
+};
+
+// What the fan will SEE as the two options, previewed live in the form. This
+// mirrors the server's labelling rules rather than driving them — it's a
+// preview, not a payload.
+function optionPreview(
+  kind: PredictionKind,
+  line: string,
+  homeLabel: string,
+  awayLabel: string,
+): [string, string] {
+  if (kind === 'winner') return [homeLabel, awayLabel];
+  if (kind === 'yes_no') return ['Yes', 'No'];
+  // Normalize through Number the way the backend does (it labels with
+  // String(dto.line), and `line` is sent as a number). Without this a rep who
+  // types "7.0" previews "Over 7.0" but fans get "Over 7" — a preview that
+  // doesn't match what ships isn't one.
+  const raw = line.trim();
+  const n = Number(raw);
+  const l = raw === '' || !Number.isFinite(n) ? '…' : String(n);
+  return [`Over ${l}`, `Under ${l}`];
+}
+
+// The console's prediction tool: a compact open-a-question form plus the live
+// board with one-tap Lock / Resolve / Void. Sits inside the live console card,
+// so it renders body-only (no card chrome of its own).
+function ConsolePredictions({
+  token,
+  eventId,
+  homeLabel,
+  awayLabel,
+  // False when either team FK is unset on the event. A `winner` question then
+  // genuinely cannot be built (the backend 409s: it has no team names to
+  // resolve against), so the kind is disabled with the reason shown rather than
+  // offered and rejected.
+  canAskWinner,
+}: {
+  token: string;
+  eventId: string;
+  homeLabel: string;
+  awayLabel: string;
+  canAskWinner: boolean;
+}) {
+  const [rows, setRows] = useState<Prediction[]>([]);
+  const [question, setQuestion] = useState('');
+  const [kind, setKind] = useState<PredictionKind>(
+    canAskWinner ? 'winner' : 'yes_no',
+  );
+  const [line, setLine] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // The prediction whose winner the rep is choosing (Resolve expands in place
+  // into its own options rather than opening a dialog — one thumb, courtside).
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  // Best-effort load; a failed read just leaves an empty board and the rep can
+  // still open a question.
+  const load = async () => {
+    try {
+      setRows(await getEventPredictions(token, eventId));
+    } catch {
+      /* leave the board as-is; opening/settling still works */
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await getEventPredictions(token, eventId);
+        if (!cancelled) setRows(list);
+      } catch {
+        /* empty board on failure */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, eventId]);
+
+  const lineNum = Number(line);
+  const lineValid = line.trim() !== '' && Number.isFinite(lineNum);
+  const canOpen =
+    question.trim().length > 0 &&
+    !busy &&
+    (kind !== 'over_under' || lineValid) &&
+    (kind !== 'winner' || canAskWinner);
+
+  async function open() {
+    if (!canOpen) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await createPrediction(token, {
+        eventId,
+        question: question.trim(),
+        kind,
+        // Keys only — the server labels them (see the header above).
+        options: KIND_KEYS[kind].map((key) => ({ key })),
+        ...(kind === 'over_under' ? { line: lineNum } : {}),
+        // No stake sent: the column default (100) applies. v1 stake is FIXED per
+        // question by design — every fan on a question risks the same amount —
+        // so there's no field here to get wrong at 9pm in a gym.
+      });
+      setQuestion('');
+      setLine('');
+      // create returns the RAW row (no options distribution, no myPick), so the
+      // board is re-read rather than spliced.
+      await load();
+      setNotice('Question is open — fans can pick now.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open prediction');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function lock(p: Prediction) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await lockPrediction(token, p.id);
+      await load();
+      setNotice('Picks locked.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to lock');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Pays out irreversibly, so this one confirms — naming the winner and the
+  // number of picks riding on it, which is the thing a rep would want to catch
+  // before it's too late to catch it.
+  async function resolve(p: Prediction, winningKey: string) {
+    const label = p.options.find((o) => o.key === winningKey)?.label ?? winningKey;
+    if (
+      !window.confirm(
+        `Resolve "${p.question}" with ${label} as the winner? This pays out ${p.totalPicks} pick${
+          p.totalPicks === 1 ? '' : 's'
+        } immediately and cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await resolvePrediction(token, p.id, winningKey);
+      setResolving(null);
+      await load();
+      setNotice(
+        `Resolved — ${res.tally.winners} of ${res.tally.picks} picks won, ${points(
+          res.tally.pointsPaid,
+        )} points paid out.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to resolve');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The mercy switch: refunds every stake and settles nothing. Also confirms —
+  // it's not destructive to a fan, but it does end the question.
+  async function voidIt(p: Prediction) {
+    if (
+      !window.confirm(
+        `Void "${p.question}"? Every stake is refunded and nobody wins or loses.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await voidPrediction(token, p.id);
+      await load();
+      setNotice(
+        `Voided — ${points(res.tally.pointsRefunded)} points refunded to ${
+          res.tally.refunded
+        } pick${res.tally.refunded === 1 ? '' : 's'}.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to void');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Only questions still in play carry actions. Settled ones drop off the
+  // console — the fan page is where a resolved question lives on.
+  const liveRows = rows.filter(
+    (p) => p.status === 'open' || p.status === 'locked',
+  );
+  const [optA, optB] = optionPreview(kind, line, homeLabel, awayLabel);
+
+  return (
+    <div className="console-group predict-console">
+      <span className="console-label">Predictions · points only</span>
+
+      {/* ---- Open a question ---- */}
+      <div className="predict-console__form">
+        <input
+          value={question}
+          placeholder="Ask the crowd…"
+          disabled={busy}
+          maxLength={200}
+          aria-label="Prediction question"
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && canOpen) void open();
+          }}
+        />
+        <div className="predict-console__kinds">
+          {PREDICTION_KINDS.map((k) => {
+            const blocked = k.value === 'winner' && !canAskWinner;
+            return (
+              <button
+                key={k.value}
+                type="button"
+                className={`console-chip${
+                  kind === k.value ? ' console-chip--on' : ''
+                }`}
+                disabled={busy || blocked}
+                title={
+                  blocked
+                    ? 'This game does not have both teams set, so a winner question has no team names to resolve.'
+                    : undefined
+                }
+                onClick={() => setKind(k.value)}
+              >
+                {k.label}
+              </button>
+            );
+          })}
+          {kind === 'over_under' && (
+            <input
+              type="number"
+              step="any"
+              inputMode="decimal"
+              className="predict-console__line"
+              placeholder="Line"
+              aria-label="Over/under line"
+              value={line}
+              disabled={busy}
+              onChange={(e) => setLine(e.target.value)}
+            />
+          )}
+        </div>
+        {/* Exactly what the fan will see, before it's live in front of them. */}
+        <div className="predict-console__preview">
+          <span className="predict-console__preview-label">Fans will pick</span>
+          <span className="predict-console__preview-opts">
+            {optA} <span className="predict-console__preview-or">or</span> {optB}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn-inline predict-console__open"
+          disabled={!canOpen}
+          onClick={() => void open()}
+        >
+          {busy ? 'Working…' : 'Open prediction'}
+        </button>
+      </div>
+
+      {notice && <div className="success predict-console__notice">{notice}</div>}
+      {error && <div className="error">{error}</div>}
+
+      {/* ---- The live board: one row per question still in play ---- */}
+      {liveRows.length === 0 ? (
+        <p className="muted console-feed__empty">
+          No questions open. Ask the crowd something.
+        </p>
+      ) : (
+        <ul className="predict-console__list">
+          {liveRows.map((p) => (
+            <li key={p.id} className="predict-console__row">
+              <div className="predict-console__row-head">
+                <span className="predict-console__q">{p.question}</span>
+                <span className={`pill predict-pill predict-pill--${p.status}`}>
+                  {p.status === 'open' ? 'Open' : 'Locked'}
+                </span>
+              </div>
+              <span className="predict-console__meta">
+                {p.totalPicks === 1 ? '1 pick' : `${points(p.totalPicks)} picks`} ·{' '}
+                {points(p.stake)} points each
+              </span>
+
+              {resolving === p.id ? (
+                // Resolve expanded: name the winner. The options ARE the
+                // buttons — no select, no second dialog before the confirm.
+                <div className="predict-console__resolve">
+                  <span className="predict-console__resolve-label">
+                    Who won?
+                  </span>
+                  {p.options.map((o) => (
+                    <button
+                      key={o.key}
+                      type="button"
+                      className="btn-inline predict-console__winner"
+                      disabled={busy}
+                      onClick={() => void resolve(p, o.key)}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="link-btn"
+                    disabled={busy}
+                    onClick={() => setResolving(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="predict-console__actions">
+                  {p.status === 'open' && (
+                    <button
+                      type="button"
+                      className="btn-inline btn-ghost"
+                      disabled={busy}
+                      onClick={() => void lock(p)}
+                    >
+                      Lock
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-inline btn-ghost"
+                    disabled={busy}
+                    onClick={() => setResolving(p.id)}
+                  >
+                    Resolve
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-inline btn-ghost predict-console__void"
+                    disabled={busy}
+                    onClick={() => void voidIt(p)}
+                  >
+                    Void
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // The COURTSIDE console — shown at the top of the workspace only while a game is
 // live. Phone-first, big tap targets: a score pad (+1/+2/+3 per team, optimistic
 // then reconciled from the emit response), period chips, big-play input + preset
@@ -244,6 +632,7 @@ function LiveConsole({
   initialAway,
   homeLabel,
   awayLabel,
+  canAskWinner,
   onEndGame,
 }: {
   token: string;
@@ -253,6 +642,9 @@ function LiveConsole({
   initialAway: number | null;
   homeLabel: string;
   awayLabel: string;
+  // Both team FKs are set on the event -> a `winner` question can resolve to a
+  // real team name. Passed through to the predictions tool.
+  canAskWinner: boolean;
   // End the game from the console (marks it final with the live scores). The
   // standalone Live & Result section doesn't render while live, so End Game
   // lives here — the console is the page courtside. Resolves once the PATCH
@@ -608,6 +1000,16 @@ function LiveConsole({
       </div>
 
       {error && <div className="error">{error}</div>}
+
+      {/* (h) Predictions — the fan game the rep runs from courtside. Owns its
+          own busy/error state, so it sits below the console's error line. */}
+      <ConsolePredictions
+        token={token}
+        eventId={eventId}
+        homeLabel={homeLabel}
+        awayLabel={awayLabel}
+        canAskWinner={canAskWinner}
+      />
 
       {/* (f) Emitted feed with retract */}
       <div className="console-feed">
@@ -1706,6 +2108,9 @@ function GameWorkspace({
           initialAway={result?.awayScore ?? null}
           homeLabel={assignment.event.homeTeam ?? 'Home'}
           awayLabel={assignment.event.awayTeam ?? 'Away'}
+          canAskWinner={
+            !!assignment.event.homeTeamId && !!assignment.event.awayTeamId
+          }
           onEndGame={endGame}
         />
       )}
