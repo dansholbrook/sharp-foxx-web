@@ -6419,6 +6419,41 @@ a.follow-sugcard__name:hover {
   opacity: 0.45;
 }
 
+/* ---- Admin mode: the activation actions column + the school edit panel ----
+   Admin-only markup, so none of this renders for the other four roles. The
+   actions sit in the last column of a row that is itself clickable, so they read
+   as quiet controls rather than a second call to action: ghost button, small,
+   and pinned right. */
+.discover-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+/* Compact enough not to set the row height, like .roster-activate. The
+   margin/flex reset comes from .btn-inline on the element itself. */
+.discover-action {
+  padding: 6px 14px;
+  font-size: 0.68rem;
+  letter-spacing: var(--tracking);
+}
+.discover-action__edit {
+  font-size: 0.66rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+}
+
+/* The backfill form inside the slide-over. Deliberately ruleless as a container,
+   like .profile-edit: the global .field/label/input styles already lay the form
+   out, and a second layout here would fight their margins. It exists to scope
+   the toggle below, which is .discover-toggle from the filter bar re-hosted
+   under a .field label — it only needs to stop inheriting the label's own
+   bottom margin. */
+.discover-edit__toggle {
+  margin-top: 2px;
+}
+
 /* ============================================================================
    Games (/games) — the schedule: every upcoming, live, and finished game.
    A fan surface, so results are the shared .tcard game cards in a .results-grid

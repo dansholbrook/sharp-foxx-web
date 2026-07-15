@@ -21,16 +21,20 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
-import { QueueTable, Column } from '../queue-table';
+import { QueueTable, Column, SlideOver } from '../queue-table';
 import {
   getConference,
   getConferences,
+  getInstitution,
   getInstitutions,
   searchTeams,
+  updateInstitution,
+  updateTeam,
   ConferenceSummary,
   InstitutionSummary,
   InstitutionTier,
   TeamSearchResult,
+  UpdatedInstitution,
 } from '../api';
 
 const PAGE_SIZE = 25;
@@ -92,6 +96,241 @@ function CoveragePill({ active }: { active: boolean }) {
     <span className="pill discover-pill--on">Covered</span>
   ) : (
     <span className="pill discover-pill--off">Not yet covered</span>
+  );
+}
+
+// ---- Admin mode ----------------------------------------------------------
+// Everything below renders only for an admin. /discover is the browse surface
+// for every role, and it stays byte-identical for the other four — the actions
+// column isn't in `columns` at all unless the viewer is an admin.
+//
+// The activation switch itself: this is what moves a staged import row into the
+// covered map (the Add Game picker filters on it, and the "Not yet covered" pill
+// is its other face).
+
+// Rows navigate (onRowActivate pushes the school/team page), so every control in
+// here stops both click and keydown from reaching the row — the same guard the
+// rep roster's row buttons use. Without it, activating a row would also leave the
+// page. The label follows the optimistic state, so it flips the moment it's
+// clicked and stays disabled until the PATCH lands.
+function RowActions({
+  name,
+  active,
+  busy,
+  onToggle,
+  onEdit,
+}: {
+  name: string;
+  active: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onEdit?: () => void;
+}) {
+  return (
+    <div
+      className="discover-actions"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      {/* btn-inline is the in-row button reset (it drops the global button
+          margin-top); btn-ghost keeps it quiet next to the row's own click
+          target. Same pairing as the roster's Activate. */}
+      <button
+        type="button"
+        className="btn-ghost btn-inline discover-action"
+        disabled={busy}
+        aria-label={`${active ? 'Deactivate' : 'Activate'} ${name}`}
+        onClick={onToggle}
+      >
+        {active ? 'Deactivate' : 'Activate'}
+      </button>
+      {onEdit && (
+        <button
+          type="button"
+          className="link-btn discover-action__edit"
+          aria-label={`Edit ${name}`}
+          onClick={onEdit}
+        >
+          Edit
+        </button>
+      )}
+    </div>
+  );
+}
+
+// The backfill surface. Activation is exactly when an admin fills in what the
+// EADA import couldn't give us (it carries no mascot, and website only
+// sometimes), so the mascot/website fields and the isActive toggle live in one
+// panel rather than a separate edit page.
+//
+// The directory row is lean (no mascot/website), so the panel reads the detail
+// on open and edits from that.
+function SchoolEditPanel({
+  token,
+  school,
+  onClose,
+  onSaved,
+}: {
+  token: string;
+  school: InstitutionSummary;
+  onClose: () => void;
+  onSaved: (row: UpdatedInstitution) => void;
+}) {
+  const [mascot, setMascot] = useState('');
+  const [website, setWebsite] = useState('');
+  const [isActive, setIsActive] = useState(school.isActive);
+  // Null until the detail lands; also the "is the form ready" flag and the
+  // baseline the save diffs against.
+  const [initial, setInitial] = useState<
+    { mascot: string; website: string; isActive: boolean } | null
+  >(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await getInstitution(token, school.id);
+        if (cancelled) return;
+        setMascot(detail.mascot ?? '');
+        setWebsite(detail.website ?? '');
+        setIsActive(detail.isActive);
+        setInitial({
+          mascot: detail.mascot ?? '',
+          website: detail.website ?? '',
+          isActive: detail.isActive,
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load school');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, school.id]);
+
+  const dirty = Boolean(
+    initial &&
+      (mascot.trim() !== initial.mascot ||
+        website.trim() !== initial.website ||
+        isActive !== initial.isActive),
+  );
+
+  async function onSave() {
+    if (!initial) return;
+    // Only what changed. '' is a real value here — it clears the column — so
+    // every field diffs against the baseline rather than testing truthiness.
+    const patch: Parameters<typeof updateInstitution>[2] = {};
+    if (mascot.trim() !== initial.mascot) patch.mascot = mascot.trim();
+    if (website.trim() !== initial.website) patch.website = website.trim();
+    if (isActive !== initial.isActive) patch.isActive = isActive;
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      onSaved(await updateInstitution(token, school.id, patch));
+    } catch (err) {
+      // A bad website is a 400 from the backend's zod schema, which surfaces as
+      // "400 <message>" like the rest of the app's writes.
+      setError(err instanceof Error ? err.message : 'Failed to save school');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SlideOver
+      onClose={onClose}
+      kicker={[school.city, school.stateCode].filter(Boolean).join(', ')}
+      title={school.name}
+      label={`Edit ${school.name}`}
+      footer={
+        <>
+          <button
+            type="button"
+            disabled={saving || loading || !dirty}
+            onClick={onSave}
+          >
+            {saving ? 'Saving…' : 'Save school'}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={saving}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </>
+      }
+    >
+      {loading ? (
+        <p className="muted">Loading school…</p>
+      ) : (
+        <div className="discover-edit">
+          {error && <div className="error">{error}</div>}
+
+          <div className="field field--wide">
+            <label htmlFor="school-mascot">Mascot</label>
+            <input
+              id="school-mascot"
+              value={mascot}
+              maxLength={60}
+              placeholder="e.g. Tar Heels"
+              disabled={saving}
+              onChange={(e) => setMascot(e.target.value)}
+            />
+            <span className="game-hint">
+              The import doesn’t carry mascots — this is where they come from.
+              Clear the field to remove it.
+            </span>
+          </div>
+
+          <div className="field field--wide">
+            <label htmlFor="school-website">Website</label>
+            <input
+              id="school-website"
+              type="url"
+              value={website}
+              placeholder="https://example.edu"
+              disabled={saving}
+              onChange={(e) => setWebsite(e.target.value)}
+            />
+            <span className="game-hint">
+              Full URL including https://. Clear the field to remove it.
+            </span>
+          </div>
+
+          {/* The same switch as the row button, in the place an admin is
+              already standing when they finish the backfill. */}
+          <div className="field field--wide">
+            <label>Coverage</label>
+            <label className="discover-toggle discover-edit__toggle">
+              <input
+                type="checkbox"
+                checked={isActive}
+                disabled={saving}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              Covered
+            </label>
+            <span className="game-hint">
+              Covered schools appear in the Add Game picker and lose the “Not yet
+              covered” pill. Turning this off only hides the school from covered
+              views — its teams, games, and assignments are untouched.
+            </span>
+          </div>
+        </div>
+      )}
+    </SlideOver>
   );
 }
 
@@ -221,6 +460,9 @@ function Discover() {
   const params = useSearchParams();
   const { token, user } = useAuth();
   const allowed = canAccess(user?.roles ?? [], '/discover');
+  // The admin-mode gate. Everything it unlocks is additive — for every other
+  // role this page renders exactly as it did before.
+  const isAdmin = (user?.roles ?? []).includes('admin');
 
   // The URL seeds the filters once, on mount; from there the page owns them and
   // mirrors back (see the sync effect). Reading them live instead would make
@@ -249,6 +491,15 @@ function Discover() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Admin mode state (inert for every other role) ----
+  // Rows with a PATCH in flight, keyed by id: the button disables and a second
+  // click can't race the first.
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
+  // A failed activation reports here rather than through `error`, which would
+  // blank the results the failed row is sitting in.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<InstitutionSummary | null>(null);
 
   // Debounce the text box so typing doesn't fire a request per keystroke. A
   // 1-char term is dropped rather than sent: the backend would ignore it and
@@ -396,6 +647,93 @@ function Discover() {
     setConference(null);
   }
 
+  // ---- Activation (admin) ------------------------------------------------
+  // Both toggles are optimistic: the pill flips on click and the PATCH catches
+  // up. A failure puts the row back exactly as it was (the captured row object)
+  // and says so — a silent revert would read as a click that didn't land.
+  //
+  // Neither toggle re-runs the query. A deactivated row under "Covered only"
+  // stays on screen until the next fetch on purpose: yanking the row out from
+  // under the cursor mid-sweep is worse than one stale row.
+  const setBusy = useCallback((id: string, busy: boolean) => {
+    setBusyIds((prev) => {
+      if (busy) return { ...prev, [id]: true };
+      const { [id]: _drop, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  const toggleSchool = useCallback(
+    async (school: InstitutionSummary) => {
+      if (!token || busyIds[school.id]) return;
+      const next = !school.isActive;
+      setBusy(school.id, true);
+      setActionError(null);
+      setSchools((prev) =>
+        prev.map((s) => (s.id === school.id ? { ...s, isActive: next } : s)));
+      try {
+        await updateInstitution(token, school.id, { isActive: next });
+      } catch (err) {
+        setSchools((prev) => prev.map((s) => (s.id === school.id ? school : s)));
+        setActionError(
+          err instanceof Error
+            ? `${school.name}: ${err.message}`
+            : `Failed to update ${school.name}`,
+        );
+      } finally {
+        setBusy(school.id, false);
+      }
+    },
+    [token, busyIds, setBusy],
+  );
+
+  const toggleTeam = useCallback(
+    async (team: TeamSearchResult) => {
+      if (!token || busyIds[team.id]) return;
+      const next = !team.isActive;
+      const school = team.institution;
+      setBusy(team.id, true);
+      setActionError(null);
+      // Activating a team activates its school server-side — a covered team
+      // implies a covered school — so the optimistic patch mirrors both. The
+      // rule is unconditional, so there's no response flag to wait on.
+      setTeams((prev) =>
+        prev.map((t) => (t.id === team.id
+          ? {
+            ...t,
+            isActive: next,
+            institution: next && t.institution
+              ? { ...t.institution, isActive: true }
+              : t.institution,
+          }
+          : t)));
+      try {
+        await updateTeam(token, team.id, { isActive: next });
+        // The school that just came along is also a row on the Schools tab, and
+        // the school cell of every other loaded team it fields. Patch both so
+        // switching tabs doesn't show a stale "Not yet covered".
+        if (next && school) {
+          setSchools((prev) =>
+            prev.map((s) => (s.id === school.id ? { ...s, isActive: true } : s)));
+          setTeams((prev) =>
+            prev.map((t) => (t.institution && t.institution.id === school.id
+              ? { ...t, institution: { ...t.institution, isActive: true } }
+              : t)));
+        }
+      } catch (err) {
+        setTeams((prev) => prev.map((t) => (t.id === team.id ? team : t)));
+        setActionError(
+          err instanceof Error
+            ? `${team.name}: ${err.message}`
+            : `Failed to update ${team.name}`,
+        );
+      } finally {
+        setBusy(team.id, false);
+      }
+    },
+    [token, busyIds, setBusy],
+  );
+
   const schoolColumns: Column<InstitutionSummary>[] = useMemo(
     () => [
       { key: 'name', header: 'School', cell: (s) => s.name },
@@ -416,8 +754,24 @@ function Discover() {
         header: 'Status',
         cell: (s) => <CoveragePill active={s.isActive} />,
       },
+      // Admin only — the column doesn't exist for anyone else.
+      ...(isAdmin
+        ? [{
+          key: 'admin',
+          header: '',
+          cell: (s: InstitutionSummary) => (
+            <RowActions
+              name={s.name}
+              active={s.isActive}
+              busy={Boolean(busyIds[s.id])}
+              onToggle={() => toggleSchool(s)}
+              onEdit={() => setEditing(s)}
+            />
+          ),
+        }]
+        : []),
     ],
-    [],
+    [isAdmin, busyIds, toggleSchool],
   );
 
   const teamColumns: Column<TeamSearchResult>[] = useMemo(
@@ -436,7 +790,24 @@ function Discover() {
           </>
         ),
       },
-      { key: 'school', header: 'School', cell: (t) => t.institution?.name ?? '—' },
+      {
+        key: 'school',
+        header: 'School',
+        cell: (t) => {
+          if (!t.institution) return '—';
+          return (
+            <>
+              {t.institution.name}
+              {/* Admin only: the SCHOOL's coverage, which is not the team's.
+                  It's here because activating a team drags its school active —
+                  this line is what disappears when that happens. */}
+              {isAdmin && !t.institution.isActive && (
+                <span className="discover-cell__sub">Not yet covered</span>
+              )}
+            </>
+          );
+        },
+      },
       { key: 'sport', header: 'Sport', cell: (t) => t.sport },
       { key: 'division', header: 'Division', cell: (t) => t.division ?? '—' },
       {
@@ -449,8 +820,24 @@ function Discover() {
         header: 'Status',
         cell: (t) => <CoveragePill active={t.isActive} />,
       },
+      // Admin only. No Edit here: a team's only editable surface is its social
+      // links, which already has its stand-in on the team page.
+      ...(isAdmin
+        ? [{
+          key: 'admin',
+          header: '',
+          cell: (t: TeamSearchResult) => (
+            <RowActions
+              name={t.name}
+              active={t.isActive}
+              busy={Boolean(busyIds[t.id])}
+              onToggle={() => toggleTeam(t)}
+            />
+          ),
+        }]
+        : []),
     ],
-    [],
+    [isAdmin, busyIds, toggleTeam],
   );
 
   if (!token) return null;
@@ -614,6 +1001,9 @@ function Discover() {
       </div>
 
       {error && <div className="error">{error}</div>}
+      {/* A failed activation — kept separate from `error` so the row it came
+          from stays on screen. */}
+      {actionError && <div className="error">{actionError}</div>}
 
       {/* Only blank the results when there's nothing to keep: a refiltered
           search dims the rows it already has instead of flashing them out and
@@ -674,6 +1064,27 @@ function Discover() {
             />
           )}
         </div>
+      )}
+
+      {/* The school backfill panel. Mounting it opens it; a save patches the
+          loaded rows in place rather than refetching the page the admin is
+          working through. */}
+      {editing && (
+        <SchoolEditPanel
+          token={token}
+          school={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(row) => {
+            setSchools((prev) =>
+              prev.map((s) => (s.id === row.id ? { ...s, isActive: row.isActive } : s)));
+            // The same school is the school cell of any loaded team row.
+            setTeams((prev) =>
+              prev.map((t) => (t.institution && t.institution.id === row.id
+                ? { ...t, institution: { ...t.institution, isActive: row.isActive } }
+                : t)));
+            setEditing(null);
+          }}
+        />
       )}
     </main>
   );

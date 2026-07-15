@@ -853,6 +853,11 @@ export const getTeam = (token: string, id: string) =>
 // and for the ~5.5k imported teams whose conference the import never resolved.
 // gender is 'mens' | 'womens' | 'coed', null on hand-made rows; division is the
 // per-team 'Division I' etc.
+//
+// institution.isActive is the SCHOOL's coverage, not the team's — the two are
+// independent (a covered school fields sports we don't cover). Activating a team
+// does drag its school active with it; /discover's admin mode reads this to show
+// that.
 export interface TeamSearchResult {
   id: string;
   name: string;
@@ -867,9 +872,29 @@ export interface TeamSearchResult {
     name: string;
     stateCode: string | null;
     tier: InstitutionTier | null;
+    isActive: boolean;
   } | null;
   conference: { id: string; name: string } | null;
 }
+
+// The bare teams row returned by PATCH /teams/:id (`.returning()`). Only what
+// the admin surface reads back is typed here.
+export interface UpdatedTeam {
+  id: string;
+  name: string;
+  isActive: boolean;
+  socialLinks: SocialLinks | null;
+}
+
+// Admin-only team edit. isActive is the activation switch; socialLinks merges
+// ('' removes a platform). Sending isActive: true ALSO activates the team's
+// school server-side — a covered team implies a covered school — so a caller
+// showing school coverage should reflect that without needing a flag back.
+export const updateTeam = (
+  token: string,
+  id: string,
+  input: { isActive?: boolean; socialLinks?: SocialLinks },
+) => authPatch<UpdatedTeam>(`/teams/${encodeURIComponent(id)}`, token, input);
 
 // GET /teams filters. activeOnly defaults TRUE on the backend and every caller
 // keeps it explicit: the college import left ~25.8k teams inactive, so the
@@ -961,6 +986,38 @@ export interface InstitutionDetail {
 
 export const getInstitution = (token: string, id: string) =>
   authGet<InstitutionDetail>(`/institutions/${encodeURIComponent(id)}`, token);
+
+// The bare institutions row returned by PATCH /institutions/:id (`.returning()`).
+// Only the fields the admin surface reads back are typed here.
+export interface UpdatedInstitution {
+  id: string;
+  name: string;
+  city: string | null;
+  stateCode: string | null;
+  tier: InstitutionTier;
+  mascot: string | null;
+  website: string | null;
+  isActive: boolean;
+}
+
+// Admin-only school edit. isActive is the activation switch — flipping it true
+// is what puts the school into the covered map (the Add Game picker, "Covered
+// only"). mascot/website are the backfill that rides along with activation: the
+// EADA import carries neither. Send '' for either to clear it back to null; omit
+// a field to leave it untouched. An empty body is a 400.
+//
+// Activation does not cascade in either direction: it never touches the school's
+// teams (activate those one at a time), and deactivating only hides the school
+// from activeOnly reads — in-flight games and assignments are untouched.
+export const updateInstitution = (
+  token: string,
+  id: string,
+  input: { isActive?: boolean; mascot?: string; website?: string },
+) => authPatch<UpdatedInstitution>(
+  `/institutions/${encodeURIComponent(id)}`,
+  token,
+  input,
+);
 
 // School directory. A search under 2 chars is ignored server-side; limit is
 // capped at 100 (default 25) and offset pages through the rest. Returns
