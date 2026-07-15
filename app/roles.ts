@@ -37,6 +37,15 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Discover',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // The schedule: every upcoming and live game, filterable. Open to everyone —
+  // it's the "what can I watch tonight?" surface. Sits between Discover (browse
+  // the map) and My games (the games you work), which is the honest reading of
+  // it: another fan browse, one row above its staff-only namesake.
+  {
+    href: '/games',
+    label: 'Games',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
   {
     href: '/my-games',
     label: 'My games',
@@ -131,13 +140,26 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p === '/my-sales',
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
+  // The schedule (/games) — every game, filterable, nav-reached by every role.
+  // Must come before the /games/ rule below: that one is a startsWith and would
+  // not match the bare path anyway, but keeping the exact match first means the
+  // two never depend on each other's ordering.
+  {
+    match: (p) => p === '/games',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
   // The fan-facing game page is open to every authenticated role -- a viewer
   // reaches it by clicking any game card on the feed or search results. Listed
   // explicitly (rather than relying on the open-by-default fallback) so the
   // intent is legible alongside the staff-gated pages above.
+  //
+  // athlete was missing here while the comment above claimed "every
+  // authenticated role", so an athlete clicking a game card on the feed (a page
+  // they can reach) hit AccessDenied. /games makes that reachable from the nav
+  // too, so the gap is fixed rather than widened.
   {
     match: (p) => p.startsWith('/games/'),
-    roles: ['admin', 'regional_manager', 'field_rep', 'viewer'],
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
   // The public athlete profile (/athletes/:id) is open to every authenticated
   // role incl. viewer/fans -- reached by name links from the NIL review queue,

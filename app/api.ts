@@ -677,12 +677,57 @@ export const getPublishedContent = (token: string) =>
   authGet<FeedItem[]>('/content?status=published', token);
 
 // Events for the browsable feed, e.g. GET /events?status=scheduled (Upcoming
-// Games). Any authenticated user can list; backend orders soonest-first.
-export const getEvents = (token: string, status?: string) =>
-  authGet<EventListItem[]>(
+// Games). Any authenticated user can list.
+//
+// GET /events returns { items, total } like the other paged reads; this wrapper
+// unwraps to the bare array its callers have always taken, which is why adding
+// paging to the endpoint didn't touch the feed, search, My Games, or the pickers.
+// It deliberately sends NO limit -- the backend then returns every matching row,
+// which those callers need (My Games joins /assignments/mine against the full
+// set by event id; a page-capped list would silently lose games). A browse
+// surface that wants a page and a count uses getGames() below.
+export const getEvents = async (
+  token: string,
+  status?: string,
+): Promise<EventListItem[]> => {
+  const page = await authGet<Page<EventListItem>>(
     `/events${status ? `?status=${encodeURIComponent(status)}` : ''}`,
     token,
   );
+  return page.items;
+};
+
+// GET /events filters, as /games drives them. status is comma-separable
+// ('scheduled,live' for Upcoming, 'final' for Results); state matches the HOME
+// team's institution; dateFrom/dateTo are ISO and compare against scheduledAt;
+// teamId matches either side of the matchup. Backend order is live first, then
+// scheduled soonest-first, then finals most-recent-first.
+export interface GameFilters {
+  status?: string;
+  sport?: string;
+  state?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  teamId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// The paged schedule read behind /games -- same endpoint as getEvents, kept
+// separate because this one wants the { items, total } envelope for "X of Y".
+export const getGames = (token: string, params: GameFilters = {}) => {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set('status', params.status);
+  if (params.sport) qs.set('sport', params.sport);
+  if (params.state) qs.set('state', params.state);
+  if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
+  if (params.dateTo) qs.set('dateTo', params.dateTo);
+  if (params.teamId) qs.set('teamId', params.teamId);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
+  const s = qs.toString();
+  return authGet<Page<EventListItem>>(`/events${s ? `?${s}` : ''}`, token);
+};
 
 // Any content already attached to a game. With no status filter (the default) a
 // staff caller gets every status, so a rep can find/edit an existing draft on

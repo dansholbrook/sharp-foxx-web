@@ -6418,3 +6418,100 @@ a.follow-sugcard__name:hover {
 .discover-results--busy {
   opacity: 0.45;
 }
+
+/* ============================================================================
+   Games (/games) — the schedule: every upcoming, live, and finished game.
+   A fan surface, so results are the shared .tcard game cards in a .results-grid
+   rather than /discover's table. Reuses the feed shell, the .chip filter
+   language, .result-count / .results-empty, and .queue-more for paging; scoped
+   under .gamesdir-*. (The name keeps its distance from the older .game-* rules
+   the single-game page owns.) Only the tab strip and the filter bar are new,
+   and both mirror /discover's so the two browse surfaces read as siblings.
+   ============================================================================ */
+.gamesdir-page {
+  max-width: 1080px;
+}
+
+/* ---- Tabs: the same chips as the filters, one size up ---- */
+.gamesdir-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0 18px;
+}
+.gamesdir-tabs .chip {
+  padding: 8px 20px;
+  font-size: 0.82rem;
+  letter-spacing: var(--tracking);
+}
+
+/* ---- Filter bar: one row (sport, state, date window) ---- */
+.gamesdir-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+  padding: 16px;
+  margin-bottom: 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.gamesdir-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+}
+.gamesdir-field label {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gamesdir-input {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+}
+.gamesdir-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The date chips sit on the filter bar's baseline next to the two selects,
+   which are label + control tall. */
+.gamesdir-filters .filter-row {
+  align-items: center;
+  padding-bottom: 2px;
+}
+
+/* The fallback header when there's nothing upcoming and we're showing recent
+   finals instead. Sits tighter to the empty-state copy above it than a feed row
+   title would, since the two are one thought. */
+.gamesdir-fallback-title {
+  margin-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .gamesdir-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Refiltering keeps the current cards on screen and dims them rather than
+   flashing the grid out. pointer-events stay live: they're still real results
+   until the new page lands. */
+.gamesdir-results {
+  transition: opacity 120ms ease;
+}
+.gamesdir-results--busy {
+  opacity: 0.45;
+}
