@@ -799,36 +799,69 @@ export const getTeam = (token: string, id: string) =>
   authGet<TeamDetail>(`/teams/${encodeURIComponent(id)}`, token);
 
 // ---------------------------------------------------------------------------
-// Team picker search (GET /teams?search=&activeOnly=&limit=)
+// The team directory (GET /teams) — the Add Game type-ahead and /discover
 // ---------------------------------------------------------------------------
 
-// A search hit for the Add Game type-ahead. Richer than the lean Team row: it
-// carries isActive and the joined school so results can be disambiguated
-// ("Tigers" — Clemson University (SC)). institution is null for pro teams.
+// A directory row. Richer than the lean Team row: it carries isActive and the
+// joined school so results can be disambiguated ("Tigers" — Clemson University
+// (SC)). institution is null for pro teams; conference is null for pro teams
+// and for the ~5.5k imported teams whose conference the import never resolved.
+// gender is 'mens' | 'womens' | 'coed', null on hand-made rows; division is the
+// per-team 'Division I' etc.
 export interface TeamSearchResult {
   id: string;
   name: string;
   sport: string;
+  gender: string | null;
+  division: string | null;
   level: string;
   league: string | null;
   isActive: boolean;
-  institution: { id: string; name: string; stateCode: string | null } | null;
+  institution: {
+    id: string;
+    name: string;
+    stateCode: string | null;
+    tier: InstitutionTier | null;
+  } | null;
+  conference: { id: string; name: string } | null;
 }
 
-// Type-ahead search for the Add Game pickers. activeOnly defaults TRUE on the
-// backend and we keep it explicit here: the college import left ~25.8k teams
-// inactive and the picker must not drown in them. A search under 2 chars is
-// ignored server-side, so callers should avoid firing until 2.
-export const searchTeams = (
-  token: string,
-  params: { search?: string; sport?: string; activeOnly?: boolean; limit?: number },
-) => {
+// GET /teams filters. activeOnly defaults TRUE on the backend and every caller
+// keeps it explicit: the college import left ~25.8k teams inactive, so the
+// picker pins it true while /discover pins it false. A search under 2 chars is
+// ignored server-side, so callers should avoid firing until 2. state/tier
+// filter through the school join; conferenceId sits on the team itself.
+export interface TeamSearchParams {
+  search?: string;
+  sport?: string;
+  gender?: string;
+  conferenceId?: string;
+  state?: string;
+  tier?: InstitutionTier;
+  activeOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+// Paged directory reads return the filtered `total` alongside the page, so a
+// browse UI can render "Showing 25 of 3,412" without a second count call.
+export interface Page<T> {
+  items: T[];
+  total: number;
+}
+
+export const searchTeams = (token: string, params: TeamSearchParams) => {
   const qs = new URLSearchParams();
   if (params.search) qs.set('search', params.search);
   if (params.sport) qs.set('sport', params.sport);
+  if (params.gender) qs.set('gender', params.gender);
+  if (params.conferenceId) qs.set('conferenceId', params.conferenceId);
+  if (params.state) qs.set('state', params.state);
+  if (params.tier) qs.set('tier', params.tier);
   if (params.activeOnly !== undefined) qs.set('activeOnly', String(params.activeOnly));
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
-  return authGet<TeamSearchResult[]>(`/teams?${qs.toString()}`, token);
+  if (params.offset) qs.set('offset', String(params.offset));
+  return authGet<Page<TeamSearchResult>>(`/teams?${qs.toString()}`, token);
 };
 
 // ---------------------------------------------------------------------------
@@ -885,18 +918,30 @@ export const getInstitution = (token: string, id: string) =>
   authGet<InstitutionDetail>(`/institutions/${encodeURIComponent(id)}`, token);
 
 // School directory. A search under 2 chars is ignored server-side; limit is
-// capped at 100 (default 25).
+// capped at 100 (default 25) and offset pages through the rest. Returns
+// { items, total } — total counts the whole filtered set, not the page.
+// activeOnly defaults FALSE here (the opposite of GET /teams): nearly every
+// imported school is inactive, so a school browse must show them by default.
 export const getInstitutions = (
   token: string,
-  params: { search?: string; state?: string; tier?: InstitutionTier; limit?: number } = {},
+  params: {
+    search?: string;
+    state?: string;
+    tier?: InstitutionTier;
+    activeOnly?: boolean;
+    limit?: number;
+    offset?: number;
+  } = {},
 ) => {
   const qs = new URLSearchParams();
   if (params.search) qs.set('search', params.search);
   if (params.state) qs.set('state', params.state);
   if (params.tier) qs.set('tier', params.tier);
+  if (params.activeOnly !== undefined) qs.set('activeOnly', String(params.activeOnly));
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
   const q = qs.toString();
-  return authGet<InstitutionSummary[]>(`/institutions${q ? `?${q}` : ''}`, token);
+  return authGet<Page<InstitutionSummary>>(`/institutions${q ? `?${q}` : ''}`, token);
 };
 
 // A directory row from GET /conferences. tier is nullable and is in practice

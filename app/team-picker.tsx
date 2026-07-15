@@ -89,14 +89,16 @@ export function TeamPicker({
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const list = await searchTeams(token, {
+        // The directory is paged ({ items, total }); a type-ahead only ever
+        // wants the first page, so the count is discarded.
+        const page = await searchTeams(token, {
           search: term,
           sport,
           activeOnly: true,
           limit: RESULT_LIMIT,
         });
         if (!cancelled) {
-          setResults(list);
+          setResults(page.items);
           setError(null);
           setActiveIndex(-1);
         }

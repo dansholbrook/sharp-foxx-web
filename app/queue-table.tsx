@@ -99,9 +99,13 @@ export function SlideOver({
 // onRowActivate is given, navigates instead -- used by pages that already have
 // a full detail route (My Games' workspace, the rep drill-down) so a row reads
 // as a link rather than a dialog trigger. Built-in client-side pagination shows
-// `pageSize` rows and appends `pageSize` more on "Show more" (the queue APIs
-// return full lists today; if a queue ever grows past a few hundred rows this
-// should move to server pagination).
+// `pageSize` rows and appends `pageSize` more on "Show more" -- fine for the
+// queue APIs, which return full lists of at most a few hundred rows.
+//
+// Server-paged callers (/discover walks 2k schools / 25.8k teams) pass
+// totalCount + onShowMore instead: `rows` is then the whole loaded set, every
+// row renders, and "Show more" asks the page to fetch the next offset and
+// append. Same footer either way, so both modes read identically.
 
 export interface Column<T> {
   key: string;
@@ -120,6 +124,9 @@ export function QueueTable<T>({
   pageSize = 15,
   resetKey,
   ariaLabel,
+  totalCount,
+  onShowMore,
+  loadingMore = false,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -134,10 +141,21 @@ export function QueueTable<T>({
   onRowActivate?: (item: T) => void;
   pageSize?: number;
   // Change this (e.g. the active status filter) to re-page back to the first
-  // page; leave undefined for a single unfiltered list.
+  // page; leave undefined for a single unfiltered list. Ignored in server-paged
+  // mode, where the page owns what's loaded.
   resetKey?: unknown;
   ariaLabel?: string;
+  // ---- Server-paged mode (opt-in): pass both. ----
+  // The size of the whole filtered set on the server, not of `rows` -- it's the
+  // Y in "Showing X of Y" and decides whether "Show more" appears at all.
+  totalCount?: number;
+  // Fetch + append the next page. Its presence is what switches off the
+  // client-side pager: every row in `rows` renders.
+  onShowMore?: () => void;
+  // Disables the button and shows progress while that fetch is in flight.
+  loadingMore?: boolean;
 }) {
+  const serverPaged = Boolean(onShowMore);
   const [visible, setVisible] = useState(pageSize);
   const [selected, setSelected] = useState<T | null>(null);
   // The <tr> for each rendered row, so focus can return to it on close.
@@ -165,8 +183,11 @@ export function QueueTable<T>({
     }
   }, []);
 
-  const shown = rows.slice(0, visible);
+  // Server-paged: `rows` is already exactly what's been fetched, so show it all.
+  const shown = serverPaged ? rows : rows.slice(0, visible);
   const selectedKey = selected ? rowKey(selected) : null;
+  const total = serverPaged ? totalCount ?? rows.length : rows.length;
+  const hasMore = shown.length < total;
 
   return (
     <>
@@ -221,17 +242,20 @@ export function QueueTable<T>({
         </table>
       </div>
 
-      {rows.length > visible && (
+      {hasMore && (
         <div className="queue-more">
           <button
             type="button"
             className="btn-ghost"
-            onClick={() => setVisible((v) => v + pageSize)}
+            disabled={loadingMore}
+            onClick={
+              onShowMore ?? (() => setVisible((v) => v + pageSize))
+            }
           >
-            Show more
+            {loadingMore ? 'Loading…' : 'Show more'}
           </button>
           <span className="muted queue-more__note">
-            Showing {shown.length} of {rows.length}
+            Showing {shown.length} of {total.toLocaleString()}
           </span>
         </div>
       )}

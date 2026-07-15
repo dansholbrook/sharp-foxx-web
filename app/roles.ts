@@ -28,6 +28,15 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Feed',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // The college map (2k schools / 25.8k teams), open to everyone: a fan browses
+  // for their school, staff plan territory over the rows we don't cover yet.
+  // Sits next to Feed because it's the other "look around" surface -- both are
+  // browse, not work.
+  {
+    href: '/discover',
+    label: 'Discover',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
   {
     href: '/my-games',
     label: 'My games',
@@ -160,6 +169,15 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   },
   {
     match: (p) => p.startsWith('/conferences/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
+  // The browse surface over the whole college map, feeding the school and team
+  // hubs above. Open to every authenticated role, same as its destinations and
+  // the backend GET /institutions and GET /teams it reads. Listed explicitly
+  // rather than left to the open-by-default fallback: it's the rare all-roles
+  // page that IS nav-reached, so the intent should be legible here.
+  {
+    match: (p) => p === '/discover',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
 ];
