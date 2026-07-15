@@ -353,9 +353,10 @@ export interface UpdateContentInput {
   body?: string;
 }
 
-// A teams row as returned by GET /teams?sport=<sport> (teams.service.ts),
-// ordered by name. level is the backend enum ('pro' | 'college' |
-// 'high_school'); league is nullable (optional on create).
+// The bare teams row returned by POST /teams (the inline "new team" creator in
+// the Add Game form). level is the backend enum ('pro' | 'college' |
+// 'high_school'); league is nullable (optional on create). Reading a list of
+// teams goes through searchTeams -> TeamSearchResult, which is richer.
 export interface Team {
   id: string;
   name: string;
@@ -767,10 +768,6 @@ export const getReviewQueue = (token: string) =>
 export const returnContent = (token: string, id: string, input: ReturnContentInput) =>
   authPost<ContentItem>(`/content/${id}/return`, token, input);
 
-// Teams for a sport, name-ordered, to populate the Add Game team dropdowns.
-export const getTeams = (token: string, sport: string) =>
-  authGet<Team[]>(`/teams?sport=${encodeURIComponent(sport)}`, token);
-
 // GET /teams/:id -- a single team for the team hub page (/teams/[id]). Open to
 // every authenticated role incl. viewer. institution resolves via a null-safe
 // join server-side (pro teams have none). A bad id is a 404 -> "404 Team not
@@ -792,10 +789,161 @@ export interface TeamDetail {
   level: string;
   socialLinks: SocialLinks;
   institution: { id: string; name: string } | null;
+  // Null for pro teams (no institution) and for imported college teams whose
+  // EADA row carried no conference. The conference hangs off the TEAM, not the
+  // school: a school sits in different conferences per sport.
+  conference: { id: string; name: string } | null;
 }
 
 export const getTeam = (token: string, id: string) =>
   authGet<TeamDetail>(`/teams/${encodeURIComponent(id)}`, token);
+
+// ---------------------------------------------------------------------------
+// Team picker search (GET /teams?search=&activeOnly=&limit=)
+// ---------------------------------------------------------------------------
+
+// A search hit for the Add Game type-ahead. Richer than the lean Team row: it
+// carries isActive and the joined school so results can be disambiguated
+// ("Tigers" — Clemson University (SC)). institution is null for pro teams.
+export interface TeamSearchResult {
+  id: string;
+  name: string;
+  sport: string;
+  level: string;
+  league: string | null;
+  isActive: boolean;
+  institution: { id: string; name: string; stateCode: string | null } | null;
+}
+
+// Type-ahead search for the Add Game pickers. activeOnly defaults TRUE on the
+// backend and we keep it explicit here: the college import left ~25.8k teams
+// inactive and the picker must not drown in them. A search under 2 chars is
+// ignored server-side, so callers should avoid firing until 2.
+export const searchTeams = (
+  token: string,
+  params: { search?: string; sport?: string; activeOnly?: boolean; limit?: number },
+) => {
+  const qs = new URLSearchParams();
+  if (params.search) qs.set('search', params.search);
+  if (params.sport) qs.set('sport', params.sport);
+  if (params.activeOnly !== undefined) qs.set('activeOnly', String(params.activeOnly));
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  return authGet<TeamSearchResult[]>(`/teams?${qs.toString()}`, token);
+};
+
+// ---------------------------------------------------------------------------
+// The school / conference graph (/schools/[id], /conferences/[id])
+// ---------------------------------------------------------------------------
+
+// institution_tier, straight off the backend enum. 'unclassified' is what the
+// college import assigns an NCAA school with a missing/odd division.
+export type InstitutionTier =
+  | 'ncaa_d1' | 'ncaa_d2' | 'ncaa_d3' | 'naia' | 'juco' | 'high_school'
+  | 'unclassified';
+
+// A directory row from GET /institutions. Ordered active-first then name: the
+// handful of schools we actually cover float above the ~2k imported ones.
+export interface InstitutionSummary {
+  id: string;
+  name: string;
+  city: string | null;
+  stateCode: string | null;
+  tier: InstitutionTier;
+  isActive: boolean;
+  teamCount: number;
+}
+
+// One team on a school page. conference is null when the imported row carried
+// none; division is the per-team 'Division I' etc. (the school's tier is the
+// summary of those). gender is 'mens' | 'womens' | 'coed', null on hand-made rows.
+export interface InstitutionTeam {
+  id: string;
+  name: string;
+  sport: string;
+  gender: string | null;
+  division: string | null;
+  isActive: boolean;
+  conference: { id: string; name: string } | null;
+}
+
+// GET /institutions/:id -- identity + every team, ordered sport then gender.
+// isActive is false for every imported school: the row exists so the graph
+// resolves, but we don't cover it yet. mascot is null until an AD backfills it.
+export interface InstitutionDetail {
+  id: string;
+  name: string;
+  city: string | null;
+  stateCode: string | null;
+  website: string | null;
+  mascot: string | null;
+  tier: InstitutionTier;
+  isActive: boolean;
+  teams: InstitutionTeam[];
+}
+
+export const getInstitution = (token: string, id: string) =>
+  authGet<InstitutionDetail>(`/institutions/${encodeURIComponent(id)}`, token);
+
+// School directory. A search under 2 chars is ignored server-side; limit is
+// capped at 100 (default 25).
+export const getInstitutions = (
+  token: string,
+  params: { search?: string; state?: string; tier?: InstitutionTier; limit?: number } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (params.search) qs.set('search', params.search);
+  if (params.state) qs.set('state', params.state);
+  if (params.tier) qs.set('tier', params.tier);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  const q = qs.toString();
+  return authGet<InstitutionSummary[]>(`/institutions${q ? `?${q}` : ''}`, token);
+};
+
+// A directory row from GET /conferences. tier is nullable and is in practice
+// NULL for all 146 imported conferences -- the import hangs the conference off
+// the team and never sets a conference tier. Callers must hide the badge when
+// it's absent rather than render an empty pill.
+export interface ConferenceSummary {
+  id: string;
+  name: string;
+  tier: InstitutionTier | null;
+  memberCount: number;
+}
+
+// A member row on a conference page: a TEAM, joined to its school. institution
+// is null only if a team somehow carries a conference but no school (a data bug
+// -- the join is null-safe so one bad row can't blank the page).
+export interface ConferenceMember {
+  teamId: string;
+  teamName: string;
+  sport: string;
+  gender: string | null;
+  division: string | null;
+  isActive: boolean;
+  institution: { id: string; name: string; stateCode: string | null } | null;
+}
+
+// GET /conferences/:id -- identity + members, ordered institution name then sport.
+export interface ConferenceDetail {
+  id: string;
+  name: string;
+  tier: InstitutionTier | null;
+  members: ConferenceMember[];
+}
+
+export const getConference = (token: string, id: string) =>
+  authGet<ConferenceDetail>(`/conferences/${encodeURIComponent(id)}`, token);
+
+export const getConferences = (
+  token: string,
+  params: { search?: string; limit?: number } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (params.search) qs.set('search', params.search);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  const q = qs.toString();
+  return authGet<ConferenceSummary[]>(`/conferences${q ? `?${q}` : ''}`, token);
+};
 
 // A roster row as returned by GET /athletes?teamId= (athletes.service.ts
 // listByTeam). name is composed server-side (first + last); position/classYear/

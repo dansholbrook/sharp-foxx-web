@@ -149,6 +149,19 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p.startsWith('/teams/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // The school and conference hubs — the front doors onto the imported college
+  // dataset. Same all-roles gate as the team/athlete pages they link between,
+  // matching the backend GET /institutions/:id and GET /conferences/:id. NO nav
+  // items; both are link-reached (from a team hero, an athlete affiliation, or
+  // each other).
+  {
+    match: (p) => p.startsWith('/schools/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
+  {
+    match: (p) => p.startsWith('/conferences/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
 ];
 
 export function canAccess(roles: string[], pathname: string): boolean {

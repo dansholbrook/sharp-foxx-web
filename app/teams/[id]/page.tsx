@@ -440,15 +440,28 @@ export default function TeamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, photoSourceKey]);
 
-  // "Sport · Level · Institution" for the hero affiliation line.
+  // "Sport · Level · Institution · Conference" for the hero affiliation line.
+  // The institution and conference segments link into the school graph; the
+  // rest stay plain text (same {label, href?} shape the athlete profile uses).
   const affiliation = useMemo(() => {
-    if (!team) return [] as string[];
-    const level = team.level ? team.level.replace(/_/g, ' ') : '';
-    return [
-      titleCase(team.sport),
-      level ? titleCase(level) : '',
-      team.institution?.name ?? '',
-    ].filter(Boolean);
+    if (!team) return [] as Array<{ label: string; href?: string }>;
+    const parts: Array<{ label: string; href?: string }> = [];
+    parts.push({ label: titleCase(team.sport) });
+    if (team.level) parts.push({ label: titleCase(team.level.replace(/_/g, ' ')) });
+    if (team.institution) {
+      parts.push({
+        label: team.institution.name,
+        href: `/schools/${team.institution.id}`,
+      });
+    }
+    // Null for pro teams and for imported teams whose row carried no conference.
+    if (team.conference) {
+      parts.push({
+        label: `Conference: ${team.conference.name}`,
+        href: `/conferences/${team.conference.id}`,
+      });
+    }
+    return parts;
   }, [team]);
 
   // A mine-shaped entry for the hero Follow button — identifies this team and
@@ -515,11 +528,21 @@ export default function TeamPage() {
               <h1 className="team-name">{team.name}</h1>
               {affiliation.length > 0 && (
                 <p className="team-affil">
-                  {affiliation.map((seg, i) => (
-                    <span key={i} className="team-affil__seg">
-                      {seg}
-                    </span>
-                  ))}
+                  {affiliation.map((seg, i) =>
+                    seg.href ? (
+                      <Link
+                        key={i}
+                        href={seg.href}
+                        className="team-affil__seg team-affil__seg--link"
+                      >
+                        {seg.label}
+                      </Link>
+                    ) : (
+                      <span key={i} className="team-affil__seg">
+                        {seg.label}
+                      </span>
+                    ),
+                  )}
                 </p>
               )}
               {/* Social links — present platforms only; hidden when empty. */}

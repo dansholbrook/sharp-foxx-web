@@ -539,8 +539,8 @@ export default function AthletePage() {
     return parts.join(' · ');
   }, [identity]);
 
-  // "Team · Sport · Institution" — the team segment links to its hub page; the
-  // rest stay plain text.
+  // "Team · Sport · Institution" — the team and institution segments link into
+  // their hub pages; the rest stay plain text.
   const affiliation = useMemo(() => {
     if (!identity) return [] as Array<{ label: string; href?: string }>;
     const parts: Array<{ label: string; href?: string }> = [];
@@ -548,7 +548,12 @@ export default function AthletePage() {
       parts.push({ label: identity.team.name, href: `/teams/${identity.team.id}` });
     }
     if (identity.team?.sport) parts.push({ label: titleCase(identity.team.sport) });
-    if (identity.institution?.name) parts.push({ label: identity.institution.name });
+    if (identity.institution?.name) {
+      parts.push({
+        label: identity.institution.name,
+        href: `/schools/${identity.institution.id}`,
+      });
+    }
     return parts;
   }, [identity]);
 

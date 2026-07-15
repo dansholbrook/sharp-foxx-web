@@ -6,15 +6,14 @@
 // the game so it appears in their list, then hands control back via onCreated.
 // For managers/admins it just confirms success and clears the form.
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
-  getTeams,
   createTeam,
   createEvent,
   createAssignment,
-  Team,
   CreateEventInput,
 } from './api';
+import { TeamPicker, TeamSelection } from './team-picker';
 
 // The sport enum, matching the values used on the Feed/Search surfaces.
 const SPORTS = ['basketball', 'football', 'baseball', 'hockey', 'soccer', 'other'];
@@ -25,9 +24,6 @@ const LEVELS: Array<{ value: 'pro' | 'college' | 'high_school'; label: string }>
   { value: 'college', label: 'College' },
   { value: 'high_school', label: 'High school' },
 ];
-
-// Sentinel option value that reveals the inline "new team" inputs.
-const NEW_TEAM = '__new__';
 
 type Side = 'home' | 'away';
 
@@ -46,10 +42,10 @@ export function AddGameForm({
   onClose: () => void;
 }) {
   const [sport, setSport] = useState('');
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [teamsLoading, setTeamsLoading] = useState(false);
-  const [homeTeamId, setHomeTeamId] = useState('');
-  const [awayTeamId, setAwayTeamId] = useState('');
+  // Each side holds the committed selection ({id, label}); TeamPicker owns the
+  // query/results and searches the API as you type.
+  const [home, setHome] = useState<TeamSelection | null>(null);
+  const [away, setAway] = useState<TeamSelection | null>(null);
   const [venue, setVenue] = useState('');
   const [scheduledAt, setScheduledAt] = useState(''); // datetime-local value
   const [isLocalStream, setIsLocalStream] = useState(true);
@@ -65,55 +61,38 @@ export function AddGameForm({
   const [creatingTeam, setCreatingTeam] = useState(false);
   const [newTeamError, setNewTeamError] = useState<string | null>(null);
 
-  // Load teams whenever the sport changes; reset the team pickers so a stale
-  // selection from another sport can't leak through.
-  useEffect(() => {
-    if (!sport) {
-      setTeams([]);
-      return;
-    }
-    let cancelled = false;
-    setTeamsLoading(true);
-    setHomeTeamId('');
-    setAwayTeamId('');
+  // Changing sport resets both sides: a team from another sport must not leak
+  // through. (TeamPicker clears its own query/results on the same change.)
+  function onChangeSport(value: string) {
+    setSport(value);
+    setHome(null);
+    setAway(null);
     setNewTeamFor(null);
-    (async () => {
-      try {
-        const list = await getTeams(token, sport);
-        if (!cancelled) setTeams(list);
-      } catch (err) {
-        if (!cancelled) {
-          setTeams([]);
-          setFormError(err instanceof Error ? err.message : 'Failed to load teams');
-        }
-      } finally {
-        if (!cancelled) setTeamsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, sport]);
-
-  // Selecting a team dropdown: the sentinel opens the inline creator for that
-  // side (and clears its current pick); any other value is a real selection.
-  function onSelectTeam(side: Side, value: string) {
     setSuccess(null);
-    if (value === NEW_TEAM) {
-      setNewTeamFor(side);
-      setNewTeamName('');
-      setNewTeamLevel('pro');
-      setNewTeamError(null);
-      if (side === 'home') setHomeTeamId('');
-      else setAwayTeamId('');
-      return;
-    }
-    if (side === 'home') setHomeTeamId(value);
-    else setAwayTeamId(value);
   }
 
-  // Create a team via POST /teams, add it to both dropdowns, and select it in
-  // the side that triggered the creation. A 409 (duplicate name) shows inline.
+  function onSelectTeam(side: Side, selection: TeamSelection | null) {
+    setSuccess(null);
+    if (side === 'home') setHome(selection);
+    else setAway(selection);
+  }
+
+  // The picker's "+ New team" row opens the inline creator for that side,
+  // prefilled with whatever was typed.
+  function openNewTeam(side: Side, name: string) {
+    setSuccess(null);
+    setNewTeamFor(side);
+    setNewTeamName(name);
+    setNewTeamLevel('pro');
+    setNewTeamError(null);
+    if (side === 'home') setHome(null);
+    else setAway(null);
+  }
+
+  // Create a team via POST /teams and select it on the side that triggered the
+  // creation. A 409 (duplicate name) shows inline. Nothing to splice into a
+  // cached list any more — the pickers search the API directly, and a fresh
+  // team is active so it turns up on the next search.
   async function submitNewTeam() {
     if (!newTeamFor || !newTeamName.trim()) return;
     setCreatingTeam(true);
@@ -124,11 +103,9 @@ export function AddGameForm({
         sport,
         level: newTeamLevel,
       });
-      setTeams((prev) =>
-        [...prev, team].sort((a, b) => a.name.localeCompare(b.name)),
-      );
-      if (newTeamFor === 'home') setHomeTeamId(team.id);
-      else setAwayTeamId(team.id);
+      const selection: TeamSelection = { id: team.id, label: team.name };
+      if (newTeamFor === 'home') setHome(selection);
+      else setAway(selection);
       setNewTeamFor(null);
       setNewTeamName('');
     } catch (err) {
@@ -151,7 +128,7 @@ export function AddGameForm({
       setFormError('Pick a date and time.');
       return;
     }
-    if (homeTeamId && awayTeamId && homeTeamId === awayTeamId) {
+    if (home && away && home.id === away.id) {
       setFormError('Home and away teams must be different.');
       return;
     }
@@ -165,8 +142,8 @@ export function AddGameForm({
       isLocalStream,
     };
     if (venue.trim()) body.venue = venue.trim();
-    if (homeTeamId) body.homeTeamId = homeTeamId;
-    if (awayTeamId) body.awayTeamId = awayTeamId;
+    if (home) body.homeTeamId = home.id;
+    if (away) body.awayTeamId = away.id;
 
     setSubmitting(true);
     try {
@@ -180,8 +157,8 @@ export function AddGameForm({
       }
       // Manager/admin: confirm and clear for the next entry.
       setSuccess('Game added.');
-      setHomeTeamId('');
-      setAwayTeamId('');
+      setHome(null);
+      setAway(null);
       setVenue('');
       setScheduledAt('');
       setIsLocalStream(true);
@@ -191,14 +168,6 @@ export function AddGameForm({
       setSubmitting(false);
     }
   }
-
-  // Options for one side, excluding the team already picked on the other side so
-  // the same team can't be chosen twice.
-  function teamOptions(otherId: string) {
-    return teams.filter((t) => t.id !== otherId || otherId === '');
-  }
-
-  const teamSelectDisabled = !sport || teamsLoading;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -225,7 +194,7 @@ export function AddGameForm({
             <select
               id="ag-sport"
               value={sport}
-              onChange={(e) => setSport(e.target.value)}
+              onChange={(e) => onChangeSport(e.target.value)}
             >
               <option value="">Choose a sport…</option>
               {SPORTS.map((s) => (
@@ -247,47 +216,30 @@ export function AddGameForm({
             />
           </div>
 
-          {/* ---- Home team ---- */}
-          <div className="field">
-            <label htmlFor="ag-home">Home team</label>
-            <select
-              id="ag-home"
-              value={homeTeamId}
-              disabled={teamSelectDisabled}
-              onChange={(e) => onSelectTeam('home', e.target.value)}
-            >
-              <option value="">
-                {sport ? (teamsLoading ? 'Loading teams…' : 'Choose home team…') : 'Pick a sport first'}
-              </option>
-              {teamOptions(awayTeamId).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-              {sport && !teamsLoading && <option value={NEW_TEAM}>+ New team…</option>}
-            </select>
-          </div>
+          {/* ---- Home / away team type-aheads ---- */}
+          {/* Each excludes the other side's pick so the same team can't be
+              chosen twice. */}
+          <TeamPicker
+            token={token}
+            sport={sport}
+            label="Home team"
+            inputId="ag-home"
+            selected={home}
+            onSelect={(s) => onSelectTeam('home', s)}
+            excludeId={away?.id ?? ''}
+            onCreateNew={(name) => openNewTeam('home', name)}
+          />
 
-          {/* ---- Away team ---- */}
-          <div className="field">
-            <label htmlFor="ag-away">Away team</label>
-            <select
-              id="ag-away"
-              value={awayTeamId}
-              disabled={teamSelectDisabled}
-              onChange={(e) => onSelectTeam('away', e.target.value)}
-            >
-              <option value="">
-                {sport ? (teamsLoading ? 'Loading teams…' : 'Choose away team…') : 'Pick a sport first'}
-              </option>
-              {teamOptions(homeTeamId).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-              {sport && !teamsLoading && <option value={NEW_TEAM}>+ New team…</option>}
-            </select>
-          </div>
+          <TeamPicker
+            token={token}
+            sport={sport}
+            label="Away team"
+            inputId="ag-away"
+            selected={away}
+            onSelect={(s) => onSelectTeam('away', s)}
+            excludeId={home?.id ?? ''}
+            onCreateNew={(name) => openNewTeam('away', name)}
+          />
 
           {/* ---- Inline new-team creator (spans both columns) ---- */}
           {newTeamFor && (

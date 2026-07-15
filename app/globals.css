@@ -5761,3 +5761,462 @@ a.follow-sugcard__name:hover {
     max-width: 130px;
   }
 }
+
+/* ============================================================================
+   School hub (/schools/[id]) — the front door onto the imported college
+   dataset. Reuses the team-hub hero/section language, scoped under .school-*.
+   ============================================================================ */
+.school-page {
+  max-width: 1080px;
+}
+
+/* ---- Hero: gradient banner + monogram (no school logos yet) ---- */
+.school-hero {
+  position: relative;
+  margin-bottom: 30px;
+}
+
+.school-banner {
+  height: clamp(150px, 26vw, 240px);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Same branded gradient stand-in as .team-banner--fallback / .profile-cover--fallback. */
+.school-banner--fallback {
+  background:
+    radial-gradient(115% 130% at 12% 8%, rgba(201, 163, 78, 0.32), rgba(201, 163, 78, 0) 52%),
+    linear-gradient(135deg, #2a2418 0%, #1c1912 52%, #13110d 100%);
+}
+
+.school-banner__monogram {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(3rem, 9vw, 6rem);
+  color: rgba(201, 163, 78, 0.5);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.school-identity {
+  padding: 18px 8px 0;
+}
+
+.school-name {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  color: #efece4;
+  margin: 0 0 8px;
+}
+
+/* "City, ST · Mascot" — dot-separated like .team-affil. */
+.school-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 8px;
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.school-meta__seg:not(:last-child)::after {
+  content: '·';
+  margin-left: 8px;
+  color: var(--border-strong);
+}
+
+.school-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* The inactive pill is deliberately quiet — "not covered yet" is the normal
+   state for ~2k imported schools, not an error. Muted, not gold. */
+.school-inactive {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border);
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.school-site {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+}
+
+.school-site__link {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.school-site__link:hover {
+  color: var(--accent);
+}
+
+/* ---- Teams, grouped by sport ---- */
+.school-section__title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.5rem;
+  margin: 2px 0 20px;
+  color: #efece4;
+}
+
+.school-sport + .school-sport {
+  margin-top: 26px;
+}
+
+.school-sport__title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.school-teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.school-teamcard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px 18px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.school-teamcard:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+.school-teamcard__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  color: var(--text);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.school-teamcard__name:hover {
+  color: var(--accent);
+}
+
+.school-teamcard__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Micro-tag: gender / division / inactive. Quieter than .pill. */
+.school-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.school-tag--off {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.school-teamcard__conf {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.school-teamcard__conf:hover {
+  color: var(--accent);
+}
+
+/* ============================================================================
+   Conference hub (/conferences/[id]) — same hero language as the school hub,
+   with members grouped by school. Scoped under .conf-*.
+   ============================================================================ */
+.conf-page {
+  max-width: 1080px;
+}
+
+.conf-hero {
+  position: relative;
+  margin-bottom: 30px;
+}
+
+.conf-banner {
+  height: clamp(130px, 20vw, 190px);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.conf-banner--fallback {
+  background:
+    radial-gradient(115% 130% at 12% 8%, rgba(201, 163, 78, 0.32), rgba(201, 163, 78, 0) 52%),
+    linear-gradient(135deg, #2a2418 0%, #1c1912 52%, #13110d 100%);
+}
+
+.conf-banner__monogram {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  color: rgba(201, 163, 78, 0.5);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.conf-identity {
+  padding: 18px 8px 0;
+}
+
+.conf-name {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+  line-height: 1.06;
+  letter-spacing: -0.015em;
+  color: #efece4;
+  margin: 0 0 10px;
+}
+
+.conf-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.conf-count {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.conf-section__title {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.5rem;
+  margin: 2px 0 20px;
+  color: #efece4;
+}
+
+.conf-school + .conf-school {
+  margin-top: 24px;
+}
+
+.conf-school__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.conf-school__link {
+  color: #efece4;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.conf-school__link:hover {
+  color: var(--accent);
+}
+
+.conf-school__state {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.conf-teams {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A member team row: name left, tags right, collapsing to stacked on narrow. */
+.conf-teamrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 14px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s ease;
+}
+
+.conf-teamrow:hover {
+  border-color: var(--border-strong);
+}
+
+.conf-teamrow__name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.conf-teamrow:hover .conf-teamrow__name {
+  color: var(--accent);
+}
+
+.conf-teamrow__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A team-hero affiliation segment that links into the school graph (the
+   institution and conference segments). Mirrors .profile-affil__seg--link. */
+.team-affil__seg--link {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.team-affil__seg--link:hover {
+  color: var(--accent);
+}
+
+/* ============================================================================
+   Team picker type-ahead (Add Game) — replaces the old <select> that couldn't
+   hold ~25.8k teams. Scoped under .team-picker*.
+   ============================================================================ */
+.team-picker {
+  position: relative;
+}
+
+/* Room for the Clear button sitting inside the input's right edge. */
+.team-picker__input {
+  padding-right: 62px;
+}
+
+.team-picker__clear {
+  position: absolute;
+  right: 10px;
+  /* Clears the label above the input. */
+  top: 32px;
+  font-size: 0.72rem;
+}
+
+.team-picker__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  /* Above the modal card's own stacking context. */
+  z-index: 30;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+}
+
+/* Options are <button>s, so undo the global gold-fill button styling. */
+.team-picker__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin-top: 0;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  cursor: pointer;
+}
+
+.team-picker__option--active,
+.team-picker__option:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.1);
+  border: none;
+  color: var(--text);
+}
+
+.team-picker__option-name {
+  font-weight: 600;
+}
+
+.team-picker__option-school {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* The "+ New team" row, pinned visually below the results. */
+.team-picker__option--new {
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 7px 7px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.team-picker__hint {
+  padding: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.team-picker__hint--error {
+  color: #d98b8b;
+}
+
+@media (max-width: 560px) {
+  .school-teams {
+    grid-template-columns: 1fr;
+  }
+}
