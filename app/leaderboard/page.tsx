@@ -21,6 +21,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
+import { FanCard } from '../fan-card';
 import { canAccess } from '../roles';
 import {
   getPointsLeaderboard,
@@ -43,6 +44,7 @@ function Row({
   scope,
   me,
   pinned,
+  onOpen,
 }: {
   entry: LeaderboardEntry;
   scope: 'global' | 'event';
@@ -50,6 +52,9 @@ function Row({
   me: boolean;
   // This is the pinned copy below the cut, not a row of the board itself.
   pinned?: boolean;
+  // Opens this fan's card. Every row on both boards gets one, including the
+  // pinned "you" row -- your own card is the same card.
+  onOpen: () => void;
 }) {
   return (
     <li
@@ -58,8 +63,18 @@ function Row({
       }`}
     >
       <span className="points-lb__rank">{rankBadge(entry.rank)}</span>
+      {/* The name is the affordance: a button, not the whole row, so the score
+          stays selectable and the click target is the thing that reads like a
+          person. Styled to look like the text it replaced -- see .fancard-open. */}
       <span className="points-lb__name">
-        {entry.displayName ?? 'You'}
+        <button
+          type="button"
+          className="fancard-open"
+          aria-haspopup="dialog"
+          onClick={onOpen}
+        >
+          {entry.displayName ?? 'You'}
+        </button>
         {me && <span className="points-lb__you">You</span>}
       </span>
       {/* An event board is net points and can be negative, so it's signed; the
@@ -92,6 +107,10 @@ function Leaderboard() {
   const [board, setBoard] = useState<PointsLeaderboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // The fan whose card is open, held as the entry rather than just an id so the
+  // card can title itself from the row instantly instead of waiting on a fetch.
+  // Mounting the card IS opening it (SlideOver's contract), so null = closed.
+  const [openFan, setOpenFan] = useState<LeaderboardEntry | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -208,6 +227,7 @@ function Leaderboard() {
                     entry={entry}
                     scope={board.scope}
                     me={entry.userId === board.me.userId}
+                    onOpen={() => setOpenFan(entry)}
                   />
                 ))}
               </ul>
@@ -215,7 +235,13 @@ function Leaderboard() {
                 <div className="points-lb__pin">
                   <span className="points-lb__pin-label">Your rank</span>
                   <ul className="points-lb__list">
-                    <Row entry={board.me} scope={board.scope} me pinned />
+                    <Row
+                      entry={board.me}
+                      scope={board.scope}
+                      me
+                      pinned
+                      onOpen={() => setOpenFan(board.me)}
+                    />
                   </ul>
                   {board.me.rank === null && (
                     <p className="muted points-lb__hint">
@@ -238,6 +264,19 @@ function Leaderboard() {
             </div>
           )}
         </section>
+      )}
+
+      {/* Mounting is opening (SlideOver's contract). Keyed by fan so clicking a
+          second name while one card is open remounts rather than leaving the
+          previous fan's numbers under a new title. */}
+      {openFan && (
+        <FanCard
+          key={openFan.userId}
+          userId={openFan.userId}
+          fallbackName={openFan.displayName}
+          isMe={openFan.userId === board?.me.userId}
+          onClose={() => setOpenFan(null)}
+        />
       )}
     </main>
   );

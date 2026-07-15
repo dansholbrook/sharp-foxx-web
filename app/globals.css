@@ -7668,6 +7668,157 @@ a.follow-sugcard__name:hover {
   font-size: 0.82rem;
 }
 
+/* ---- Fan card — the public record behind a leaderboard name ----
+   Opens as a slide-over from any board row. STATS only: rank, lifetime, W-L-R.
+   Never the spendable balance, never the pick log. Scoped .fancard-*.
+   The record line is shared with the /picks masthead, so it has to sit right
+   both inside a 480px panel and under a page title. */
+
+/* The clickable name. A button that inherits the row's type so it reads as the
+   name it replaced, not as a control bolted onto it — the underline on hover is
+   the whole affordance. */
+.fancard-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.14s ease;
+}
+
+.fancard-open:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Keyboard users get a real ring — the hover colour alone isn't a focus state. */
+.fancard-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.fancard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* The two hero numbers, side by side: where they stand, and what got them
+   there. */
+.fancard-hero {
+  display: flex;
+  gap: 28px;
+  padding: 18px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.fancard-hero__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fancard-hero__label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.fancard-hero__value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.fancard-hero__medal {
+  font-size: 1.3rem;
+}
+
+.fancard-hero__unit {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* W-L-R + rate. Wraps rather than scrolls: on a narrow panel the rate drops to
+   its own line, which is fine — it's the one number that stands alone. */
+.fancard-record {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.fancard-record__cell,
+.fancard-record__rate {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+/* The rate is the conclusion the W-L-R adds up to, so it's fenced off from the
+   counts rather than reading as a fourth one. */
+.fancard-record__rate {
+  padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+
+.fancard-record__num {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.fancard-record__key {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+/* Won/lost carry colour; refunded deliberately doesn't. A void isn't a result
+   the fan earned or blew, and colouring it would imply it counts for something
+   — which is exactly what the win rate says it doesn't. */
+.fancard-record__cell--won .fancard-record__num {
+  color: var(--accent);
+}
+
+.fancard-record__cell--lost .fancard-record__num,
+.fancard-record__cell--refunded .fancard-record__num {
+  color: var(--muted);
+}
+
+.fancard-since {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* On the /picks masthead the record sits under the standfirst rather than in a
+   panel, so it needs its own breathing room. */
+.masthead-head .fancard-record {
+  margin-top: 14px;
+}
+
 /* ---- Phone: the pick cards are a thumb surface first ---- */
 @media (max-width: 560px) {
   .predict-card {
@@ -7707,6 +7858,22 @@ a.follow-sugcard__name:hover {
     gap: 10px;
     padding: 11px 12px;
   }
+
+  .fancard-hero {
+    gap: 20px;
+    padding: 16px 14px;
+  }
+
+  .fancard-hero__value {
+    font-size: 1.45rem;
+  }
+
+  /* The rate's divider assumes it's on the same line as the counts. On a phone
+     it usually isn't, so the rule would hang off the left of its own row. */
+  .fancard-record__rate {
+    padding-left: 0;
+    border-left: 0;
+  }
 }
 
 /* Motion here is celebration, not information — every animation above has a
@@ -7726,5 +7893,11 @@ a.follow-sugcard__name:hover {
 
   .predict-opt--live:active {
     transform: none;
+  }
+
+  /* The name's colour shift is a hover hint, not motion worth suppressing —
+     only the easing goes, so the hover state still lands, just instantly. */
+  .fancard-open {
+    transition: none;
   }
 }

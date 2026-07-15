@@ -678,6 +678,20 @@ async function authGet<T>(path: string, token: string): Promise<T> {
   return res.json();
 }
 
+// Like authGet, but a 404 resolves to null instead of throwing. For reads where
+// "no such record" is a real answer the UI renders as a STATE rather than an
+// error -- see getFanPointsSummary, where a 404 means "this fan has never
+// picked", which is a thing to say, not a failure to report. Every other status
+// still throws, and 401 still fires the central teardown.
+async function authGetOrNull<T>(path: string, token: string): Promise<T | null> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw await toAuthError(res);
+  return res.json();
+}
+
 async function authPost<T>(path: string, token: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
@@ -2212,6 +2226,52 @@ export interface PointsLeaderboard {
   top: LeaderboardEntry[];
   me: LeaderboardEntry;
 }
+
+// GET /fans/:userId/points-summary — the PUBLIC card behind a leaderboard name.
+// Mirrors predictions.service.ts `pointsSummary()`.
+//
+// Two deliberate absences, both load-bearing:
+//   • No `balance`. The spendable wallet is the one number that feels private;
+//     it stays on /predictions/my-picks (caller-only). `lifetimeEarned` is the
+//     score and is already public on the board. `balanceHidden: true` is the
+//     backend saying that omission is a decision — don't "fix" it by reaching
+//     for getMyPicks() to fill a balance into this card.
+//   • No pick log. This read is counts, never rows; the pick-by-pick history is
+//     caller-only and lives on /picks.
+export interface FanPointsSummary {
+  userId: string;
+  displayName: string;
+  // Same basis as the global board (lifetime_earned), so the two never disagree.
+  lifetimeEarned: number;
+  balanceHidden: true;
+  // rank(), so ties share a number — a fan can legitimately be one of three #2s.
+  globalRank: number;
+  // `refunded` is reported but excluded from totalResolved: a void has no
+  // outcome, so a question staff pulled must not dent a fan's win rate.
+  // totalResolved === won + lost.
+  record: {
+    won: number;
+    lost: number;
+    refunded: number;
+    totalResolved: number;
+  };
+  // 0..1, or null when nothing has resolved yet — "unknown", not 0%.
+  winRate: number | null;
+  // Null only in the edge where a fan's picks were cascaded away with their
+  // events but their wallet survived.
+  firstPickAt: string | null;
+  // Null = has never won one. Distinct from "won a long time ago".
+  lastWonAt: string | null;
+}
+
+// Resolves to null on a 404, which means this fan has never picked (the wallet
+// row is only ever created BY a pick). That's a state the card renders, not an
+// error — hence authGetOrNull.
+export const getFanPointsSummary = (token: string, userId: string) =>
+  authGetOrNull<FanPointsSummary>(
+    `/fans/${encodeURIComponent(userId)}/points-summary`,
+    token,
+  );
 
 // The fan-facing board for one game. Any authenticated role reads it.
 export const getEventPredictions = (token: string, eventId: string) =>

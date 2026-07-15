@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { usePoints } from '../points-context';
 import { AppNav, AccessDenied } from '../nav';
+import { FanRecordLine, recordFromPicks } from '../fan-card';
 import { canAccess } from '../roles';
 import { getMyPicks, points, signedPoints, MyPick, MyPicksReport } from '../api';
 
@@ -120,6 +121,14 @@ export default function MyPicksPage() {
 
   const live = report?.picks.filter((p) => p.outcome === 'pending').length ?? 0;
 
+  // Your own W-L-R, so this page answers the record question the fan cards ask
+  // everywhere else. Derived from the picks already loaded rather than fetched
+  // from /fans/:id/points-summary: that endpoint's record is counted off the
+  // same server-derived `outcome` this list carries, so a second round-trip
+  // would buy identical numbers at the cost of another request and a second
+  // loading state. The shared helper keeps the two derivations one derivation.
+  const record = report ? recordFromPicks(report.picks) : null;
+
   return (
     <main className="feed-home">
       <div className="header-row">
@@ -142,6 +151,13 @@ export default function MyPicksPage() {
             Pick with points, climb the leaderboard. Points have no cash value —
             they can&apos;t be bought, redeemed, or cashed out.
           </p>
+          {/* The same line, from the same numbers, that everyone else sees on
+              your fan card. Only once something has resolved: a fan whose first
+              pick is still live has a record of "nothing yet", and 0-0-0 at a
+              "—" win rate says that worse than saying nothing. */}
+          {record && record.totalResolved > 0 && (
+            <FanRecordLine record={record} />
+          )}
         </div>
         <div className="masthead-actions">
           <Link href="/leaderboard" className="link-btn">
