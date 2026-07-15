@@ -18,6 +18,15 @@
   --accent-dim: #a9863b;
   --accent-text: #13110d;
 
+  /* Warning. Deliberately NOT in the gold family: gold is the "this is your
+     money" accent and reads as neutral-to-good everywhere else in the app, so
+     an alarm painted gold doesn't register as one. These are the literals
+     .error already used, promoted to tokens on first reuse (the NIL health
+     table flags pools whose obligations exceed their balance). */
+  --warn: #e0928a;
+  --warn-bg: #2c1714;
+  --warn-border: #5c2b2b;
+
   --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     Helvetica, Arial, sans-serif;
@@ -6549,4 +6558,238 @@ a.follow-sugcard__name:hover {
 }
 .gamesdir-results--busy {
   opacity: 0.45;
+}
+
+/* =================================================================
+   Executive dashboard (/dashboard) + territory performance
+   (/managers/[id]). Both are built from the existing vocabulary --
+   .card game, .rep-stat* cards, .report-table, .pill -- so the rules
+   below only add what didn't exist: the dependency-free bar chart, the
+   NIL-health warning row, and a little section spacing.
+
+   .rev-chart is shared by both pages (it is literally the same chart at
+   two sizes) rather than duplicated as .exec-chart + .terr-chart;
+   page-specific rules stay scoped to .exec-* / .terr-*.
+   ================================================================= */
+
+/* Match the tighter card packing the earnings/territory strips use, so the
+   six exec KPIs sit on one row on a wide surface before wrapping. */
+.exec-stats .rep-stat,
+.terr-stats .rep-stat {
+  flex-basis: 150px;
+}
+
+.exec-stats,
+.terr-stats {
+  margin-bottom: 24px;
+}
+
+/* ---- Bar chart: no library, just divs with a height percentage ----
+   The columns are a flex row; each column is bottom-aligned so its stacked
+   segments grow upward from the axis. Heights are set inline as a % of the
+   tallest month, so the chart self-scales and needs no y-axis. */
+.rev-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 168px;
+  margin: 4px 0 8px;
+  padding-bottom: 4px;
+}
+
+.rev-chart--mini {
+  height: 110px;
+}
+
+.rev-chart__col {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  height: 100%;
+  cursor: default;
+}
+
+/* The plot area. justify-content: flex-end stacks the segments onto the
+   baseline; the column's label sits underneath it. */
+.rev-chart__stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  flex: 1;
+  gap: 1px;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+  transition: background 0.15s ease;
+}
+
+.rev-chart__col:hover .rev-chart__stack {
+  background: rgba(201, 163, 78, 0.06);
+}
+
+.rev-chart__bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: opacity 0.15s ease;
+  /* flex: none -- the inline height % is the whole point of this chart; without
+     it the flex container would shrink the bars back to fit. */
+  flex: none;
+  /* A month with revenue but a rounding-to-zero height still shows a sliver,
+     so "small" never renders as "none". */
+  min-height: 2px;
+}
+
+.rev-chart__bar--ad {
+  background: var(--accent);
+}
+
+.rev-chart__bar--nil {
+  background: var(--accent-dim);
+}
+
+/* A zero month: no bar at all, just the baseline rule, so an empty month is
+   visibly empty rather than a 2px stub that reads as a tiny value. */
+.rev-chart__bar--empty {
+  background: var(--border);
+  min-height: 1px;
+}
+
+.rev-chart__label {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Legend: a caption for the two stacked series. */
+.rev-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 18px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.rev-chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.rev-chart-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.rev-chart-legend__swatch--ad {
+  background: var(--accent);
+}
+
+.rev-chart-legend__swatch--nil {
+  background: var(--accent-dim);
+}
+
+/* ---- Exec section rhythm ---- */
+.exec-section__note {
+  margin: -4px 0 16px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Two compact tables side by side (by-stream + by-state) on a wide surface,
+   stacking on narrow. */
+.exec-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+/* ---- NIL health: the low-balance early warning ----
+   A pool whose pending obligations exceed its balance is the row this table
+   exists to surface, so it gets the warning tint AND a text badge -- color
+   alone would leave the signal invisible to anyone who can't separate the
+   red from the warm background. */
+.exec-warn-row td {
+  background: var(--warn-bg);
+}
+
+.exec-warn-row:hover td {
+  background: var(--warn-bg);
+}
+
+.exec-warn-row td.total {
+  color: var(--warn);
+}
+
+.exec-warn-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--warn-border);
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Manager rows drill through to the territory dashboard: exec -> manager -> rep. */
+.exec-manager-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.exec-manager-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* The "Unassigned" bucket is a real row, not a manager -- quieten it so it
+   doesn't read as a person. */
+.exec-unassigned {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---- Territory performance ---- */
+.terr-section__head {
+  margin: 4px 0 12px;
+}
+
+/* A rep with no activity at all: the coaching signal, dimmed rather than
+   shouted -- the sort already floats producers to the top. */
+.terr-stale {
+  color: var(--muted);
+}
+
+/* Marks the manager's own row in the per-rep table (player-coach: their own
+   sales count toward the territory, so they appear alongside their roster). */
+.terr-self-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }

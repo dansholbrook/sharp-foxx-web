@@ -38,6 +38,89 @@ export interface RevenueReport {
   total: string;
 }
 
+// Mirrors reports.service.ts `executive()`. Admin only. EVERY money field is a
+// dollar string, including the ones sourced from the NIL *_cents integer columns
+// -- the backend normalizes both conventions at its output boundary, so nothing
+// here needs to know which table a number came from.
+//
+// Note on streams: nil_fees is Sharp Foxx's PLATFORM FEE on NIL releases, not
+// gross contributions (that money is the school's, not revenue). It is a
+// different number from RevenueReport.byStream.nilContributions.
+export interface ExecutiveReport {
+  kpis: {
+    // "Booked" == ad orders not in (draft, canceled) -- the same definition
+    // RevenueReport uses, so the two reads reconcile to the penny.
+    totalRevenue: string;
+    revenueThisMonth: string;
+    activeReps: number;
+    // Distinct advertisers with >= 1 booked order (not the advertisers row count).
+    activeAdvertisers: string | number;
+    nilPoolTotalBalance: string;
+    // Gross value released to athletes (fee + net), not our fee revenue.
+    nilTotalReleased: string;
+  };
+  // Exactly 12 entries, oldest-first, zero-filled: a month with no revenue is a
+  // present zero rather than a gap, so the bar chart can index it directly.
+  revenueByMonth: Array<{ month: string; adRevenue: string; nilFees: string }>;
+  // A list, not an object, so new streams are additive.
+  revenueByStream: Array<{ stream: string; total: string; thisMonth: string }>;
+  // state is null for orders whose advertiser has no institution -> "Unassigned".
+  revenueByState: Array<{ state: string | null; total: string; orderCount: number }>;
+  // managerId/managerName are null for the "Unassigned" bucket (reps with no
+  // manager). Rows link to /managers/:managerId, which admins can already open.
+  revenueByManager: Array<{
+    managerId: string | null;
+    managerName: string | null;
+    repCount: number;
+    totalRevenue: string;
+    totalCommissions: string;
+  }>;
+  // pendingObligations > balance is the low-balance early warning.
+  nilHealth: Array<{
+    institutionId: string;
+    name: string;
+    balance: string;
+    totalContributed: string;
+    totalReleased: string;
+    pendingObligations: string;
+  }>;
+}
+
+// Mirrors reports.service.ts `territory()`. Admin sees any territory; a
+// regional_manager only their own (else 403). :managerId is the manager's own
+// field_reps id -- the same id /managers/:id uses.
+export interface TerritoryReport {
+  managerId: string;
+  kpis: {
+    repCount: number;
+    activeRepCount: number;
+    totalRevenue: string;
+    totalCommissions: string;
+    gamesCovered: number;
+    articlesPublished: number;
+  };
+  // Includes the manager's own rep row (player-coach), flagged via isManager, so
+  // these totals match the Overview strip from ManagerSummary on the same page.
+  // Sorted by revenue desc -- stalled reps collect at the bottom.
+  perRep: Array<{
+    repId: string;
+    name: string | null;
+    status: string;
+    isManager: boolean;
+    ordersCount: number;
+    revenue: string;
+    commissionsEarned: string;
+    gamesCovered: number;
+    articlesPublished: number;
+    thirtyDayRevenue: string;
+    // Most recent of: booked order created, game claimed, article authored.
+    // null when the rep has done none of the three.
+    lastActivityAt: string | null;
+  }>;
+  // Exactly 6 entries, oldest-first, zero-filled.
+  revenueByMonth: Array<{ month: string; adRevenue: string }>;
+}
+
 // Mirrors the users table row returned by POST /users (users.service.ts).
 export interface User {
   id: string;
@@ -635,6 +718,15 @@ export const getCommissions = (token: string) =>
 
 export const getRevenue = (token: string) =>
   authGet<RevenueReport>('/reports/revenue', token);
+
+// The whole executive dashboard in one call. Admin only (403 otherwise).
+export const getExecutiveReport = (token: string) =>
+  authGet<ExecutiveReport>('/reports/executive', token);
+
+// Territory performance (id is the manager's field_reps row id). Admin any; a
+// regional_manager only their own (else 403).
+export const getTerritoryReport = (token: string, id: string) =>
+  authGet<TerritoryReport>(`/reports/territory/${id}`, token);
 
 export const getFieldReps = (token: string) =>
   authGet<FieldRep[]>('/field-reps', token);

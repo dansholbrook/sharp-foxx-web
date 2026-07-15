@@ -6,14 +6,15 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
+import { RevChart, RevChartLegend } from '../rev-chart';
 import {
   getCommissions,
-  getRevenue,
+  getExecutiveReport,
   CommissionsReport,
-  RevenueReport,
+  ExecutiveReport,
 } from '../api';
 
-// Human labels for the commission source_type keys and revenue streams.
+// Human labels for the commission source_type keys.
 const SOURCE_LABELS: Record<string, string> = {
   ad_order: 'Ad orders',
   nil_contribution: 'NIL',
@@ -22,11 +23,15 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 const SOURCE_KEYS = Object.keys(SOURCE_LABELS);
 
+// Labels for /reports/executive's revenueByStream keys. nil_fees is Sharp Foxx's
+// platform fee on NIL releases -- NOT gross contributions, which are the school's
+// money passing through us. The label has to say so or the number reads as a ~7x
+// undercount of NIL volume to anyone who remembers the old Reports page.
 const STREAM_LABELS: Record<string, string> = {
-  adOrders: 'Ad orders',
-  nilContributions: 'NIL contributions',
-  subscriptionPayments: 'Subscription payments',
-  retailOrders: 'Retail orders',
+  ad_sales: 'Ad sales',
+  nil_fees: 'NIL platform fees',
+  subscriptions: 'Subscriptions',
+  retail: 'Retail',
 };
 
 const usd = (v: string) =>
@@ -37,8 +42,8 @@ export default function DashboardPage() {
   const pathname = usePathname();
   const { token, user } = useAuth();
   const allowed = canAccess(user?.roles ?? [], pathname);
+  const [exec, setExec] = useState<ExecutiveReport | null>(null);
   const [commissions, setCommissions] = useState<CommissionsReport | null>(null);
-  const [revenue, setRevenue] = useState<RevenueReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,13 +58,13 @@ export default function DashboardPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [c, r] = await Promise.all([
+        const [e, c] = await Promise.all([
+          getExecutiveReport(token),
           getCommissions(token),
-          getRevenue(token),
         ]);
         if (!cancelled) {
+          setExec(e);
           setCommissions(c);
-          setRevenue(r);
         }
       } catch (err) {
         if (!cancelled) {
@@ -91,10 +96,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="masthead">
-        <span className="masthead-kicker">Revenue &amp; commissions</span>
-        <h1 className="masthead-title">Reports</h1>
+        <span className="masthead-kicker">Executive</span>
+        <h1 className="masthead-title">Dashboard</h1>
         <p className="masthead-standfirst">
-          Commissions earned per field rep and revenue booked by stream, pulled
+          Every revenue stream, territory and NIL pool on the platform, pulled
           live from the Sharp Foxx ledger.
         </p>
       </div>
@@ -102,9 +107,167 @@ export default function DashboardPage() {
       {loading && <div className="card muted">Loading reports…</div>}
       {error && <div className="error">{error}</div>}
 
-      {!loading && !error && (
+      {!loading && !error && exec && (
         <>
-          {/* ---- Commissions by rep ---- */}
+          {/* ---- KPI strip ---- */}
+          <section className="card game">
+            <span className="game-kicker">At a glance</span>
+            <h2>Key figures</h2>
+            <div className="rep-stats exec-stats">
+              <div className="rep-stat">
+                <span className="rep-stat__label">Booked revenue</span>
+                <span className="rep-stat__value">{usd(exec.kpis.totalRevenue)}</span>
+                <span className="rep-stat__sub">ad sales, lifetime</span>
+              </div>
+              <div className="rep-stat">
+                <span className="rep-stat__label">This month</span>
+                <span className="rep-stat__value">
+                  {usd(exec.kpis.revenueThisMonth)}
+                </span>
+              </div>
+              <div className="rep-stat">
+                <span className="rep-stat__label">Active reps</span>
+                <span className="rep-stat__value">{exec.kpis.activeReps}</span>
+              </div>
+              <div className="rep-stat">
+                <span className="rep-stat__label">Advertisers</span>
+                <span className="rep-stat__value">{exec.kpis.activeAdvertisers}</span>
+                <span className="rep-stat__sub">with booked spend</span>
+              </div>
+              <div className="rep-stat">
+                <span className="rep-stat__label">NIL pool balance</span>
+                <span className="rep-stat__value">
+                  {usd(exec.kpis.nilPoolTotalBalance)}
+                </span>
+                <span className="rep-stat__sub">held for schools</span>
+              </div>
+              <div className="rep-stat">
+                <span className="rep-stat__label">NIL released</span>
+                <span className="rep-stat__value">
+                  {usd(exec.kpis.nilTotalReleased)}
+                </span>
+                <span className="rep-stat__sub">gross, to athletes</span>
+              </div>
+            </div>
+          </section>
+
+          {/* ---- Revenue by month ---- */}
+          <section className="card game">
+            <span className="game-kicker">Last 12 months</span>
+            <h2>Revenue by month</h2>
+            <RevChartLegend />
+            <RevChart
+              months={exec.revenueByMonth}
+              ariaLabel="Ad sales and NIL platform fees by month, last 12 months"
+            />
+          </section>
+
+          {/* ---- By stream + by state ---- */}
+          <div className="exec-split">
+            <section className="card game">
+              <span className="game-kicker">By stream</span>
+              <h2>Revenue streams</h2>
+              <table className="report-table">
+                <thead>
+                  <tr>
+                    <th>Stream</th>
+                    <th className="num">This month</th>
+                    <th className="num total">Lifetime</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exec.revenueByStream.map((s) => (
+                    <tr key={s.stream}>
+                      <td>{STREAM_LABELS[s.stream] ?? s.stream}</td>
+                      <td className="num">{usd(s.thisMonth)}</td>
+                      <td className="num total">{usd(s.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+
+            <section className="card game">
+              <span className="game-kicker">By state</span>
+              <h2>Revenue by state</h2>
+              {exec.revenueByState.length > 0 ? (
+                <table className="report-table">
+                  <thead>
+                    <tr>
+                      <th>State</th>
+                      <th className="num">Orders</th>
+                      <th className="num total">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exec.revenueByState.map((s) => (
+                      <tr key={s.state ?? 'unassigned'}>
+                        {/* A null state means the advertiser isn't linked to an
+                            institution -- sponsoring a school is optional, so this
+                            bucket is expected to be large, not a data error. */}
+                        <td className={s.state ? undefined : 'exec-unassigned'}>
+                          {s.state ?? 'Unassigned'}
+                        </td>
+                        <td className="num">{s.orderCount}</td>
+                        <td className="num total">{usd(s.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="muted">No booked revenue yet.</p>
+              )}
+            </section>
+          </div>
+
+          {/* ---- By manager: drill-through exec -> territory -> rep ---- */}
+          <section className="card game">
+            <span className="game-kicker">By territory</span>
+            <h2>Revenue by manager</h2>
+            <p className="exec-section__note">
+              Each rep&apos;s booked orders rolled up to their regional manager.
+              Open a territory to see per-rep performance.
+            </p>
+            {exec.revenueByManager.length > 0 ? (
+              <table className="report-table">
+                <thead>
+                  <tr>
+                    <th>Manager</th>
+                    <th className="num">Reps</th>
+                    <th className="num">Commissions</th>
+                    <th className="num total">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exec.revenueByManager.map((m) => (
+                    <tr key={m.managerId ?? 'unassigned'}>
+                      <td>
+                        {/* The Unassigned bucket is reps with no manager_id --
+                            there's no territory page to open for it. */}
+                        {m.managerId ? (
+                          <Link
+                            href={`/managers/${m.managerId}`}
+                            className="exec-manager-link"
+                          >
+                            {m.managerName ?? m.managerId}
+                          </Link>
+                        ) : (
+                          <span className="exec-unassigned">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="num">{m.repCount}</td>
+                      <td className="num">{usd(m.totalCommissions)}</td>
+                      <td className="num total">{usd(m.totalRevenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="muted">No managers on the platform yet.</p>
+            )}
+          </section>
+
+          {/* ---- Commissions by rep: the by-manager table's drill-sibling ---- */}
           <section className="card game">
             <span className="game-kicker">By field rep</span>
             <h2>Commissions by rep</h2>
@@ -117,93 +280,112 @@ export default function DashboardPage() {
                   <span className="report-total__label">Total commissions</span>
                 </div>
                 <table className="report-table">
-                <thead>
-                  <tr>
-                    <th>Rep</th>
-                    {SOURCE_KEYS.map((k) => (
-                      <th key={k} className="num">
-                        {SOURCE_LABELS[k]}
-                      </th>
-                    ))}
-                    <th className="num total">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {commissions.perRep.map((rep) => (
-                    <tr key={rep.repId}>
-                      {/* Drill into the rep. Seed the drill-down header with the
-                          name + commission total this row already has (it has no
-                          ad-order count, so that stat fills in after refetch). */}
-                      <td className={rep.displayName ? undefined : 'mono'}>
-                        <Link
-                          href={`/reps/${rep.repId}?name=${encodeURIComponent(
-                            rep.displayName ?? '',
-                          )}&commissions=${encodeURIComponent(rep.total)}`}
-                          className="rep-roster-link"
-                        >
-                          {rep.displayName ?? rep.repId}
-                        </Link>
-                      </td>
+                  <thead>
+                    <tr>
+                      <th>Rep</th>
                       {SOURCE_KEYS.map((k) => (
-                        <td key={k} className="num">
-                          {usd(rep.bySource[k] ?? '0')}
-                        </td>
+                        <th key={k} className="num">
+                          {SOURCE_LABELS[k]}
+                        </th>
                       ))}
-                      <td className="num total">{usd(rep.total)}</td>
+                      <th className="num total">Total</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td>Grand total</td>
-                    {SOURCE_KEYS.map((k) => (
-                      <td key={k} />
+                  </thead>
+                  <tbody>
+                    {commissions.perRep.map((rep) => (
+                      <tr key={rep.repId}>
+                        {/* Drill into the rep. Seed the drill-down header with the
+                            name + commission total this row already has (it has no
+                            ad-order count, so that stat fills in after refetch). */}
+                        <td className={rep.displayName ? undefined : 'mono'}>
+                          <Link
+                            href={`/reps/${rep.repId}?name=${encodeURIComponent(
+                              rep.displayName ?? '',
+                            )}&commissions=${encodeURIComponent(rep.total)}`}
+                            className="rep-roster-link"
+                          >
+                            {rep.displayName ?? rep.repId}
+                          </Link>
+                        </td>
+                        {SOURCE_KEYS.map((k) => (
+                          <td key={k} className="num">
+                            {usd(rep.bySource[k] ?? '0')}
+                          </td>
+                        ))}
+                        <td className="num total">{usd(rep.total)}</td>
+                      </tr>
                     ))}
-                    <td className="num total">{usd(commissions.grandTotal)}</td>
-                  </tr>
-                </tfoot>
-              </table>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>Grand total</td>
+                      {SOURCE_KEYS.map((k) => (
+                        <td key={k} />
+                      ))}
+                      <td className="num total">{usd(commissions.grandTotal)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </>
             ) : (
               <p className="muted">No commissions recorded.</p>
             )}
           </section>
 
-          {/* ---- Revenue by stream ---- */}
+          {/* ---- NIL health ---- */}
           <section className="card game">
-            <span className="game-kicker">By stream</span>
-            <h2>Revenue by stream</h2>
-            {revenue && (
-              <>
-                <div className="report-total">
-                  <span className="report-total__value">
-                    {usd(revenue.total)}
-                  </span>
-                  <span className="report-total__label">Total revenue</span>
-                </div>
-                <table className="report-table">
-                  <thead>
-                    <tr>
-                      <th>Stream</th>
-                      <th className="num total">Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(revenue.byStream).map(([key, val]) => (
-                      <tr key={key}>
-                        <td>{STREAM_LABELS[key] ?? key}</td>
-                        <td className="num total">{usd(val)}</td>
+            <span className="game-kicker">NIL</span>
+            <h2>Pool health</h2>
+            <p className="exec-section__note">
+              Pending obligations are deliverables assigned or submitted but not
+              yet released. A pool owing more than it holds is flagged.
+            </p>
+            {exec.nilHealth.length > 0 ? (
+              <table className="report-table">
+                <thead>
+                  <tr>
+                    <th>School</th>
+                    <th className="num">Contributed</th>
+                    <th className="num">Released</th>
+                    <th className="num">Pending</th>
+                    <th className="num total">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exec.nilHealth.map((p) => {
+                    // The early warning: the pool owes athletes more than it
+                    // holds. Flagged with a badge as well as the row tint --
+                    // colour alone isn't a signal everyone can read.
+                    const short =
+                      Number(p.pendingObligations) > Number(p.balance);
+                    return (
+                      <tr
+                        key={p.institutionId}
+                        className={short ? 'exec-warn-row' : undefined}
+                      >
+                        <td>
+                          {p.name}
+                          {short && (
+                            <span className="exec-warn-badge">Low balance</span>
+                          )}
+                        </td>
+                        <td className="num">{usd(p.totalContributed)}</td>
+                        <td className="num">{usd(p.totalReleased)}</td>
+                        <td className="num">{usd(p.pendingObligations)}</td>
+                        <td className="num total">{usd(p.balance)}</td>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td>Total</td>
-                      <td className="num total">{usd(revenue.total)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="results-empty">
+                <p className="results-empty__title">No NIL pools yet</p>
+                <p className="results-empty__hint">
+                  When a school opens a NIL pool, its balance and outstanding
+                  obligations will appear here.
+                </p>
+              </div>
             )}
           </section>
         </>

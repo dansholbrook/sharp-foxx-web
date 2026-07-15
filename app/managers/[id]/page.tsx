@@ -7,14 +7,13 @@ import { AppNav, AccessDenied } from '../../nav';
 import { AssignGameForm } from '../../assign-game-form';
 import { canAccess } from '../../roles';
 import { QueueTable, Column } from '../../queue-table';
+import { RevChart } from '../../rev-chart';
 import {
-  getManagerReps,
   getManagerSummary,
-  getFieldReps,
+  getTerritoryReport,
   updateFieldRepStatus,
-  ManagerRoster,
   ManagerSummary,
-  RepStatus,
+  TerritoryReport,
 } from '../../api';
 
 // The territory dashboard shows the latest few recent orders inline; the rest
@@ -47,6 +46,8 @@ function formatWhen(iso: string): string {
 // manager themselves (rep: null). null = closed.
 type AssignTarget = { rep: { id: string; name: string } | null };
 
+type PerRep = TerritoryReport['perRep'][number];
+
 export default function ManagerRosterPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,24 +56,25 @@ export default function ManagerRosterPage() {
   const { token, user } = useAuth();
   const allowed = canAccess(user?.roles ?? [], pathname);
 
-  const [roster, setRoster] = useState<ManagerRoster | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [assign, setAssign] = useState<AssignTarget | null>(null);
 
-  // The roster payload carries no rep status, so we join it from GET /field-reps
-  // (keyed by field_reps id === roster repId) to surface an "Activate" action on
-  // reps still onboarding. Best-effort: a failed lookup just hides Activate.
-  const [statusByRep, setStatusByRep] = useState<Record<string, RepStatus>>({});
   // Reps mid-activation (for the button's busy state) + any activation error.
   const [activating, setActivating] = useState<Record<string, boolean>>({});
   const [activateError, setActivateError] = useState<string | null>(null);
 
-  // Territory summary (stat cards + recent activity). Loaded independently of the
-  // roster and best-effort: a failure here must not blank the roster below, so it
-  // just hides the summary strip. :id is the manager's own field_reps id -- the
-  // same id the roster call uses -- so a regional_manager landing here loads their
-  // own territory and an admin loads whichever manager they opened.
+  // Territory performance: KPIs, the 6-month trend and the per-rep coaching
+  // table. This is the page's primary payload -- it carries each rep's status,
+  // so unlike the old roster read it needs no second /field-reps lookup to know
+  // who can be activated. :id is the manager's own field_reps id, so a
+  // regional_manager landing here loads their own territory and an admin loads
+  // whichever manager they opened (the backend 403s anyone else's).
+  const [territory, setTerritory] = useState<TerritoryReport | null>(null);
+
+  // Recent orders + the commission status split. Loaded independently and
+  // best-effort: a failure here must not blank the performance table above, so
+  // it just hides the activity section.
   const [summary, setSummary] = useState<ManagerSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   // Recent activity is capped to the latest few until "Show all" is clicked.
@@ -91,41 +93,26 @@ export default function ManagerRosterPage() {
     setError(null);
     (async () => {
       try {
-        const data = await getManagerReps(token, id);
-        if (!cancelled) setRoster(data);
+        const data = await getTerritoryReport(token, id);
+        if (!cancelled) setTerritory(data);
       } catch (err) {
-        // The client turns 400/404 into "<status> <message>", e.g.
-        // "400 Invalid manager id" or "404 Regional manager not found".
+        // The client turns 400/403/404 into "<status> <message>", e.g.
+        // "400 Invalid manager id" or "403 You can only view your own territory".
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load roster');
+          setError(err instanceof Error ? err.message : 'Failed to load territory');
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    // Territory summary loads on its own so a failure degrades to just the roster.
     (async () => {
       try {
         const data = await getManagerSummary(token, id);
         if (!cancelled) setSummary(data);
       } catch {
-        /* leave the summary strip hidden -- the roster below still renders */
+        /* leave the activity section hidden -- performance above still renders */
       } finally {
         if (!cancelled) setSummaryLoading(false);
-      }
-    })();
-    // Rep statuses (for the Activate action). Best-effort + independent so a
-    // failure just leaves every rep without an Activate button.
-    (async () => {
-      try {
-        const reps = await getFieldReps(token);
-        if (!cancelled) {
-          setStatusByRep(
-            Object.fromEntries(reps.map((r) => [r.id, r.status as RepStatus])),
-          );
-        }
-      } catch {
-        /* leave statuses empty -- no Activate buttons render */
       }
     })();
     return () => {
@@ -133,15 +120,33 @@ export default function ManagerRosterPage() {
     };
   }, [token, id, router, allowed]);
 
-  // Activate an onboarding rep -> status 'active'. Updates the local status map
-  // on success so the Activate button disappears without a full refetch.
+  // Activate an onboarding rep -> status 'active'. Patches the rep's row in the
+  // loaded territory so the Activate button disappears without a full refetch.
   async function activateRep(repId: string) {
     if (!token) return;
     setActivating((m) => ({ ...m, [repId]: true }));
     setActivateError(null);
     try {
       const updated = await updateFieldRepStatus(token, repId, 'active');
-      setStatusByRep((m) => ({ ...m, [repId]: updated.status as RepStatus }));
+      setTerritory((t) =>
+        t === null
+          ? t
+          : {
+              ...t,
+              perRep: t.perRep.map((r) =>
+                r.repId === repId ? { ...r, status: updated.status } : r,
+              ),
+              // activeRepCount is derived from the same statuses, so it has to
+              // move with them or the KPI card contradicts the table below it.
+              kpis: {
+                ...t.kpis,
+                activeRepCount:
+                  updated.status === 'active'
+                    ? t.kpis.activeRepCount + 1
+                    : t.kpis.activeRepCount,
+              },
+            },
+      );
     } catch (err) {
       setActivateError(
         err instanceof Error ? err.message : 'Failed to activate rep',
@@ -154,58 +159,97 @@ export default function ManagerRosterPage() {
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
-  const reps = roster?.reps ?? [];
+  const reps = territory?.perRep ?? [];
 
-  // The roster payload carries no manager name, so resolve one for the heading.
-  // The backend only lets a non-admin regional_manager load their OWN roster
-  // (any other :id 403s), so a successfully-loaded roster for such a user means
-  // :id is their own rep row -> use their displayName. Admins can view any
-  // manager's roster and we don't have that name client-side, so keep the id.
+  // The payload carries no manager name, so resolve one for the heading. The
+  // backend only lets a non-admin regional_manager load their OWN territory (any
+  // other :id 403s), so a successfully-loaded territory for such a user means :id
+  // is their own rep row -> use their displayName. Admins can view any manager
+  // and we don't have that name client-side, so fall back to the manager's own
+  // row in perRep (they're in it as the player-coach), then to the id.
   const roles = user?.roles ?? [];
-  const ownRoster =
-    !!roster && roles.includes('regional_manager') && !roles.includes('admin');
-  const managerName = ownRoster ? user?.displayName ?? null : null;
+  const ownTerritory =
+    !!territory && roles.includes('regional_manager') && !roles.includes('admin');
+  const managerName =
+    (ownTerritory ? user?.displayName : null) ??
+    reps.find((r) => r.isManager)?.name ??
+    null;
 
   // Drill into a rep on click (a full page exists, so navigate rather than open a
-  // slide-over). The header stats seed from the roster row via query params so the
-  // drill-down renders instantly -- same link the old Name cell carried.
-  const openRep = (rep: ManagerRoster['reps'][number]) =>
+  // slide-over). The header stats seed from the row via query params so the
+  // drill-down renders instantly -- the same link the old roster table carried.
+  const openRep = (rep: PerRep) =>
     router.push(
       `/reps/${rep.repId}?name=${encodeURIComponent(
-        rep.displayName ?? '',
-      )}&commissions=${encodeURIComponent(rep.totalCommissions)}&adOrders=${
-        rep.adOrdersCount
+        rep.name ?? '',
+      )}&commissions=${encodeURIComponent(rep.commissionsEarned)}&adOrders=${
+        rep.ordersCount
       }`,
     );
 
-  // Reps table columns (Name · Status · aggregates the payload carries). The
-  // Assign cell keeps the per-rep Activate/Assign actions; it stops click/key
-  // propagation so pressing a button never also fires the row's navigation.
-  const repColumns: Column<ManagerRoster['reps'][number]>[] = [
-    { key: 'name', header: 'Field rep', cell: (rep) => rep.displayName ?? '—' },
+  // The coaching table: who's producing and who's stalled, sorted by revenue
+  // desc server-side. This replaces the old roster table rather than sitting
+  // above it -- both listed the same reps, and the old one's columns (rep,
+  // status, orders, commissions) are a subset of these. Its Activate/Assign
+  // actions are preserved in the last column.
+  const repColumns: Column<PerRep>[] = [
+    {
+      key: 'name',
+      header: 'Rep',
+      cell: (rep) => (
+        <>
+          {rep.name ?? '—'}
+          {/* The manager sells too (player-coach), so their own row is in the
+              territory. Mark it so the roster doesn't look off-by-one. */}
+          {rep.isManager && <span className="terr-self-badge">Manager</span>}
+        </>
+      ),
+    },
     {
       key: 'status',
       header: 'Status',
-      cell: (rep) => {
-        const st = statusByRep[rep.repId];
-        return st ? (
-          <span className="pill">{st}</span>
-        ) : (
-          <span className="muted">—</span>
-        );
-      },
+      cell: (rep) => <span className="pill">{rep.status}</span>,
     },
     {
-      key: 'orders',
-      header: 'Ad orders',
+      key: 'revenue',
+      header: 'Revenue',
       align: 'right',
-      cell: (rep) => rep.adOrdersCount,
+      cell: (rep) => usd(rep.revenue),
     },
     {
       key: 'commissions',
-      header: 'Total commissions',
+      header: 'Commissions',
       align: 'right',
-      cell: (rep) => usd(rep.totalCommissions),
+      cell: (rep) => usd(rep.commissionsEarned),
+    },
+    {
+      key: 'games',
+      header: 'Games',
+      align: 'right',
+      cell: (rep) => rep.gamesCovered,
+    },
+    {
+      key: 'articles',
+      header: 'Articles',
+      align: 'right',
+      cell: (rep) => rep.articlesPublished,
+    },
+    {
+      key: 'thirtyDay',
+      header: '30-day',
+      align: 'right',
+      cell: (rep) => usd(rep.thirtyDayRevenue),
+    },
+    {
+      key: 'lastActive',
+      header: 'Last active',
+      cell: (rep) =>
+        rep.lastActivityAt ? (
+          formatWhen(rep.lastActivityAt)
+        ) : (
+          // No order, no game, no article, ever -- the row worth a phone call.
+          <span className="terr-stale">Never</span>
+        ),
     },
     {
       key: 'assign',
@@ -216,7 +260,7 @@ export default function ManagerRosterPage() {
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
-          {statusByRep[rep.repId] === 'onboarding' && (
+          {rep.status === 'onboarding' && (
             <button
               type="button"
               className="btn-inline roster-activate"
@@ -226,17 +270,22 @@ export default function ManagerRosterPage() {
               {activating[rep.repId] ? 'Activating…' : 'Activate'}
             </button>
           )}
-          <button
-            type="button"
-            className="link-btn rep-roster-link"
-            onClick={() =>
-              setAssign({
-                rep: { id: rep.repId, name: rep.displayName ?? 'this rep' },
-              })
-            }
-          >
-            Assign game →
-          </button>
+          {/* The manager claims games for themselves via the masthead button,
+              which posts a self-claim rather than an assignment -- so no
+              "Assign game" action on their own row. */}
+          {!rep.isManager && (
+            <button
+              type="button"
+              className="link-btn rep-roster-link"
+              onClick={() =>
+                setAssign({
+                  rep: { id: rep.repId, name: rep.name ?? 'this rep' },
+                })
+              }
+            >
+              Assign game →
+            </button>
+          )}
         </div>
       ),
     },
@@ -259,11 +308,11 @@ export default function ManagerRosterPage() {
         <div className="masthead-head">
           <div>
             <span className="masthead-kicker">Team &amp; roster</span>
-            <h1 className="masthead-title">Manager roster</h1>
+            <h1 className="masthead-title">Territory</h1>
             <p className="masthead-standfirst">
-              Assign games to the reps who report to{' '}
-              {managerName ? managerName : <span className="mono">{id}</span>}, or
-              claim a game for yourself.
+              Performance for the reps who report to{' '}
+              {managerName ? managerName : <span className="mono">{id}</span>} —
+              assign them games, or claim one for yourself.
             </p>
           </div>
           <button
@@ -284,25 +333,96 @@ export default function ManagerRosterPage() {
         />
       )}
 
-      {/* ---- Territory summary: stat cards + recent activity ---- */}
-      {summaryLoading && <div className="card muted">Loading territory…</div>}
-      {summary && (
+      {loading && <div className="card muted">Loading territory…</div>}
+      {error && <div className="error">{error}</div>}
+
+      {/* ---- Performance: territory KPIs + 6-month trend ---- */}
+      {!loading && !error && territory && (
         <section className="card game">
           <span className="game-kicker">Territory</span>
-          <h2>Overview</h2>
-          <div className="rep-stats territory-stats">
+          <h2>Performance</h2>
+          <div className="rep-stats terr-stats">
             <div className="rep-stat">
               <span className="rep-stat__label">Roster</span>
-              <span className="rep-stat__value">{summary.repCount}</span>
-            </div>
-            <div className="rep-stat">
-              <span className="rep-stat__label">Territory sales</span>
-              <span className="rep-stat__value">{usd(summary.totalSales.amount)}</span>
+              <span className="rep-stat__value">{territory.kpis.repCount}</span>
               <span className="rep-stat__sub">
-                {summary.totalSales.count}{' '}
-                {summary.totalSales.count === 1 ? 'order' : 'orders'}
+                {territory.kpis.activeRepCount} active
               </span>
             </div>
+            <div className="rep-stat">
+              <span className="rep-stat__label">Territory revenue</span>
+              <span className="rep-stat__value">
+                {usd(territory.kpis.totalRevenue)}
+              </span>
+              <span className="rep-stat__sub">booked</span>
+            </div>
+            <div className="rep-stat">
+              <span className="rep-stat__label">Commissions</span>
+              <span className="rep-stat__value">
+                {usd(territory.kpis.totalCommissions)}
+              </span>
+              <span className="rep-stat__sub">lifetime earned</span>
+            </div>
+            <div className="rep-stat">
+              <span className="rep-stat__label">Games covered</span>
+              <span className="rep-stat__value">
+                {territory.kpis.gamesCovered}
+              </span>
+            </div>
+            <div className="rep-stat">
+              <span className="rep-stat__label">Articles</span>
+              <span className="rep-stat__value">
+                {territory.kpis.articlesPublished}
+              </span>
+              <span className="rep-stat__sub">published</span>
+            </div>
+          </div>
+
+          <h3 className="terr-section__head">Revenue — last 6 months</h3>
+          <RevChart
+            months={territory.revenueByMonth}
+            mini
+            ariaLabel="Territory booked revenue by month, last 6 months"
+          />
+        </section>
+      )}
+
+      {/* ---- The coaching table ---- */}
+      <section className="card game">
+        <span className="game-kicker">Roster</span>
+        <h2>Field reps</h2>
+        {activateError && <div className="error">{activateError}</div>}
+        {!loading && !error && reps.length > 0 ? (
+          <QueueTable
+            columns={repColumns}
+            rows={reps}
+            rowKey={(rep) => rep.repId}
+            onRowActivate={openRep}
+            ariaLabel="Field rep performance for this territory"
+          />
+        ) : (
+          !loading &&
+          !error && (
+            <div className="results-empty">
+              <p className="results-empty__title">No reps report to this manager</p>
+              <p className="results-empty__hint">
+                When reps are assigned to this manager, they&apos;ll appear here
+                and you can assign them games.
+              </p>
+            </div>
+          )
+        )}
+      </section>
+
+      {/* ---- Commission status + recent orders ---- */}
+      {summaryLoading && <div className="card muted">Loading activity…</div>}
+      {summary && (
+        <section className="card game">
+          <span className="game-kicker">Activity</span>
+          <h2>Recent orders</h2>
+          {/* The lifetime total lives in the Performance strip above; this is the
+              status split, which is a different question: what's owed vs settled. */}
+          <div className="rep-stats terr-stats">
             <div className="rep-stat">
               <span className="rep-stat__label">Commissions owed</span>
               <span className="rep-stat__value">
@@ -323,7 +443,6 @@ export default function ManagerRosterPage() {
             </div>
           </div>
 
-          <h3 className="territory-activity__head">Recent activity</h3>
           {summary.recentOrders.length > 0 ? (
             <>
               <table className="report-table rep-table">
@@ -380,33 +499,6 @@ export default function ManagerRosterPage() {
           )}
         </section>
       )}
-
-      <section className="card game">
-        <span className="game-kicker">Roster</span>
-        <h2>Field reps</h2>
-        {loading && <p className="muted">Loading roster…</p>}
-        {error && <div className="error">{error}</div>}
-        {activateError && <div className="error">{activateError}</div>}
-        {!loading && !error && reps.length > 0 ? (
-          <QueueTable
-            columns={repColumns}
-            rows={reps}
-            rowKey={(rep) => rep.repId}
-            onRowActivate={openRep}
-            ariaLabel="Field reps on this roster"
-          />
-        ) : (
-          !loading && !error && (
-            <div className="results-empty">
-              <p className="results-empty__title">No reps report to this manager</p>
-              <p className="results-empty__hint">
-                When reps are assigned to this manager, they&apos;ll appear here
-                and you can assign them games.
-              </p>
-            </div>
-          )
-        )}
-      </section>
     </main>
   );
 }
