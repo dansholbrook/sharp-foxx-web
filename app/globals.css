@@ -8565,7 +8565,7 @@ a.follow-sugcard__name:hover {
 
 .fgrid {
   display: grid;
-  grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
+  grid-template-columns: minmax(0, 72fr) minmax(0, 28fr);
   gap: 40px;
   align-items: start;
 }
@@ -8693,7 +8693,7 @@ a.follow-sugcard__name:hover {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding: 20px 22px;
+  padding: 20px 18px;
   background: linear-gradient(
     160deg,
     rgba(201, 163, 78, 0.15),
