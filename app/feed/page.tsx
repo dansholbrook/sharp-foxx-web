@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { useFollows } from '../follows-context';
+import { usePoints } from '../points-context';
 import { FollowButton } from '../follow-button';
+import { FanCard } from '../fan-card';
 import { AppNav } from '../nav';
 import { YourPicksBand, NationalBoardBand, OpenGamesBand } from '../feed-picks';
 import {
@@ -13,13 +15,17 @@ import {
   getEvents,
   getFollowFeed,
   getFollowSuggestions,
+  getPointsLeaderboard,
   followTargetId,
   followTargetName,
+  points,
   FeedItem,
   EventListItem,
   FollowMineEntry,
   FollowSuggestion,
   FollowFeedEntry,
+  LeaderboardEntry,
+  PointsLeaderboard,
 } from '../api';
 
 // Format the timestamptz string the API returns; fall back to the raw value if
@@ -105,16 +111,20 @@ function SearchBar() {
   );
 }
 
-// ---- A YouTube-style row: title + horizontally scrolling track of cards. ----
+// ---- A YouTube-style row: title + horizontally scrolling track of cards. The
+// optional className lets the games hero flag its Live/Upcoming rows for the
+// larger, first-impression sizing without a second component. ----
 function Row({
   title,
   children,
+  className,
 }: {
   title: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="row">
+    <section className={`row${className ? ` ${className}` : ''}`}>
       <h2 className="row-title">{title}</h2>
       <div className="row-track">{children}</div>
     </section>
@@ -444,32 +454,138 @@ function FollowingSection({
         </div>
       )}
 
-      <h3 className="follow-subhead">From your follows</h3>
-      {shown.length > 0 ? (
-        <div className="row-track">
-          {shown.map((entry) =>
-            entry.kind === 'game' ? (
-              <FollowGameCard key={`g-${entry.id}`} entry={entry} />
-            ) : (
-              <FollowArticleCard key={`a-${entry.id}`} entry={entry} />
-            ),
+      {/* "From your follows" only exists when there's something in it. The old
+          placeholder copy is gone on purpose — on a dashboard an empty section
+          reads as dead weight, so the whole subhead + track hide until a
+          followed team or athlete actually has a game or article to show. */}
+      {shown.length > 0 && (
+        <>
+          <h3 className="follow-subhead">From your follows</h3>
+          <div className="row-track">
+            {shown.map((entry) =>
+              entry.kind === 'game' ? (
+                <FollowGameCard key={`g-${entry.id}`} entry={entry} />
+              ) : (
+                <FollowArticleCard key={`a-${entry.id}`} entry={entry} />
+              ),
+            )}
+          </div>
+          {feed.length > FOLLOW_FEED_CAP && (
+            <button
+              type="button"
+              className="show-all"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? 'Show less' : `Show all (${feed.length})`}
+            </button>
           )}
-        </div>
-      ) : (
-        <div className="row-empty">
-          New games and articles from teams and athletes you follow will show up
-          here.
-        </div>
+        </>
       )}
-      {feed.length > FOLLOW_FEED_CAP && (
-        <button
-          type="button"
-          className="show-all"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          {expanded ? 'Show less' : `Show all (${feed.length})`}
-        </button>
+    </section>
+  );
+}
+
+// ---- Right rail: the points economy -------------------------------------
+// New markup, no new data — the rail is a layout of things this page (and its
+// shared contexts) already hold.
+
+// Medal for the podium, plain number otherwise. Same treatment /leaderboard
+// uses on its own rows, kept local since it's three lines and the board page's
+// copy isn't exported.
+function railRank(rank: number | null): string {
+  if (rank === 1) return '🥇';
+  if (rank === 2) return '🥈';
+  if (rank === 3) return '🥉';
+  return rank === null ? '—' : `${rank}`;
+}
+
+// POINTS HERO: the fan's balance, large, with the lifetime score under it and
+// the two doors into the points surfaces. Balance + lifetime both come from the
+// shared wallet (points-context), which loaded them together from the one
+// /predictions/my-picks read it already makes.
+//
+// Renders for EVERY role — staff pick too — and shows the starting state
+// gracefully: a fan with no wallet row reads back the untouched 1,000-point
+// grant, so there's no "no points" empty state to guard. It shows nothing only
+// while the wallet is still in flight (balance null), so it never flashes a
+// wrong zero.
+function PointsHero() {
+  const { balance, lifetimeEarned } = usePoints();
+  if (balance === null) return null;
+  return (
+    <section className="frail-points">
+      <span className="frail-points__label">Your points</span>
+      <div className="frail-points__balance">
+        <span className="frail-points__bolt" aria-hidden="true">
+          ⚡
+        </span>
+        <span className="frail-points__value">{points(balance)}</span>
+        <span className="frail-points__unit">pts</span>
+      </div>
+      {lifetimeEarned !== null && (
+        <span className="frail-points__lifetime">
+          {points(lifetimeEarned)} pts won all-time
+        </span>
       )}
+      <div className="frail-points__links">
+        <Link href="/picks" className="frail-points__link">
+          My picks →
+        </Link>
+        <Link href="/leaderboard" className="frail-points__link">
+          Leaderboard →
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+// LEADERBOARD TEASER: the top five off the global board, each row opening the
+// same fan card the full /leaderboard opens (the component is exported and
+// self-contained, so it's cheap to reuse here). Hides entirely when the board
+// hasn't loaded or nobody's on it yet.
+function LeaderboardTeaser({
+  board,
+  meId,
+  onOpen,
+}: {
+  board: PointsLeaderboard | null;
+  meId: string | undefined;
+  onOpen: (entry: LeaderboardEntry) => void;
+}) {
+  if (!board || board.top.length === 0) return null;
+  const top5 = board.top.slice(0, 5);
+  return (
+    <section className="frail-lb">
+      <div className="feedpicks__head">
+        <h2 className="row-title">Leaderboard</h2>
+        <Link href="/leaderboard" className="feedpicks__all">
+          Full leaderboard →
+        </Link>
+      </div>
+      <ol className="frail-lb__list">
+        {top5.map((entry) => (
+          <li
+            key={entry.userId}
+            className={`frail-lb__row${
+              entry.userId === meId ? ' frail-lb__row--me' : ''
+            }`}
+          >
+            <span className="frail-lb__rank">{railRank(entry.rank)}</span>
+            <button
+              type="button"
+              className="frail-lb__name fancard-open"
+              aria-haspopup="dialog"
+              onClick={() => onOpen(entry)}
+            >
+              {entry.displayName ?? 'You'}
+            </button>
+            <span className="frail-lb__score">
+              {points(entry.score)}
+              <span className="frail-lb__unit">pts</span>
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -489,6 +605,14 @@ export default function FeedPage() {
   // your follows" and the suggestions stay in sync after a toggle.
   const [followFeed, setFollowFeed] = useState<FollowFeedEntry[] | null>(null);
   const [suggestions, setSuggestions] = useState<FollowSuggestion[] | null>(null);
+
+  // The rail's leaderboard teaser: the global board, best-effort (a failure just
+  // hides the teaser). Held whole so its `me.userId` can flag the caller's own
+  // row and title the fan card the way /leaderboard does.
+  const [board, setBoard] = useState<PointsLeaderboard | null>(null);
+  // The fan whose card is open from a teaser row, held as the entry so the card
+  // titles itself instantly. Mounting the card IS opening it — null = closed.
+  const [openFan, setOpenFan] = useState<LeaderboardEntry | null>(null);
 
   // Active sport filter (ALL = show everything). Client-side over fetched data.
   const [sport, setSport] = useState<string>(ALL);
@@ -565,6 +689,24 @@ export default function FeedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, followsLoaded, followsSignature]);
 
+  // The rail's leaderboard teaser. Best-effort and independent of the browse
+  // load — a slow or failed board never holds up the games, and just leaves the
+  // teaser hidden. Global scope only; the event board is a game-page concern.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    getPointsLeaderboard(token, 'global')
+      .then((data) => {
+        if (!cancelled) setBoard(data);
+      })
+      .catch(() => {
+        // Silent: the teaser is an addition to a feed that works without it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   // Sports present across BOTH rows — the union drives which chips to show.
   // Games carry a non-null sport enum; articles carry a nullable eventSport.
   // Sorted for a stable chip order.
@@ -597,7 +739,7 @@ export default function FeedPage() {
   if (!token) return null;
 
   return (
-    <main className="feed-home">
+    <main className="feed-home feed-dash">
       <div className="header-row">
         <div>
           <span className="wordmark">Sharp Foxx</span>
@@ -612,105 +754,157 @@ export default function FeedPage() {
 
       <SearchBar />
 
-      {/* Your own points, first: what's still riding and what just landed. Above
-          the follows band on purpose — a fan with points in play wants that
-          before anything else on the page. Hides itself entirely when there's
-          nothing in play, so a fan who has never picked sees the feed unchanged.
-          Takes the events this page ALREADY fetched: /predictions/my-picks
-          carries no game status, and this saves a read per pick. */}
-      <YourPicksBand token={token} events={events ?? []} />
-
-      {/* Personalized band — the real "following" experience. Renders once the
-          shared follows membership has loaded; picks Following vs Suggested. */}
-      {followsLoaded && (
-        <FollowingSection
-          mine={mine}
-          followFeed={followFeed}
-          suggestions={suggestions}
-        />
-      )}
-
-      {/* The National Board — house questions, pickable right here. This band IS
-          the surface (there's no /national page), so it sits below the follows
-          band but above the browse rows: it's a thing to DO, not a thing to
-          read. */}
-      <NationalBoardBand token={token} />
-
-      {/* …and the games with questions open right now. Followed teams sort
-          first when the shared follows are already loaded — no extra fetch. */}
-      <OpenGamesBand token={token} follows={followsLoaded ? mine : []} />
-
-      {!loading && !error && availableSports.length > 0 && (
-        <div className="filter-row" role="group" aria-label="Filter by sport">
-          <button
-            type="button"
-            className={`chip${sport === ALL ? ' chip--on' : ''}`}
-            aria-pressed={sport === ALL}
-            onClick={() => setSport(ALL)}
-          >
-            All sports
-          </button>
-          {availableSports.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`chip${sport === s ? ' chip--on' : ''}`}
-              aria-pressed={sport === s}
-              onClick={() => setSport(s)}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {loading && <div className="card muted">Loading feed…</div>}
       {error && <div className="error">{error}</div>}
 
-      {!loading && (
-        <>
-          {liveEvents.length > 0 && (
-            <Row title="Live Now">
-              {liveEvents.map((ev) => (
-                <GameCard key={ev.id} event={ev} />
-              ))}
-            </Row>
-          )}
-
-          <Row title="Upcoming Games">
-            {upcomingEvents.length > 0 ? (
-              upcomingEvents.map((ev) => <GameCard key={ev.id} event={ev} />)
-            ) : (
-              <div className="row-empty">
-                {sport === ALL
-                  ? 'No upcoming games'
-                  : `No upcoming games for ${sport}`}
+      {/* Two columns on desktop, one interleaved column on mobile. The .fmain /
+          .frail wrappers are real elements at desktop (the rail is the sticky
+          one) and `display: contents` below ~1024px, so every section becomes a
+          direct grid item there and CSS `order` alone weaves them into the
+          points-first mobile sequence — no duplicated markup. */}
+      <div className="fgrid">
+        {/* ---- MAIN COLUMN ---- */}
+        <div className="fmain">
+          {/* HERO: the live/upcoming games are the first thing on the page. The
+              sport chips ride with them since they filter the games (and the
+              articles down in the tail). */}
+          <section className="fmain-hero">
+            {!loading && !error && availableSports.length > 0 && (
+              <div
+                className="filter-row"
+                role="group"
+                aria-label="Filter by sport"
+              >
+                <button
+                  type="button"
+                  className={`chip${sport === ALL ? ' chip--on' : ''}`}
+                  aria-pressed={sport === ALL}
+                  onClick={() => setSport(ALL)}
+                >
+                  All sports
+                </button>
+                {availableSports.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`chip${sport === s ? ' chip--on' : ''}`}
+                    aria-pressed={sport === s}
+                    onClick={() => setSport(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
-          </Row>
 
-          {resultEvents.length > 0 && (
-            <Row title="Recent Results">
-              {resultEvents.map((ev) => (
-                <GameCard key={ev.id} event={ev} />
-              ))}
-            </Row>
+            {loading && <div className="card muted">Loading games…</div>}
+
+            {!loading && liveEvents.length > 0 && (
+              <Row title="Live Now" className="fmain-live">
+                {liveEvents.map((ev) => (
+                  <GameCard key={ev.id} event={ev} />
+                ))}
+              </Row>
+            )}
+
+            {!loading && (
+              <Row title="Upcoming Games" className="fmain-upcoming">
+                {upcomingEvents.length > 0 ? (
+                  upcomingEvents.map((ev) => <GameCard key={ev.id} event={ev} />)
+                ) : (
+                  <div className="row-empty">
+                    {sport === ALL
+                      ? 'No upcoming games'
+                      : `No upcoming games for ${sport}`}
+                  </div>
+                )}
+              </Row>
+            )}
+          </section>
+
+          {/* FOLLOWING + FROM YOUR FOLLOWS. Renders once the shared follows
+              membership has loaded; picks Following vs Suggested and hides the
+              "from your follows" track when it's empty. */}
+          {followsLoaded && (
+            <FollowingSection
+              mine={mine}
+              followFeed={followFeed}
+              suggestions={suggestions}
+            />
           )}
 
-          <Row title="Latest Articles">
-            {visibleArticles.length > 0 ? (
-              visibleArticles.map((item) => (
-                <ArticleThumb key={item.id} item={item} />
-              ))
-            ) : (
-              <div className="row-empty">
-                {sport === ALL
-                  ? 'No published articles yet'
-                  : `No articles for ${sport}`}
-              </div>
+          {/* TAIL: results + the article shelf. */}
+          <section className="fmain-tail">
+            {!loading && resultEvents.length > 0 && (
+              <Row title="Recent Results">
+                {resultEvents.map((ev) => (
+                  <GameCard key={ev.id} event={ev} />
+                ))}
+              </Row>
             )}
-          </Row>
-        </>
+
+            {!loading && (
+              <Row title="Latest Articles">
+                {visibleArticles.length > 0 ? (
+                  visibleArticles.map((item) => (
+                    <ArticleThumb key={item.id} item={item} />
+                  ))
+                ) : (
+                  <div className="row-empty">
+                    {sport === ALL
+                      ? 'No published articles yet'
+                      : `No articles for ${sport}`}
+                  </div>
+                )}
+              </Row>
+            )}
+          </section>
+        </div>
+
+        {/* ---- RIGHT RAIL: the points economy. Sticky with its own scroll on
+            desktop; interleaves into the single column on mobile. Every section
+            below self-hides when empty, so the rail is never a column of gaps. */}
+        <aside className="frail" aria-label="Your points">
+          {/* a. POINTS HERO — balance large, lifetime under, the two doors. */}
+          <PointsHero />
+
+          {/* b. YOUR PICKS — the pending + just-settled cards, stacked to rail
+              width by the .frail-picks scope. Same self-fetching band as before;
+              hides itself when there's nothing riding. */}
+          <div className="frail-picks">
+            <YourPicksBand token={token} events={events ?? []} />
+          </div>
+
+          {/* c. NATIONAL BOARD — house questions, pickable right here. The
+              PickCards stack one-per-row at rail width; cap-4 + expander kept. */}
+          <div className="frail-natboard">
+            <NationalBoardBand token={token} />
+          </div>
+
+          {/* d. LEADERBOARD TEASER — top five, rows open the real fan card. */}
+          <LeaderboardTeaser
+            board={board}
+            meId={board?.me.userId}
+            onOpen={setOpenFan}
+          />
+
+          {/* e. MAKE YOUR PICKS — games with a question open now, as compact
+              rail rows. Followed teams sort first (no extra fetch). */}
+          <div className="frail-open">
+            <OpenGamesBand token={token} follows={followsLoaded ? mine : []} />
+          </div>
+        </aside>
+      </div>
+
+      {/* Mounting is opening (SlideOver's contract). Keyed by fan so a second
+          click remounts rather than leaving the previous fan under a new title. */}
+      {openFan && (
+        <FanCard
+          key={openFan.userId}
+          userId={openFan.userId}
+          fallbackName={openFan.displayName}
+          isMe={openFan.userId === board?.me.userId}
+          onClose={() => setOpenFan(null)}
+        />
       )}
     </main>
   );

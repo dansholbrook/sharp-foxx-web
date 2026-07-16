@@ -8209,6 +8209,122 @@ a.follow-sugcard__name:hover {
   font-weight: 600;
 }
 
+/* ---- The rail accordion. National Board cards stack one-per-row at rail
+   width, so two open questions used to run the rail off the screen. Each card
+   now collapses to its header + one summary row; tapping the header expands the
+   full option list. Rail-density only — the game board never passes the collapse
+   props, so this whole block is dark on that surface. ---- */
+
+/* The header, now a toggle. Strips the button chrome and inherits the flex
+   layout of .predict-card__head it's stacked with, so the question and pill sit
+   exactly where they did before — only now the row is tappable. */
+.natboard-collapse-toggle {
+  width: 100%;
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.natboard-collapse-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.natboard-collapse-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* The open/closed indicator. Points down when collapsed, flips up on expand. */
+.natboard-collapse-chevron {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  transition: transform 0.16s ease;
+}
+
+.natboard-collapse-chevron[data-open='true'] {
+  transform: rotate(180deg);
+}
+
+/* The expanded option list slides down on open. Purely an entrance flourish —
+   the card is fully usable the instant it renders. */
+.natboard-collapse-body {
+  animation: natboard-collapse-open 0.2s ease-out;
+}
+
+@keyframes natboard-collapse-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The one-line collapsed summary — the fan's pick, or the shape of the
+   question. Sits where the stake/options used to, so a collapsed card is just a
+   header and this line. */
+.natboard-collapse-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.natboard-collapse-mine {
+  color: var(--text);
+}
+
+.natboard-collapse-mine strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.natboard-collapse-dot {
+  margin: 0 4px;
+  color: var(--border-strong);
+}
+
+/* The nudge on an unpicked open question, pushed to the far end of the row. */
+.natboard-collapse-cta {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The settled badge, same green-for-won / quiet-for-the-rest call the outcome
+   banner and the Your-picks band make — a loss is never scolded. */
+.natboard-collapse-badge {
+  margin-left: auto;
+  padding: 2px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.natboard-collapse-badge--won {
+  color: #b4e6c0;
+  background: #17251a;
+  border-color: #2f5c3a;
+}
+
 /* ---- /national-admin: the console pattern, without a console ---- */
 .natboard-admin__alert {
   margin-top: 14px;
@@ -8418,5 +8534,329 @@ a.follow-sugcard__name:hover {
   .feedpicks-card:hover,
   .feedpicks-game:hover {
     transform: none;
+  }
+
+  /* The accordion stays functional, just instant: no chevron spin, no slide on
+     expand. The state change still lands — only the motion is dropped. */
+  .natboard-collapse-chevron {
+    transition: none;
+  }
+
+  .natboard-collapse-body {
+    animation: none;
+  }
+}
+
+/* =========================== /feed DASHBOARD ===========================
+   The feed as a two-column dashboard: browse content on the left (~65%), the
+   points economy in a sticky rail on the right (~35%). All scoped under
+   .feed-dash so nothing here leaks to the other pages that share .feed-home's
+   tokens and card language.
+
+   The whole responsive trick is one idea: at desktop .fmain / .frail are real
+   columns (the rail being the sticky one); below ~1024px BOTH become
+   `display: contents`, so every section they hold turns into a direct grid item
+   of .fgrid and plain CSS `order` weaves them into the points-first mobile
+   sequence — one DOM, no duplicated markup, nothing hidden. */
+
+.feed-dash {
+  max-width: 1240px;
+}
+
+.fgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
+  gap: 40px;
+  align-items: start;
+}
+
+.fmain {
+  min-width: 0;
+}
+
+/* ---- HERO games: the first thing on the page, so they carry more presence
+   than the browse rows further down — a larger title and wider cards. ---- */
+.fmain-hero .row-title {
+  font-size: 1.5rem;
+}
+
+/* Live Now leads and reads BIG: wider cards, and a quiet gold ring so the row
+   registers as "happening now" before the pulsing LIVE badge is even read. */
+.fmain-live .tcard {
+  flex: 0 0 380px;
+}
+
+.fmain-live .thumb {
+  box-shadow: 0 0 0 1px var(--accent-dim) inset;
+}
+
+.fmain-upcoming .tcard {
+  flex: 0 0 300px;
+}
+
+/* ---- The rail: one sticky element that scrolls itself when it outgrows the
+   viewport. Its sections space via a flex gap (the bands' own row margins are
+   zeroed below), so the column reads as a tight stack of cards. ---- */
+.frail {
+  min-width: 0;
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  /* a hair of room so a card's hover-lift / shadow isn't clipped at the
+     scroll edge, pulled back out with a matching negative margin */
+  padding: 2px;
+  margin: -2px;
+}
+
+.frail::-webkit-scrollbar {
+  width: 8px;
+}
+
+.frail::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+.frail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* A wrapped band that self-hid (returned null) leaves an empty wrapper; drop it
+   so the rail is a stack of cards, never a column of gaps. PointsHero and the
+   teaser hide themselves (no box), so only the three wrapped bands need this. */
+.frail-picks:empty,
+.frail-natboard:empty,
+.frail-open:empty {
+  display: none;
+}
+
+/* Inside the rail the bands shed their horizontal-strip chrome: no bottom
+   margin (the flex gap owns spacing), a calmer title, and every track turns
+   vertical at full rail width. */
+.frail .row {
+  margin-bottom: 0;
+}
+
+.frail .row-title {
+  font-size: 1.05rem;
+  margin: 0 0 12px;
+}
+
+.frail .feedpicks__head {
+  margin-bottom: 12px;
+}
+
+/* YOUR PICKS + MAKE YOUR PICKS: unroll the horizontal track into a full-width
+   vertical stack. */
+.frail-picks .feedpicks__track,
+.frail-open .feedpicks__track {
+  flex-direction: column;
+  overflow: visible;
+  gap: 10px;
+  padding-bottom: 0;
+}
+
+.frail-picks .feedpicks-card,
+.frail-open .feedpicks-game {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Make-your-picks rows read tighter in the rail — same card, calmer. */
+.frail-open .feedpicks-game {
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.frail-open .feedpicks-game__matchup {
+  font-size: 0.95rem;
+}
+
+/* NATIONAL BOARD: one PickCard per row at rail width. The auto-fit grid would
+   already collapse to a single column here, but pin it so a wide-ish rail can
+   never split the board in two. */
+.frail-natboard .natboard__list {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+/* ---- a. POINTS HERO: the balance, large, over the lifetime score and the two
+   doors into the points surfaces. Gold-anchored so it reads as "this is your
+   score" at a glance. ---- */
+.frail-points {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 20px 22px;
+  background: linear-gradient(
+    160deg,
+    rgba(201, 163, 78, 0.15),
+    rgba(201, 163, 78, 0.03)
+  );
+  border: 1px solid var(--accent-dim);
+  border-radius: 14px;
+}
+
+.frail-points__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--accent-dim);
+}
+
+.frail-points__balance {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.frail-points__bolt {
+  align-self: center;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.frail-points__value {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.frail-points__unit {
+  font-size: 0.9rem;
+  color: var(--accent-dim);
+}
+
+.frail-points__lifetime {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.frail-points__links {
+  display: flex;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.frail-points__link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.frail-points__link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* ---- d. LEADERBOARD TEASER: the top five, each row opening the same fan card
+   /leaderboard opens. ---- */
+.frail-lb__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.frail-lb__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.frail-lb__row:last-child {
+  border-bottom: none;
+}
+
+.frail-lb__rank {
+  flex: 0 0 26px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.frail-lb__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+/* The caller's own row leans gold, the way /leaderboard highlights "you". */
+.frail-lb__row--me .frail-lb__name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.frail-lb__score {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.frail-lb__unit {
+  margin-left: 3px;
+  font-size: 0.66rem;
+  color: var(--accent-dim);
+}
+
+/* ---- Below ~1024px: one column. Flatten both wrappers so their sections
+   become direct grid items, then `order` alone weaves the points-first
+   sequence. Nothing is hidden — the leaderboard teaser, which the brief's
+   mobile list omits, slots in right after Make-your-picks. ---- */
+@media (max-width: 1023px) {
+  .fgrid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .fmain,
+  .frail {
+    display: contents;
+  }
+
+  .frail-points {
+    order: 1;
+  }
+  .frail-picks {
+    order: 2;
+  }
+  .fmain-hero {
+    order: 3;
+  }
+  .frail-natboard {
+    order: 4;
+  }
+  .follow-section {
+    order: 5;
+  }
+  .frail-open {
+    order: 7;
+  }
+  .frail-lb {
+    order: 8;
+  }
+  .fmain-tail {
+    order: 9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fmain-live .tcard {
+    transition: none;
   }
 }

@@ -186,6 +186,8 @@ export function PickCard({
   optimisticKey,
   error,
   onPick,
+  collapsed,
+  onToggleCollapse,
 }: {
   prediction: PredictionBase;
   // Optional line under the question. The game board leaves it off (the page IS
@@ -196,6 +198,15 @@ export function PickCard({
   optimisticKey: string | null;
   error: string | null;
   onPick: (pickKey: string) => void;
+  // ---- Rail accordion variant (National Board only) ----
+  // Passing `onToggleCollapse` turns the card collapsible: the head becomes a
+  // toggle button with a chevron, and while `collapsed` the stake/options/notes
+  // body is swapped for a single summary row. Omit both and the card renders
+  // exactly as before — always-expanded, the game board's behaviour. This is a
+  // density concern for the feed's right rail, NOT a redesign of the card; the
+  // expanded body below is the same markup the game board shows.
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const my = prediction.myPick;
   const myKey = my?.pickKey ?? optimisticKey;
@@ -206,23 +217,15 @@ export function PickCard({
   const canPick = open && myKey === null;
   const inFlight = optimisticKey !== null && !my;
 
-  return (
-    <article
-      className={`predict-card${
-        prediction.status === 'resolved' ? ' predict-card--settled' : ''
-      }`}
-    >
-      <div className="predict-card__head">
-        <h3 className="predict-card__question">{prediction.question}</h3>
-        <span
-          className={`pill predict-pill predict-pill--${prediction.status}`}
-        >
-          {statusLabel(prediction)}
-        </span>
-      </div>
+  const collapsible = onToggleCollapse != null;
+  const showSummary = collapsible && collapsed;
+  const pillClass = `pill predict-pill predict-pill--${prediction.status}`;
 
-      {caption}
-
+  // The full body — identical whether the card is a game-board card or an
+  // expanded rail card. Extracted only so the collapsed rail state can swap it
+  // out for the one-line summary; nothing here changed.
+  const body = (
+    <>
       <div className="predict-card__stake">
         <span className="predict-card__stake-value">
           {points(prediction.stake)} points
@@ -270,7 +273,110 @@ export function PickCard({
       )}
 
       {error && <div className="error predict-error">{error}</div>}
+    </>
+  );
+
+  return (
+    <article
+      className={`predict-card${
+        prediction.status === 'resolved' ? ' predict-card--settled' : ''
+      }`}
+    >
+      {collapsible ? (
+        <button
+          type="button"
+          className="predict-card__head natboard-collapse-toggle"
+          aria-expanded={!collapsed}
+          onClick={onToggleCollapse}
+        >
+          <h3 className="predict-card__question">{prediction.question}</h3>
+          <span className="natboard-collapse-head-right">
+            <span className={pillClass}>{statusLabel(prediction)}</span>
+            <span
+              className="natboard-collapse-chevron"
+              data-open={!collapsed}
+              aria-hidden="true"
+            >
+              ▾
+            </span>
+          </span>
+        </button>
+      ) : (
+        <div className="predict-card__head">
+          <h3 className="predict-card__question">{prediction.question}</h3>
+          <span className={pillClass}>{statusLabel(prediction)}</span>
+        </div>
+      )}
+
+      {caption}
+
+      {showSummary ? (
+        <CollapsedSummary prediction={prediction} myKey={myKey} open={open} />
+      ) : collapsible ? (
+        <div className="natboard-collapse-body">{body}</div>
+      ) : (
+        body
+      )}
     </article>
+  );
+}
+
+// ---- The one-line collapsed summary for a rail card. Answers "where do I
+// stand?" without the option list: the fan's pick and stake (with a Won/Lost/
+// Refunded badge once it's settled) if they've picked, or the shape of the
+// question plus a "Make your pick" nudge if they haven't. ----
+function CollapsedSummary({
+  prediction,
+  myKey,
+  open,
+}: {
+  prediction: PredictionBase;
+  myKey: string | null;
+  open: boolean;
+}) {
+  const my = prediction.myPick;
+
+  if (myKey !== null) {
+    // Optimistic picks carry no `my` yet, so resolve the label off the key and
+    // fall back to the question's own stake for the points figure.
+    const label = prediction.options.find((o) => o.key === myKey)?.label ?? '';
+    const stake = my?.stake ?? prediction.stake;
+    const settled = my != null && my.outcome !== 'pending';
+    return (
+      <div className="natboard-collapse-summary">
+        <span className="natboard-collapse-mine">
+          Your pick: <strong>{label}</strong>
+          <span className="natboard-collapse-dot" aria-hidden="true">·</span>
+          {points(stake)} pts
+        </span>
+        {settled && (
+          <span
+            className={`natboard-collapse-badge natboard-collapse-badge--${my.outcome}`}
+          >
+            {my.outcome === 'won'
+              ? 'Won'
+              : my.outcome === 'lost'
+                ? 'Lost'
+                : 'Refunded'}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="natboard-collapse-summary">
+      <span className="natboard-collapse-stat">
+        {prediction.options.length} options
+        <span className="natboard-collapse-dot" aria-hidden="true">·</span>
+        {prediction.totalPicks === 1
+          ? '1 pick'
+          : `${points(prediction.totalPicks)} picks`}
+        <span className="natboard-collapse-dot" aria-hidden="true">·</span>
+        {points(prediction.stake)} pts to play
+      </span>
+      {open && <span className="natboard-collapse-cta">Make your pick</span>}
+    </div>
   );
 }
 

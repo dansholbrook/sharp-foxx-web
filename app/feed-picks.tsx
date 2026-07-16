@@ -287,6 +287,32 @@ export function NationalBoardBand({ token }: { token: string }) {
   // changes anything. The board re-reads itself after each pick.
   const { rows, onPick, optimistic, errors } = usePickBoard({ token, fetchRows });
 
+  // The accordion. These cards are FULL pick cards stacked one-per-row at rail
+  // width, so two open questions used to make the rail enormous. Here each card
+  // collapses to a header + one summary row and only ONE is expanded at a time
+  // (openId); tapping a header expands it and collapses whichever was open.
+  const [openId, setOpenId] = useState<string | null>(null);
+  // Smart default, computed ONCE per board load rather than on every render, so
+  // a fan expanding then collapsing every card isn't overruled on the next
+  // poll. Auto-expand the sole question that's open AND unpicked — the one thing
+  // asking for an action — and only when it's alone; anything else (nothing to
+  // do, or several waiting) starts fully collapsed. Resolved/voided never
+  // auto-open: they're a record, not a prompt.
+  const [didAutoOpen, setDidAutoOpen] = useState(false);
+  useEffect(() => {
+    if (didAutoOpen || !rows) return;
+    const actionable = rows.filter(
+      (p) => p.status === 'open' && p.myPick === null,
+    );
+    setOpenId(actionable.length === 1 ? actionable[0].id : null);
+    setDidAutoOpen(true);
+  }, [rows, didAutoOpen]);
+
+  const toggle = useCallback(
+    (id: string) => setOpenId((cur) => (cur === id ? null : id)),
+    [],
+  );
+
   if (!rows || rows.length === 0) return null;
 
   const shown = expanded ? rows : rows.slice(0, NATIONAL_FEED_CAP);
@@ -306,6 +332,8 @@ export function NationalBoardBand({ token }: { token: string }) {
             optimisticKey={optimistic[p.id] ?? null}
             error={errors[p.id] ?? null}
             onPick={(key) => void onPick(p.id, key)}
+            collapsed={openId !== p.id}
+            onToggleCollapse={() => toggle(p.id)}
           />
         ))}
       </div>
