@@ -2083,6 +2083,11 @@ export async function unfollowTarget(
 export type PredictionKind = 'winner' | 'yes_no' | 'over_under';
 export type PredictionStatus = 'open' | 'locked' | 'resolved' | 'voided';
 
+// 'game' = hung off an event we cover, opened courtside by a rep. 'national' = a
+// house question about the wider sport ("Who wins the NBA Finals?"), tied to no
+// game and opened by admin/RM only.
+export type PredictionScope = 'game' | 'national';
+
 // A pick's outcome is DERIVED on the backend from its parent's status and its
 // payout (outcomeOf) — it is not a stored column. 'refunded' is a voided
 // question (payout stays null); 'lost' is a resolved one that paid 0.
@@ -2098,10 +2103,16 @@ export interface PredictionOption {
   share: number;
 }
 
-// GET /events/:id/predictions — one game's board, newest question first.
-export interface Prediction {
+// Everything a board row carries REGARDLESS of scope — the exact shape of the
+// backend's `withPickData()`, which is scope-blind on purpose so a question
+// reads identically on the per-game board and the National Board. The two
+// concrete boards below each add only the fields their own read layers on top.
+//
+// This is what the shared PickCard renders (see predictions.tsx): a card that
+// took the game board's `Prediction` couldn't show a national question, whose
+// row has no eventId at all.
+export interface PredictionBase {
   id: string;
-  eventId: string;
   question: string;
   kind: PredictionKind;
   // `numeric` at rest, so a STRING over the wire (over_under only, else null).
@@ -2126,16 +2137,84 @@ export interface Prediction {
   } | null;
 }
 
-// POST /predictions body. Labels are deliberately omitted: the backend owns them
-// (team names from the event for `winner`, "Over <line>"/"Under <line>",
-// "Yes"/"No"), and a client label is IGNORED for winner regardless. Sending keys
-// only keeps the server authoritative.
-export interface CreatePredictionInput {
+// GET /events/:id/predictions — one game's board, newest question first.
+// eventId is the one field this board adds.
+export interface Prediction extends PredictionBase {
   eventId: string;
+}
+
+// GET /predictions/national — the fan-facing National Board. Open+locked first,
+// then recently resolved, capped at 20. Every authenticated role reads it.
+//
+// Note the absences: NO eventId (a national question is tied to no game) and no
+// 'voided' row will ever appear — the backend excludes voided from this read on
+// purpose (a question staff PULLED isn't advertised to fans who never picked
+// it). Fans who did pick it still see it on /predictions/my-picks as 'refunded'.
+export interface NationalPrediction extends PredictionBase {
+  // Echoed by the backend so a feed can mix these with game questions and tell
+  // them apart without inferring it from a missing eventId.
+  scope: 'national';
+  // What the question is ABOUT ("NBA Finals 2026"). Required by the create DTO
+  // on national scope, but the column is nullable (game rows carry null), so the
+  // wire type is honest about it and the UI renders defensively.
+  context: string | null;
+  // The promise-to-fans settle date. A DATE ('2026-07-15'), not a datetime —
+  // it's a commitment fans read, not an instant anything fires on. Optional at
+  // create, so null here means "no date promised".
+  resolvesBy: string | null;
+  // The real staff member who opened it, by display name — not a house brand.
+  openedByName: string | null;
+}
+
+// GET /predictions/open-games — the feed's "Make your picks" carousel: games
+// with at least one question a fan can pick RIGHT NOW. Live games first, then
+// soonest to start; capped at 12.
+//
+// Team names are NULLABLE (the backend left-joins them, so a game whose team row
+// went missing still reaches the carousel) and there are deliberately no team
+// IDs on this read — anything matching these against follows must do it by name.
+export interface OpenPickGame {
+  eventId: string;
+  homeTeamName: string | null;
+  awayTeamName: string | null;
+  // Only ever a game that hasn't finished — there's nothing to pick on a game
+  // that's over, so the backend filters to these two.
+  status: 'scheduled' | 'live';
+  scheduledAt: string;
+  openCount: number;
+  // The cheapest way onto this game's board — what a fan needs to play.
+  minStake: number;
+}
+
+// POST /predictions body. Labels are MOSTLY server-owned: the backend takes team
+// names from the event for a game `winner`, and writes "Over <line>"/"Under
+// <line>"/"Yes"/"No" itself. Sending keys only keeps the server authoritative.
+//
+// The ONE exception is a national `winner` — there's no event to take names
+// from, so the caller must supply a label per option or the board renders raw
+// keys ("okc") at fans. That's the only multi-way question v1 has: 2-6 options,
+// caller-keyed. Every other (scope, kind) pair keeps the closed key set.
+//
+// The scope split, enforced by the backend's refinement and mirrored here:
+//   game     — eventId REQUIRED; context/resolvesBy rejected (the event IS the
+//              context, and it resolves when the game ends).
+//   national — eventId REJECTED; context REQUIRED; resolvesBy optional.
+export interface CreatePredictionInput {
+  // Defaulted to 'game' server-side, so an existing courtside caller that has
+  // never heard of this field keeps working untouched.
+  scope?: PredictionScope;
+  // Required on game scope, rejected on national.
+  eventId?: string;
+  // Required on national scope, rejected on game.
+  context?: string;
+  // National only. A DATE ('2026-07-15'), never a datetime.
+  resolvesBy?: string;
   question: string;
   kind: PredictionKind;
   options: Array<{ key: string; label?: string }>;
   line?: number;
+  // Capped server-side at the 1,000-point starting grant: a question staked
+  // above what a new fan has is unplayable by every new fan.
   stake?: number;
   locksAt?: string;
 }
@@ -2181,10 +2260,19 @@ export interface VoidedPrediction {
 // GET /predictions/my-picks — the caller's wallet + full pick history,
 // newest-first. `net` is what the pick did to the balance: a refund nets 0, a
 // still-pending pick reads as -stake (those points ARE debited right now).
+//
+// Carries BOTH scopes. A national pick reports eventId: null and is captioned by
+// its `context` instead — there is no game to link it to. Anything rendering a
+// pick must branch on that rather than assume a game.
 export interface MyPick {
   pickId: string;
   predictionId: string;
-  eventId: string;
+  // NULL on a national pick. Never build a /games/ link without checking.
+  eventId: string | null;
+  scope: PredictionScope;
+  // The national caption ("NBA Finals 2026"); null on a game pick, whose event
+  // is its context.
+  context: string | null;
   question: string;
   kind: PredictionKind;
   pickKey: string;
@@ -2277,6 +2365,16 @@ export const getFanPointsSummary = (token: string, userId: string) =>
 export const getEventPredictions = (token: string, eventId: string) =>
   authGet<Prediction[]>(`/events/${eventId}/predictions`, token);
 
+// The National Board. Any authenticated role reads it — opening one is admin/RM,
+// but PICKING one is everybody, same as any other question.
+export const getNationalPredictions = (token: string) =>
+  authGet<NationalPrediction[]>('/predictions/national', token);
+
+// The feed carousel's games-with-open-questions strip. A fan-facing read, same
+// as the boards it links to.
+export const getOpenPickGames = (token: string) =>
+  authGet<OpenPickGame[]>('/predictions/open-games', token);
+
 // Make a pick. Sends a KEY and nothing else — stake and payout are server-owned.
 export const makePick = (token: string, predictionId: string, pickKey: string) =>
   authPost<PredictionPickResult>(`/predictions/${predictionId}/pick`, token, {
@@ -2307,6 +2405,15 @@ export const voidPrediction = (token: string, predictionId: string) =>
 
 // ---- Points identity ----
 
+// The full pick history, every scope, newest-first — there is no server-side
+// filter on this read.
+//
+// FUTURE ENRICHMENT: a `?pending=true` param. The feed's "Your picks" band wants
+// only in-play picks plus the last 48h of settled ones, and today it fetches the
+// whole history and filters client-side (see feed-picks.tsx). That's honest at a
+// handful of picks and wrong at a thousand: this read grows without bound per
+// fan, and the feed pays for all of it on every load. A `pending=` (or a date
+// floor) on the backend would let the band ask for what it actually renders.
 export const getMyPicks = (token: string) =>
   authGet<MyPicksReport>('/predictions/my-picks', token);
 
@@ -2321,6 +2428,26 @@ export const getPointsLeaderboard = (
     }`,
     token,
   );
+
+// A national question whose promised settle date has passed while it is STILL
+// open or locked — i.e. fans are holding staked points on a question the house
+// said it would have settled by now. The feed says so to the fan; the admin
+// board pills it as a warning. One rule, so the two can't disagree about who's
+// late.
+//
+// resolvesBy is a DATE, not an instant, so the deadline is the END of that day:
+// a question resolving "by Jul 15" is not overdue at 9am on the 15th. Compared
+// in UTC because that's the zone the date was stored in — reading it in the
+// viewer's zone would make the same question late in Sydney and fine in LA.
+export function isNationalOverdue(p: {
+  resolvesBy: string | null;
+  status: PredictionStatus;
+}): boolean {
+  if (!p.resolvesBy) return false;
+  if (p.status !== 'open' && p.status !== 'locked') return false;
+  const due = new Date(`${p.resolvesBy}T23:59:59Z`).getTime();
+  return !Number.isNaN(due) && Date.now() > due;
+}
 
 // Points are a plain integer count, never money — so they format as a grouped
 // count ("1,100"), never through usd(). The ⚡ chip and the picks hero append

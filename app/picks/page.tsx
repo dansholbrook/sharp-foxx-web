@@ -45,12 +45,26 @@ function PickRow({ pick }: { pick: MyPick }) {
   return (
     <li className={`points-row points-row--${pick.outcome}`}>
       <div className="points-row__main">
-        {/* Every pick links back to the game it was made on — the question only
-            means something next to the score. */}
-        <Link href={`/games/${pick.eventId}`} className="points-row__question">
-          {pick.question}
-        </Link>
+        {/* A GAME pick links back to the game it was made on — the question only
+            means something next to the score.
+            A NATIONAL pick has no game to link to (eventId is null by design:
+            it's tied to no event we cover), so it renders as plain text and is
+            captioned by its context instead. Interpolating the null id into a
+            href would have produced a live link to /games/null — TypeScript
+            can't catch that, since a template literal stringifies null happily.
+            The context label is what a national pick has INSTEAD of a matchup;
+            without it the question would sit here with no home at all. */}
+        {pick.eventId ? (
+          <Link href={`/games/${pick.eventId}`} className="points-row__question">
+            {pick.question}
+          </Link>
+        ) : (
+          <span className="points-row__question">{pick.question}</span>
+        )}
         <span className="points-row__pick">
+          {pick.scope === 'national' && (
+            <span className="points-row__ctx">{pick.context ?? 'National'}</span>
+          )}
           Your pick: <strong>{pick.pickLabel}</strong>
         </span>
       </div>

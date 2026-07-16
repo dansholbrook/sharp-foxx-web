@@ -1,13 +1,21 @@
 'use client';
 
-// The fan-facing PREDICTIONS board for one game — the pick cards. POINTS ONLY:
-// a fan stakes points, wins points, and climbs a leaderboard. There is no money
-// here and the copy must never imply one ("points", "picks", "stake" — never
-// "bet", "wager", "odds").
+// The fan-facing PREDICTIONS pick cards, and the board that puts them on a game
+// page. POINTS ONLY: a fan stakes points, wins points, and climbs a leaderboard.
+// There is no money here and the copy must never imply one ("points", "picks",
+// "stake" — never "bet", "wager", "odds").
 //
-// Lives on the game page between the photos and the courtside feed. Any
-// authenticated role sees it; any of them can pick (the backend puts no @Roles
-// on the pick route on purpose).
+// This file owns THREE things, in widening order of coupling:
+//   • PickCard — a pure card over a PredictionBase. Scope-blind, like the
+//     backend's withPickData() it renders: a game question and a national one
+//     read identically, which is the whole point.
+//   • usePickBoard — the pick STATE MACHINE (optimistic taps, per-card errors,
+//     the balance push, the re-read). Takes a `load` and knows nothing about
+//     where rows come from.
+//   • PredictionsSection — the game page's board: event read + live poll, built
+//     on the two above.
+// The National Board on the feed (feed-picks.tsx) reuses the first two with its
+// own `load`. Nothing about picking is duplicated there.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -17,7 +25,7 @@ import {
   makePick,
   points,
   signedPoints,
-  Prediction,
+  PredictionBase,
   PredictionOption,
 } from './api';
 
@@ -29,10 +37,10 @@ import {
 const POLL_MS = 5000;
 
 // A question the fan can still act on drives the whole card's affordance.
-const isOpen = (p: Prediction) => p.status === 'open';
+const isOpen = (p: PredictionBase) => p.status === 'open';
 
 // Status pill copy. Deliberately plain-language: "Picks locked", not "LOCKED".
-function statusLabel(p: Prediction): string {
+function statusLabel(p: PredictionBase): string {
   switch (p.status) {
     case 'open':
       return 'Picks open';
@@ -60,7 +68,7 @@ function OptionButton({
   onPick,
 }: {
   option: PredictionOption;
-  prediction: Prediction;
+  prediction: PredictionBase;
   myKey: string | null;
   optimisticBump: boolean;
   disabled: boolean;
@@ -125,7 +133,7 @@ function OptionButton({
 
 // ---- The outcome banner on a settled question. Green for a win, neutral
 // otherwise — a loss should be quiet, not a scolding. ----
-function OutcomeBanner({ prediction }: { prediction: Prediction }) {
+function OutcomeBanner({ prediction }: { prediction: PredictionBase }) {
   const my = prediction.myPick;
   if (!my) return null;
 
@@ -160,20 +168,29 @@ function OutcomeBanner({ prediction }: { prediction: Prediction }) {
 
 // The label the fan actually picked (falls back to the raw key, which should
 // never surface but beats rendering nothing).
-function pickLabelOf(p: Prediction): string {
+function pickLabelOf(p: PredictionBase): string {
   const key = p.myPick?.pickKey;
   return p.options.find((o) => o.key === key)?.label ?? key ?? '';
 }
 
 // ---- One pick card: question, stake, status, the option buttons, and whatever
 // the fan's own standing is on it. ----
-function PickCard({
+//
+// Takes a PredictionBase, so this ONE card serves the game board and the
+// National Board. It renders nothing scope-specific on its own — a national
+// question's context/byline arrives through `caption`, which is the only thing
+// the two boards disagree about.
+export function PickCard({
   prediction,
+  caption,
   optimisticKey,
   error,
   onPick,
 }: {
-  prediction: Prediction;
+  prediction: PredictionBase;
+  // Optional line under the question. The game board leaves it off (the page IS
+  // the context); the National Board passes "NBA Finals 2026 · asked by …".
+  caption?: React.ReactNode;
   // A pick that's been tapped but hasn't come back yet. Overlaid on the server
   // row so the card commits instantly.
   optimisticKey: string | null;
@@ -203,6 +220,8 @@ function PickCard({
           {statusLabel(prediction)}
         </span>
       </div>
+
+      {caption}
 
       <div className="predict-card__stake">
         <span className="predict-card__stake-value">
@@ -255,19 +274,24 @@ function PickCard({
   );
 }
 
-export function PredictionsSection({
+// ---- The pick state machine, minus any opinion about where rows come from.
+//
+// Everything hard about picking lives here: optimistic taps, the read-ordering
+// guard, per-card 409s, and pushing the server's new balance at the ⚡ chip. It
+// takes a `fetchRows` and is otherwise board-agnostic, which is what lets the
+// game board and the National Board share it instead of growing two subtly
+// different copies of the same race conditions.
+//
+// `fetchRows` MUST be stable (useCallback it) — it keys the initial load.
+export function usePickBoard<T extends PredictionBase>({
   token,
-  eventId,
-  live,
+  fetchRows,
 }: {
   token: string;
-  eventId: string;
-  // Drives the poll only. The board renders on every game — an upcoming game
-  // can carry open questions before tip-off.
-  live: boolean;
+  fetchRows: () => Promise<T[]>;
 }) {
   const { applyBalance } = usePoints();
-  const [rows, setRows] = useState<Prediction[] | null>(null);
+  const [rows, setRows] = useState<T[] | null>(null);
   // predictionId -> pickKey for taps still in flight. Overlaid on the server
   // rows at render, so a poll landing mid-flight can replace `rows` wholesale
   // without stomping the fan's tap.
@@ -285,7 +309,7 @@ export function PredictionsSection({
   const load = useCallback(async () => {
     const gen = ++loadGenRef.current;
     try {
-      const next = await getEventPredictions(token, eventId);
+      const next = await fetchRows();
       // Superseded by a newer read while this one was in flight — drop it.
       if (cancelledRef.current || gen !== loadGenRef.current) return;
       setRows(next);
@@ -310,9 +334,9 @@ export function PredictionsSection({
     } catch {
       // The board is a garnish on someone else's page — a failed load leaves
       // whatever's on screen and the next poll tries again. It must never blank
-      // the game.
+      // the game (or the feed).
     }
-  }, [token, eventId]);
+  }, [fetchRows]);
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -321,14 +345,6 @@ export function PredictionsSection({
       cancelledRef.current = true;
     };
   }, [load]);
-
-  // Ride the game page's live cadence (see POLL_MS). Only while live: a
-  // scheduled or final game's board doesn't move on its own.
-  useEffect(() => {
-    if (!live) return;
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [live, load]);
 
   const onPick = useCallback(
     async (predictionId: string, pickKey: string) => {
@@ -367,6 +383,42 @@ export function PredictionsSection({
     },
     [token, applyBalance, load],
   );
+
+  return { rows, load, onPick, optimistic, errors };
+}
+
+// ---- The game page's board: the event read + the live poll, over the shared
+// card and state machine above. ----
+export function PredictionsSection({
+  token,
+  eventId,
+  live,
+}: {
+  token: string;
+  eventId: string;
+  // Drives the poll only. The board renders on every game — an upcoming game
+  // can carry open questions before tip-off.
+  live: boolean;
+}) {
+  // Stable per (token, eventId) — the hook keys its initial load on it.
+  const fetchRows = useCallback(
+    () => getEventPredictions(token, eventId),
+    [token, eventId],
+  );
+  const { rows, load, onPick, optimistic, errors } = usePickBoard({
+    token,
+    fetchRows,
+  });
+
+  // Ride the game page's live cadence (see POLL_MS). Only while live: a
+  // scheduled or final game's board doesn't move on its own. This is the one
+  // thing that stays here rather than in the hook — a national question moves on
+  // a scale of weeks and has nothing to poll for.
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(() => void load(), POLL_MS);
+    return () => clearInterval(timer);
+  }, [live, load]);
 
   // A game with no questions shows NOTHING — no empty state, no placeholder.
   // Most games won't have a board, and an empty section on every one of them

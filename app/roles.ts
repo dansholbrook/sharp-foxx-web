@@ -77,6 +77,19 @@ const NAV_ITEMS: NavItem[] = [
   // as the backend GET /nil/review-queue (admin + regional_manager).
   { href: '/nil-review', label: 'NIL Review', roles: ['admin', 'regional_manager'] },
   { href: '/applicants', label: 'Applicants', roles: ['admin', 'regional_manager'] },
+  // The National Board's management surface: open a house question, then lock /
+  // resolve / void it. admin + regional_manager ONLY -- field_rep is excluded
+  // deliberately, mirroring the backend's NATIONAL_ROLES (a rep opens questions
+  // courtside on their own games; a national question speaks for the house).
+  //
+  // A page of its own rather than a section on an existing surface: every staff
+  // page here is scoped to a territory, a roster, or a queue, and a national
+  // question is scoped to none of them -- it has no game, no rep, and no review
+  // state to hang off. /my-games/:eventId is the closest cousin (it carries the
+  // per-game prediction console) but it is per-EVENT by construction, which is
+  // exactly what a national question isn't. Sits last among the staff queues,
+  // next to Reports: like Reports, it's a house-wide surface, not territory work.
+  { href: '/national-admin', label: 'National', roles: ['admin', 'regional_manager'] },
   { href: '/dashboard', label: 'Reports', roles: ['admin'] },
 ];
 
@@ -120,6 +133,14 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   { match: (p) => p === '/applicants', roles: ['admin', 'regional_manager'] },
   // Editorial review queue -- same gate as the backend review-queue route.
   { match: (p) => p === '/review', roles: ['admin', 'regional_manager'] },
+  // The National Board console. Mirrors the backend's NATIONAL_ROLES, which is a
+  // deliberate SUBSET of the OPENER_ROLES that guard the prediction writes: a
+  // field_rep may open a question on a game they're working, but not one that
+  // speaks for the house. The API enforces this per-request in the service
+  // (assertMayAdminister) rather than via a route guard, because the rule
+  // depends on the scope in the body/row -- so this gate keeps a rep off a page
+  // whose every button would 403 rather than duplicating that check.
+  { match: (p) => p === '/national-admin', roles: ['admin', 'regional_manager'] },
   // The athlete's NIL home (deliverables + wallet) -- athlete-only.
   { match: (p) => p === '/nil', roles: ['athlete'] },
   // Staff NIL review queue -- same gate as GET /nil/review-queue.

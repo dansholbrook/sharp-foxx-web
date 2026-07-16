@@ -7,6 +7,7 @@ import { useAuth } from '../auth-context';
 import { useFollows } from '../follows-context';
 import { FollowButton } from '../follow-button';
 import { AppNav } from '../nav';
+import { YourPicksBand, NationalBoardBand, OpenGamesBand } from '../feed-picks';
 import {
   getPublishedContent,
   getEvents,
@@ -611,6 +612,14 @@ export default function FeedPage() {
 
       <SearchBar />
 
+      {/* Your own points, first: what's still riding and what just landed. Above
+          the follows band on purpose — a fan with points in play wants that
+          before anything else on the page. Hides itself entirely when there's
+          nothing in play, so a fan who has never picked sees the feed unchanged.
+          Takes the events this page ALREADY fetched: /predictions/my-picks
+          carries no game status, and this saves a read per pick. */}
+      <YourPicksBand token={token} events={events ?? []} />
+
       {/* Personalized band — the real "following" experience. Renders once the
           shared follows membership has loaded; picks Following vs Suggested. */}
       {followsLoaded && (
@@ -620,6 +629,16 @@ export default function FeedPage() {
           suggestions={suggestions}
         />
       )}
+
+      {/* The National Board — house questions, pickable right here. This band IS
+          the surface (there's no /national page), so it sits below the follows
+          band but above the browse rows: it's a thing to DO, not a thing to
+          read. */}
+      <NationalBoardBand token={token} />
+
+      {/* …and the games with questions open right now. Followed teams sort
+          first when the shared follows are already loaded — no extra fetch. */}
+      <OpenGamesBand token={token} follows={followsLoaded ? mine : []} />
 
       {!loading && !error && availableSports.length > 0 && (
         <div className="filter-row" role="group" aria-label="Filter by sport">

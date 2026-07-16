@@ -7479,6 +7479,19 @@ a.follow-sugcard__name:hover {
   font-weight: 600;
 }
 
+/* A national pick's context label ("NBA Finals 2026 ·"), standing in for the
+   matchup a game pick gets from its question link. Same gold-dim treatment as
+   the National Board's caption on the feed, so the two read as one label. */
+.points-row__ctx::after {
+  content: ' · ';
+  color: var(--muted);
+}
+
+.points-row__ctx {
+  color: var(--accent-dim);
+  font-weight: 600;
+}
+
 .points-row__side {
   display: flex;
   align-items: center;
@@ -7899,5 +7912,511 @@ a.follow-sugcard__name:hover {
      only the easing goes, so the hover state still lands, just instantly. */
   .fancard-open {
     transition: none;
+  }
+}
+
+/* ===========================================================================
+   The prediction engine ON THE FEED — three bands, all scoped:
+     .feedpicks-*  — "Your picks" (what you're holding) and "Make your picks"
+                     (games with questions open now). Both are card STRIPS, so
+                     they ride the shared .row / .row-track scroller.
+     .natboard-*   — the National Board band, plus its admin surface. NOT a
+                     strip: it reuses .predict-card whole, because a house
+                     question is the same object as a courtside one and must
+                     read identically wherever a fan meets it.
+   Everything here is built from the existing tokens — no new colours. The one
+   thing these bands add to the vocabulary is nothing at all: gold stays the
+   points accent, --warn stays the alarm, .success's green stays the only
+   non-gold "good".
+   =========================================================================== */
+
+/* Shared by all three bands' heads — the title plus whatever sits on its
+   baseline (a link on "Your picks", a subtitle on the other two). */
+.feedpicks__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* The band's "All my picks →" / subtitle sit on the title's baseline rather
+   than under it — the head is one line, so the cards start higher. */
+.feedpicks__all {
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.feedpicks__all:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.natboard__sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.feedpicks__track {
+  align-items: stretch;
+}
+
+/* ---- One pick card in the "Your picks" strip. Narrow and tall enough to say
+   the question, the call, and where it stands — no more. This is a status
+   glance, not the board; the board is one tap away. ---- */
+.feedpicks-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 236px;
+  min-width: 236px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  scroll-snap-align: start;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.feedpicks-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+
+.feedpicks-card__q {
+  font-family: var(--font-serif);
+  font-size: 0.94rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+  /* Two lines, then ellipsis: a long question must not make one card taller
+     than the rest of the strip. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feedpicks-card__mine {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.feedpicks-card__mine strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The foot carries the "where does this stand" pair, pinned to the bottom so
+   every card's status line sits on the same rule regardless of question length. */
+.feedpicks-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.feedpicks-card__when,
+.feedpicks-card__ctx {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The national caption is the card's only sense of place — gold, because it's
+   doing the job the matchup does on a game pick. */
+.feedpicks-card__ctx {
+  color: var(--accent-dim);
+}
+
+.feedpicks-card__stake {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A settled card steps back, exactly like .predict-card--settled: it's a
+   record now, not a call to action. */
+.feedpicks-card--settled {
+  background: var(--panel-raised);
+  border-color: var(--border-strong);
+}
+
+.feedpicks-badge {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Won borrows .success's green — the same non-gold "good" the win pill uses,
+   so a result reads the same on the feed as on the board. */
+.feedpicks-card--won .feedpicks-badge {
+  color: #b4e6c0;
+  background: #17251a;
+  border-color: #2f5c3a;
+}
+
+/* A loss stays QUIET: muted, not red. --warn is for the house's alarms, not
+   for telling a fan off. Same call the outcome banner makes. */
+.feedpicks-card--lost .feedpicks-badge {
+  color: var(--muted);
+  background: none;
+  border-color: var(--border-strong);
+}
+
+.feedpicks-card__net {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.feedpicks-card__net--up {
+  color: #b4e6c0;
+}
+
+.feedpicks-card__net--down {
+  color: var(--muted);
+}
+
+/* ---- "Make your picks": the open-games strip. Wider than a pick card — the
+   matchup is the thing being scanned. ---- */
+.feedpicks-game {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 0 0 250px;
+  min-width: 250px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  scroll-snap-align: start;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.feedpicks-game:hover {
+  border-color: var(--accent-dim);
+  transform: translateY(-2px);
+}
+
+.feedpicks-game__top {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+}
+
+.feedpicks-game__when {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.feedpicks-game__matchup {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.feedpicks-game__vs {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.feedpicks-game__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* The open-question count is the invitation — gold, and the loudest thing on
+   the card after the matchup. */
+.feedpicks-game__open {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.feedpicks-game__stake {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- The National Board band. Reuses .predict-card wholesale via PickCard;
+   this only lays them out and captions them. Capped at two columns: these are
+   full pick cards with tap targets, not thumbnails. ---- */
+.natboard__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+/* The caption under a national question: what it's about, who asked, and the
+   promise. Sits between the question and the stake inside .predict-card. */
+.natboard-caption {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: -4px 0 12px;
+}
+
+.natboard-ctx {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.natboard-by {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* The promise, broken — the fan-facing wording of the same fact the admin page
+   pills. --warn, because this one IS an alarm: their points are still held. */
+.natboard-by--late {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* ---- /national-admin: the console pattern, without a console ---- */
+.natboard-admin__alert {
+  margin-top: 14px;
+  padding: 11px 13px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  color: var(--warn);
+  font-size: 0.9rem;
+}
+
+.natboard-admin__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.natboard-admin__form-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.natboard-admin__kinds {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.natboard-admin__hint {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.natboard-admin__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 200px;
+}
+
+.natboard-admin__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.natboard-admin__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* "required" rides the label in gold — the field it marks is the one a national
+   question cannot go out without. */
+.natboard-admin__req {
+  margin-left: 6px;
+  color: var(--accent-dim);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  font-style: italic;
+}
+
+.natboard-admin__help {
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.natboard-admin__opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.natboard-admin__opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.natboard-admin__opt input {
+  flex: 1;
+}
+
+.natboard-admin__add {
+  align-self: flex-start;
+}
+
+/* The missing-date nudge. Advice, not an alarm: muted and gold-edged rather
+   than --warn, because a question with no resolve-by date is legitimate — the
+   backend keeps the field optional. The alarm is for one that's LATE. */
+.natboard-admin__warn {
+  margin: 0;
+  padding: 9px 12px;
+  border-left: 2px solid var(--accent-dim);
+  background: var(--panel-raised);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.natboard-admin__open {
+  align-self: flex-start;
+}
+
+.natboard-admin__board {
+  margin-top: 28px;
+}
+
+.natboard-admin__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.natboard-admin__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.natboard-admin__item-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.natboard-admin__q {
+  flex: 1;
+  min-width: 200px;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.natboard-admin__overdue {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  text-transform: none;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.natboard-admin__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.natboard-admin__meta-ctx {
+  color: var(--accent-dim);
+  font-weight: 600;
+}
+
+.natboard-admin__won {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.natboard-admin__won strong {
+  color: #b4e6c0;
+}
+
+/* Phones: the strips stay scrollers (that's what a strip is FOR), but the
+   National Board's cards go single-column — a 320px card in a 2-col grid on a
+   360px screen is a horizontal scroll nobody asked for. */
+@media (max-width: 720px) {
+  .natboard__list {
+    grid-template-columns: 1fr;
+  }
+
+  .natboard-admin__row {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedpicks-card,
+  .feedpicks-game {
+    transition: none;
+  }
+
+  .feedpicks-card:hover,
+  .feedpicks-game:hover {
+    transform: none;
   }
 }
