@@ -27,10 +27,13 @@ import {
   getMyPicks,
   getNationalPredictions,
   getOpenPickGames,
+  getContests,
   isNationalOverdue,
   isFeedEvent,
+  contestCost,
   points,
   signedPoints,
+  Contest,
   EventListItem,
   FollowMineEntry,
   MyPick,
@@ -393,6 +396,86 @@ function OpenGameCard({ game, isFeed }: { game: OpenPickGame; isFeed: boolean })
         <span className="feedpicks-game__stake">from {points(game.minStake)} pts</span>
       </span>
     </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 4. CONTESTS
+// ---------------------------------------------------------------------------
+
+// The feed's window onto the contest lobby: open pick'em contests as compact
+// rail rows, linking to /contests/[id]. Best-effort and self-hiding, same as the
+// bands above — a fan with no open contest never sees it.
+//
+// Shows title, cost and a lock countdown from the list payload. It deliberately
+// does NOT show an "Entered ✓" flag: GET /contests carries no per-fan entry
+// state (that lives on the detail read), and a detail fan-out per row is exactly
+// what a compact rail band shouldn't do. The Entered state shows once the fan
+// opens the contest.
+const CONTESTS_RAIL_CAP = 4;
+
+function contestLockCountdown(locksAt: string | null): string | null {
+  if (!locksAt) return null;
+  const at = new Date(locksAt).getTime();
+  if (Number.isNaN(at)) return null;
+  const ms = at - Date.now();
+  if (ms <= 0) return 'Locking now';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `Locks in ${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return `Locks in ${hrs}h`;
+  return `Locks in ${Math.round(hrs / 24)}d`;
+}
+
+function ContestRailRow({ contest }: { contest: Contest }) {
+  const countdown = contestLockCountdown(contest.locksAt);
+  return (
+    <Link href={`/contests/${contest.id}`} className="railcontest">
+      <span className="railcontest__title">{contest.title}</span>
+      <span className="railcontest__foot">
+        <span className="railcontest__cost">{contestCost(contest.entryCost)}</span>
+        {countdown && <span className="railcontest__when">{countdown}</span>}
+      </span>
+    </Link>
+  );
+}
+
+export function ContestsBand({ token }: { token: string }) {
+  const [contests, setContests] = useState<Contest[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Open contests only — the ones a fan can still enter and play.
+        const page = await getContests(token, { status: 'open', limit: 10 });
+        if (!cancelled) setContests(page.items);
+      } catch {
+        // Best-effort, same as the bands above.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  if (!contests || contests.length === 0) return null;
+  const shown = contests.slice(0, CONTESTS_RAIL_CAP);
+
+  return (
+    <section className="row feedpicks">
+      <div className="feedpicks__head">
+        <h2 className="row-title">Contests</h2>
+        <Link href="/contests" className="feedpicks__all">
+          All contests →
+        </Link>
+      </div>
+      <div className="railcontest__list">
+        {shown.map((c) => (
+          <ContestRailRow key={c.id} contest={c} />
+        ))}
+      </div>
+    </section>
   );
 }
 

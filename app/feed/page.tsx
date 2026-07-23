@@ -9,7 +9,12 @@ import { usePoints } from '../points-context';
 import { FollowButton } from '../follow-button';
 import { FanCard } from '../fan-card';
 import { AppNav } from '../nav';
-import { YourPicksBand, NationalBoardBand, OpenGamesBand } from '../feed-picks';
+import {
+  YourPicksBand,
+  NationalBoardBand,
+  ContestsBand,
+  OpenGamesBand,
+} from '../feed-picks';
 import {
   getPublishedContent,
   getEvents,
@@ -886,6 +891,12 @@ export default function FeedPage() {
               PickCards stack one-per-row at rail width; cap-4 + expander kept. */}
           <div className="frail-natboard">
             <NationalBoardBand token={token} />
+          </div>
+
+          {/* c2. CONTESTS — open pick'em contests as compact rows, linking into
+              /contests/[id]. Self-hides when nothing's open. */}
+          <div className="frail-contests">
+            <ContestsBand token={token} />
           </div>
 
           {/* d. LEADERBOARD TEASER — top five, rows open the real fan card. */}

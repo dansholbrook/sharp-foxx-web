@@ -743,6 +743,19 @@ async function authPatch<T>(path: string, token: string, body: unknown): Promise
   return res.json();
 }
 
+async function authPut<T>(path: string, token: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toAuthError(res);
+  return res.json();
+}
+
 // DELETE returns 204 (no body), so there's nothing to parse -- resolve to void.
 async function authDelete(path: string, token: string): Promise<void> {
   const res = await fetch(`${BASE}${path}`, {
@@ -2486,4 +2499,292 @@ export function points(n: number): string {
 export function signedPoints(n: number): string {
   if (n === 0) return '0';
   return n > 0 ? `+${points(n)}` : `−${points(Math.abs(n))}`;
+}
+
+// ============================================================================
+// CONTESTS — the generic contest chassis + pick'em gameplay. POINTS ONLY, the
+// same closed loop as predictions: entry costs points, payouts pay points, and
+// every move is an immutable point_events row. Mirrors contests.service.ts,
+// pickem.service.ts, and points-ledger.service.ts on the backend.
+//
+// The one live gameplay type is 'pickem'; the other four enum values exist but
+// their modules 501 at create, so a fan only ever sees pick'em contests here.
+// ============================================================================
+
+export type ContestType =
+  | 'pickem'
+  | 'survivor'
+  | 'squares'
+  | 'parlay_board'
+  | 'bracket';
+
+// draft/open/locked/live/final/canceled, straight off the contests_status_check.
+// Fans meet a contest at 'open' (enter + pick), then it lazy-locks at the first
+// kickoff and rides locked -> live -> final; canceled is the mercy exit.
+export type ContestStatus =
+  | 'draft'
+  | 'open'
+  | 'locked'
+  | 'live'
+  | 'final'
+  | 'canceled';
+
+// The payout table the chassis owns: config.payouts = [{rank, points}, ...].
+// Points paid to each finishing rank at finalize; a contest may have none (a
+// pure leaderboard). See ContestsService.assertPayoutsValid.
+export interface PayoutRow {
+  rank: number;
+  points: number;
+}
+
+// The contest's per-type config bag (jsonb). The chassis owns `payouts`; a
+// pick'em adds `eventIds` (the slate) and optional `pointsPerCorrect` (the
+// scoreboard weight, defaulting to 1). Left open-ended to mirror the backend's
+// `Record<string, unknown>` — read the known keys, ignore the rest.
+export interface ContestConfig {
+  payouts?: PayoutRow[];
+  eventIds?: string[];
+  pointsPerCorrect?: number;
+  [key: string]: unknown;
+}
+
+// A bare contests row (GET /contests items, POST lifecycle returns). money-free:
+// entryCost is a plain point count. opensAt/locksAt/resolvesBy are nullable
+// timestamptz strings (a generated pick'em leaves them null and locks off the
+// slate's earliest kickoff instead — see the pick sheet). description nullable.
+export interface Contest {
+  id: string;
+  type: ContestType;
+  title: string;
+  description: string | null;
+  status: ContestStatus;
+  entryCost: number;
+  maxEntries: number | null;
+  config: ContestConfig;
+  createdBy: string;
+  opensAt: string | null;
+  locksAt: string | null;
+  resolvesBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// A contest_entries row (POST /contests/:id/enter `.returning()`, and detail's
+// myEntry). score is `numeric` -> a STRING at rest (keep it a string until the
+// render boundary, same discipline as money); rank is null until finalize.
+export interface ContestEntry {
+  id: string;
+  contestId: string;
+  userId: string;
+  status: 'active' | 'eliminated' | 'withdrawn' | 'final';
+  score: string;
+  rank: number | null;
+  enteredAt: string;
+}
+
+// GET /contests/:id — the contest row plus the three read-time extras the list
+// deliberately doesn't carry: `playable` (is the type's gameplay module
+// installed), `myEntry` (the caller's entry or null), and `entrants` (the live
+// count). A detail read also lazy auto-locks the contest, so `status` here is
+// honest even if the earliest game has kicked off since the row was written.
+export interface ContestDetail extends Contest {
+  playable: boolean;
+  myEntry: ContestEntry | null;
+  entrants: number;
+}
+
+// One leaderboard row. NOTE the snake_case: this read is raw SQL
+// (ContestsService.leaderboard uses db.execute with explicit aliases), so unlike
+// every other shape here the keys are user_id/display_name, not camelCase. score
+// is `numeric` -> a string; rank() shares a number across ties; seq is the
+// stable row_number used for the top-50 cut.
+export interface ContestLeaderboardRow {
+  user_id: string;
+  display_name: string | null;
+  score: string;
+  status: string;
+  rank: number;
+  seq: number;
+}
+
+// GET /contests/:id/leaderboard — the top 50 by live rank plus the caller's own
+// row (`me`), which is null only when the caller has no entry at all.
+export interface ContestLeaderboard {
+  contestId: string;
+  items: ContestLeaderboardRow[];
+  me: ContestLeaderboardRow | null;
+}
+
+// A fan's side on one game: home or away. The closed key set the sheet upserts.
+export type PickSide = 'home' | 'away';
+
+// One row of the pick sheet: a slate game with team names + schedule + live/
+// final scores, the caller's pick and its graded result, and — only once the
+// contest has locked — the crowd's home/away split. `status` here is the EVENT's
+// status (a game can be final while the contest is still live); the sheet-level
+// status/revealed below are the contest's.
+//
+// `distribution` is present ONLY when the sheet is revealed (locked/live/final);
+// pre-lock the backend omits the key entirely (no herding onto the popular side),
+// so it's optional here and the UI must guard on `revealed` rather than on it.
+export interface PickSheetGame {
+  eventId: string;
+  homeTeam: string | null;
+  awayTeam: string | null;
+  scheduledAt: string;
+  status: EventListItem['status'];
+  homeScore: number | null;
+  awayScore: number | null;
+  pick: PickSide | null;
+  // null until graded; true/false as the game finalizes (a tie sets false).
+  isCorrect: boolean | null;
+  distribution?: { home: number; away: number };
+}
+
+// GET/PUT /contests/:id/picks — the whole sheet. `status` is the contest status
+// and `revealed` is (status is locked/live/final): the flag the crowd
+// distribution rides on. `summary` is the caller's own progress + running score.
+export interface PickSheet {
+  contestId: string;
+  entryId: string;
+  status: ContestStatus;
+  revealed: boolean;
+  pointsPerCorrect: number;
+  games: PickSheetGame[];
+  summary: { picksMade: number; correct: number };
+}
+
+// PUT /contests/:id/picks body. A PARTIAL sheet is fine — the backend upserts
+// per-pick, so sending one game saves that one and leaves the rest. Duplicate
+// eventIds in a single body are rejected (400); the tap-to-save UI never sends
+// more than one anyway.
+export interface SubmitPicksInput {
+  picks: Array<{ eventId: string; pick: PickSide }>;
+}
+
+// An immutable point_events row (GET /points/ledger items). `points` is SIGNED:
+// negative is a spend/debit (contest entry), positive an earn/credit (payout,
+// engagement, refund). referenceType/referenceId tie it to what it was about
+// (a contest); note is the human line ("Entry: Weekend Pick'em"). Append-only —
+// nothing ever updates or deletes one.
+export interface PointEvent {
+  id: string;
+  userId: string;
+  actionType: string;
+  points: number;
+  referenceType: string | null;
+  referenceId: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+// GET /contests filters (status/type/limit/offset), same server-paging shape as
+// the other browse reads. The backend orders open + live first (the playable
+// lobby), then newest — so the default (no status) is already lobby-ordered.
+export interface ContestFilters {
+  status?: ContestStatus;
+  type?: ContestType;
+  limit?: number;
+  offset?: number;
+}
+
+export const getContests = (token: string, params: ContestFilters = {}) => {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set('status', params.status);
+  if (params.type) qs.set('type', params.type);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
+  const s = qs.toString();
+  return authGet<Page<Contest>>(`/contests${s ? `?${s}` : ''}`, token);
+};
+
+// The contest page's read — carries myEntry + entrants + playable, and lazy
+// auto-locks on load so the status the page branches on is honest.
+export const getContest = (token: string, id: string) =>
+  authGet<ContestDetail>(`/contests/${id}`, token);
+
+// Enter a contest. Spends entryCost through the ledger in the same tx as the
+// insert, so a failed debit rolls back cleanly. 409s: already entered, contest
+// full, contest not open, or "Insufficient points" (surfaced verbatim inline).
+// Returns the created entry row — NOT a balance, so the caller refreshes the ⚡
+// chip from its own wallet read (getMyPicks) after this resolves.
+export const enterContest = (token: string, id: string) =>
+  authPost<ContestEntry>(`/contests/${id}/enter`, token, {});
+
+// Withdraw while still open: refunds the entry fee (a balance-only adjustment,
+// not an earn) and deletes the entry, so the fan can re-enter. 409 once the
+// contest has locked. The backend returns { withdrawn: id }, which the caller
+// doesn't need — a resolved promise is the signal to refresh.
+export const withdrawContest = (token: string, id: string) =>
+  authDelete(`/contests/${id}/enter`, token);
+
+export const getContestLeaderboard = (token: string, id: string) =>
+  authGet<ContestLeaderboard>(`/contests/${id}/leaderboard`, token);
+
+// The caller's pick sheet. Entered fans only (403 otherwise — the sheet is a
+// participant's surface). Lazy auto-locks on read, so `revealed` is honest.
+export const getPickSheet = (token: string, id: string) =>
+  authGet<PickSheet>(`/contests/${id}/picks`, token);
+
+// Upsert picks. Returns the rebuilt sheet, so the tap-to-save UI reconciles its
+// optimistic state from the response rather than tracking it by hand. 409s: the
+// contest locked, or a picked game already started (lazy per-event lock).
+export const submitPicks = (token: string, id: string, input: SubmitPicksInput) =>
+  authPut<PickSheet>(`/contests/${id}/picks`, token, input);
+
+// The caller's own points statement, newest first — the immutable ledger made
+// visible. Every authenticated caller has one (no @Roles on GET /points/ledger).
+export const getPointsLedger = (
+  token: string,
+  params: { limit?: number; offset?: number } = {},
+) => {
+  const qs = new URLSearchParams();
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
+  const s = qs.toString();
+  return authGet<Page<PointEvent>>(`/points/ledger${s ? `?${s}` : ''}`, token);
+};
+
+// Display label for a contest type. Only 'pickem' is playable in v1; the rest
+// are named for the rare admin/list case where a draft of another type exists.
+export function contestTypeLabel(type: ContestType): string {
+  switch (type) {
+    case 'pickem':
+      return "Pick'em";
+    case 'survivor':
+      return 'Survivor';
+    case 'squares':
+      return 'Squares';
+    case 'parlay_board':
+      return 'Parlay board';
+    case 'bracket':
+      return 'Bracket';
+  }
+}
+
+// Entry cost as fans read it: "Free" at zero, else a grouped point count.
+export function contestCost(entryCost: number): string {
+  return entryCost > 0 ? `${points(entryCost)} pts` : 'Free';
+}
+
+// A human line for one ledger row's action_type. Mirrors the backend's action
+// vocabulary (contest_entry/contest_payout/adjustment + the engagement_* set);
+// an unknown type degrades to its slug de-underscored rather than rendering raw.
+export function ledgerActionLabel(actionType: string): string {
+  switch (actionType) {
+    case 'contest_entry':
+      return 'Contest entry';
+    case 'contest_payout':
+      return 'Contest payout';
+    case 'adjustment':
+      return 'Adjustment';
+    case 'engagement_article_read':
+      return 'Read an article';
+    case 'engagement_game_watch':
+      return 'Watched a game';
+    case 'engagement_national_pick':
+      return 'National pick';
+    default:
+      return actionType.replace(/_/g, ' ');
+  }
 }

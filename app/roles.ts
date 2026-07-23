@@ -46,6 +46,16 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Games',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // Contests: browse open pick'em contests, enter, fill a pick sheet, follow the
+  // leaderboard. A play surface, so it carries a nav LINK for every role (unlike
+  // /picks + /leaderboard, whose pages are open to all but whose links are
+  // fan-only) — staff play too, and the backend puts no @Roles on the fan
+  // contest routes. Sits next to Games, the other browse-and-play surface.
+  {
+    href: '/contests',
+    label: 'Contests',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
   // The fan's pick history + points wallet, and the points leaderboard. Both
   // PAGES are open to every role (staff can pick too — the backend deliberately
   // allows it), but only the fan roles carry the nav LINKS: staff nav is already
@@ -243,6 +253,14 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   },
   {
     match: (p) => p === '/leaderboard',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
+  // Contests — the list and every contest page. Open to EVERY authenticated
+  // role (staff play too; the backend fan routes carry no @Roles), matching the
+  // all-roles nav link above. Listed explicitly rather than left to the
+  // open-by-default fallback so the intent reads alongside the points surfaces.
+  {
+    match: (p) => p === '/contests' || p.startsWith('/contests/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
 ];

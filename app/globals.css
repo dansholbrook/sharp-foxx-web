@@ -8631,6 +8631,7 @@ a.follow-sugcard__name:hover {
    teaser hide themselves (no box), so only the three wrapped bands need this. */
 .frail-picks:empty,
 .frail-natboard:empty,
+.frail-contests:empty,
 .frail-open:empty {
   display: none;
 }
@@ -8843,6 +8844,9 @@ a.follow-sugcard__name:hover {
   }
   .follow-section {
     order: 5;
+  }
+  .frail-contests {
+    order: 6;
   }
   .frail-open {
     order: 7;
@@ -9244,4 +9248,661 @@ a.follow-sugcard__name:hover {
   background: rgba(19, 17, 13, 0.5);
   color: var(--muted);
   border: 1px solid var(--border-strong);
+}
+
+/* ==========================================================================
+   CONTESTS  (.contest-* / .picksheet-* / .scorecard-* / .railcontest-* /
+   .mycontests-* / .ledger-*)  — the pick'em contest surfaces. POINTS ONLY.
+   Built on the existing tokens; mobile-first, since the pick sheet is a phone
+   activity (the two side buttons are thumb-sized at 390px and just grow on
+   desktop). Scoped names, so nothing here reaches the rest of the app.
+   ========================================================================== */
+
+/* ---- Status pills (shared by list cards, detail kicker, my-contests) ---- */
+.contest-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border-strong);
+  background: rgba(19, 17, 13, 0.5);
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* Tone modifiers set colour only, so they compose with either .contest-pill
+   (cards) or the app's .pill base (the my-contests rows). */
+.contest-pill--open {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: rgba(201, 163, 78, 0.12);
+}
+.contest-pill--live {
+  color: var(--warn);
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+.contest-pill--locked,
+.contest-pill--final,
+.contest-pill--canceled,
+.contest-pill--draft {
+  color: var(--muted);
+}
+
+/* ---- List page: the contest grid + cards ---- */
+.contest-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+.contest-grid--busy {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+.contest-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+.contest-card:hover {
+  border-color: var(--accent-dim);
+  transform: translateY(-1px);
+}
+.contest-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.contest-card__type {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--accent);
+}
+.contest-card__title {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.25;
+}
+.contest-card__desc {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.contest-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 6px;
+  font-size: 0.82rem;
+}
+.contest-card__cost {
+  font-weight: 600;
+  color: var(--accent);
+}
+.contest-card__meta {
+  color: var(--muted);
+}
+
+/* ---- Detail page shell ---- */
+.contest-detail__back {
+  margin-bottom: 4px;
+}
+.contest-detail__head {
+  position: relative;
+}
+.contest-entered {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
+  background: rgba(201, 163, 78, 0.12);
+}
+.contest-detail__body {
+  margin-top: 20px;
+}
+
+/* ---- Enter hero ---- */
+.contest-enter {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.contest-enter__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+}
+.contest-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.contest-stat__label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+.contest-stat__value {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+.contest-payouts__head {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.contest-payouts__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 320px;
+}
+.contest-payouts__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.contest-payouts__row:last-child {
+  border-bottom: none;
+}
+.contest-payouts__rank {
+  font-weight: 600;
+  color: var(--text);
+}
+.contest-payouts__pts {
+  color: var(--accent);
+  font-weight: 600;
+}
+.contest-enter__btn {
+  width: 100%;
+  margin-top: 0;
+  padding: 15px 22px;
+  font-size: 0.9rem;
+}
+.contest-enter__hint {
+  margin: 0;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+/* ---- Pick sheet ---- */
+.picksheet-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.picksheet-progress__count {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+.picksheet-progress__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-raised);
+  overflow: hidden;
+}
+.picksheet-progress__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.picksheet-progress__hint {
+  font-size: 0.78rem;
+}
+.picksheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.picksheet-row {
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.picksheet-row--locked {
+  opacity: 0.7;
+}
+.picksheet-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.picksheet-row__when {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.picksheet-row__status {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.picksheet-row__status--saved {
+  color: var(--accent);
+}
+.picksheet-row__sides {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.picksheet-row__at {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+/* The tappable sides: big thumb targets, reset off the app's gold button. */
+.picksheet-side {
+  flex: 1;
+  min-height: 66px;
+  margin-top: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+.picksheet-side:hover:not(:disabled) {
+  background: var(--panel-raised);
+  border-color: var(--accent-dim);
+}
+.picksheet-side--on {
+  background: rgba(201, 163, 78, 0.14);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.picksheet-side--on:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.14);
+  border-color: var(--accent);
+}
+.picksheet-side__label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.picksheet-side--on .picksheet-side__label {
+  color: var(--accent-dim);
+}
+.picksheet-side__team {
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+.picksheet-row__error {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--warn);
+}
+
+/* ---- Withdraw ---- */
+.contest-withdraw {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.contest-withdraw__open {
+  font-size: 0.84rem;
+}
+.contest-withdraw__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.contest-withdraw__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.contest-withdraw__go {
+  margin-top: 0;
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+.contest-withdraw__go:hover:not(:disabled) {
+  background: var(--warn-border);
+  border-color: var(--warn-border);
+  color: var(--text);
+}
+
+/* ---- Scorecard ---- */
+.contest-scorecard {
+  margin-bottom: 30px;
+}
+.contest-scorecard__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.contest-scorecard__tally {
+  font-size: 0.84rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.scorecard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scorecard-row {
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 10px;
+}
+.scorecard-row--correct {
+  border-left-color: var(--accent);
+}
+.scorecard-row--wrong {
+  border-left-color: var(--warn-border);
+}
+.scorecard-row__matchup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.scorecard-team {
+  flex: 1;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+.scorecard-team:last-child {
+  text-align: right;
+}
+.scorecard-team--mine {
+  color: var(--accent);
+  font-weight: 600;
+}
+.scorecard-row__score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.scorecard-row__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+}
+.scorecard-row__when {
+  color: var(--muted);
+}
+.scorecard-row__mine {
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.scorecard-mark {
+  font-weight: 700;
+}
+.scorecard-mark--ok {
+  color: var(--accent);
+}
+.scorecard-mark--no {
+  color: var(--warn);
+}
+
+/* ---- Crowd distribution bars (revealed at lock) ---- */
+.picksheet-dist {
+  margin-top: 10px;
+}
+.picksheet-dist__bar {
+  display: flex;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-raised);
+}
+.picksheet-dist__seg--away {
+  background: var(--accent-dim);
+}
+.picksheet-dist__seg--home {
+  background: var(--border-strong);
+}
+.picksheet-dist__legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* ---- Feed rail: contests band ---- */
+.railcontest__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.railcontest {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s ease;
+}
+.railcontest:hover {
+  border-color: var(--accent-dim);
+}
+.railcontest__title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.railcontest__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.76rem;
+}
+.railcontest__cost {
+  color: var(--accent);
+  font-weight: 600;
+}
+.railcontest__when {
+  color: var(--muted);
+}
+
+/* ---- My Picks: my contests + recent activity ---- */
+.mycontests-list,
+.ledger-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mycontests-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.mycontests-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--text);
+  min-width: 0;
+}
+.mycontests-row__title {
+  font-weight: 600;
+  color: var(--text);
+}
+.mycontests-row:hover .mycontests-row__title {
+  color: var(--accent);
+}
+.mycontests-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+.mycontests-row__cost {
+  color: var(--muted);
+}
+.mycontests-row__side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  white-space: nowrap;
+}
+.mycontests-row__rank {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+.mycontests-row__score {
+  font-weight: 600;
+  color: var(--text);
+}
+.mycontests-row__unit {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-left: 3px;
+}
+.ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.ledger-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ledger-row__action {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.ledger-row__note {
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-row__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+.ledger-row__pts {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ledger-row__pts--up {
+  color: var(--accent);
+}
+.ledger-row__pts--down {
+  color: var(--warn);
+}
+.ledger-row__pts--flat {
+  color: var(--muted);
+}
+.ledger-row__when {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* ---- Narrow phones: keep the pick sheet comfortable at ~390px ---- */
+@media (max-width: 560px) {
+  .contest-enter__stats {
+    gap: 20px;
+  }
+  .picksheet-side {
+    min-height: 60px;
+  }
+  .picksheet-side__team {
+    font-size: 0.88rem;
+  }
+  .mycontests-row,
+  .ledger-row {
+    flex-wrap: wrap;
+  }
 }

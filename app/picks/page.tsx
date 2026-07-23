@@ -15,7 +15,21 @@ import { usePoints } from '../points-context';
 import { AppNav, AccessDenied } from '../nav';
 import { FanRecordLine, recordFromPicks } from '../fan-card';
 import { canAccess } from '../roles';
-import { getMyPicks, points, signedPoints, MyPick, MyPicksReport } from '../api';
+import {
+  getMyPicks,
+  getContests,
+  getContest,
+  getPointsLedger,
+  contestCost,
+  ledgerActionLabel,
+  points,
+  signedPoints,
+  MyPick,
+  MyPicksReport,
+  ContestDetail,
+  ContestStatus,
+  PointEvent,
+} from '../api';
 
 // Date + time — a pick is a moment in a game, so the clock matters as much as
 // the day.
@@ -84,6 +98,162 @@ function PickRow({ pick }: { pick: MyPick }) {
         <span className="points-row__when">{formatWhen(pick.pickedAt)}</span>
       </div>
     </li>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MY CONTESTS — the fan's contest entries, with status/score/rank, linking in.
+//
+// There is no /contests/mine endpoint (the contests module has list + detail
+// only), so "which have I entered?" is DERIVED: list a bounded page of contests
+// (the backend orders open + live first, then newest) and read each one's
+// detail to see if myEntry is set. That's a small detail fan-out, capped and
+// best-effort — a dedicated mine endpoint would replace it. Older finals past
+// the cap won't appear; the contest lobby is the full record.
+// ---------------------------------------------------------------------------
+
+const MY_CONTESTS_SCAN = 24;
+
+function contestStatusLabel(status: ContestStatus): string {
+  switch (status) {
+    case 'open':
+      return 'Open';
+    case 'locked':
+      return 'Locked';
+    case 'live':
+      return 'Live';
+    case 'final':
+      return 'Final';
+    case 'canceled':
+      return 'Canceled';
+    case 'draft':
+      return 'Draft';
+  }
+}
+
+function MyContestsSection({ token }: { token: string }) {
+  const [entries, setEntries] = useState<ContestDetail[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const page = await getContests(token, { limit: MY_CONTESTS_SCAN });
+        // Resolve each contest's detail to find the caller's entry. Per-item
+        // best-effort so one failed read doesn't blank the section.
+        const details = await Promise.all(
+          page.items.map((c) => getContest(token, c.id).catch(() => null)),
+        );
+        if (!cancelled) {
+          setEntries(
+            details.filter(
+              (d): d is ContestDetail => d !== null && d.myEntry !== null,
+            ),
+          );
+        }
+      } catch {
+        // Best-effort: the section just doesn't render.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Hide entirely until loaded and only when there's something to show — same
+  // rule as the feed bands: a fan who's entered nothing never sees it.
+  if (!entries || entries.length === 0) return null;
+
+  return (
+    <section className="points-history">
+      <h2 className="game-articles__head">My contests</h2>
+      <ul className="mycontests-list">
+        {entries.map((c) => {
+          const entry = c.myEntry!;
+          const score = Math.round(Number(entry.score));
+          return (
+            <li key={c.id} className="mycontests-row">
+              <Link href={`/contests/${c.id}`} className="mycontests-row__main">
+                <span className="mycontests-row__title">{c.title}</span>
+                <span className="mycontests-row__meta">
+                  <span className={`pill contest-pill--${c.status}`}>
+                    {contestStatusLabel(c.status)}
+                  </span>
+                  <span className="mycontests-row__cost">
+                    {contestCost(c.entryCost)}
+                  </span>
+                </span>
+              </Link>
+              <div className="mycontests-row__side">
+                {entry.rank != null && (
+                  <span className="mycontests-row__rank">#{entry.rank}</span>
+                )}
+                <span className="mycontests-row__score">
+                  {points(score)}
+                  <span className="mycontests-row__unit">pts</span>
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RECENT ACTIVITY — the immutable points ledger made visible. The last 10 moves
+// (action, signed points, when), newest first. Contest entries, payouts,
+// refunds and engagement earns all land here; predictions do NOT (that path
+// doesn't write ledger rows yet — see points-ledger.service.ts), so this reads
+// as "points economy activity", not a second pick history.
+// ---------------------------------------------------------------------------
+
+function RecentActivitySection({ token }: { token: string }) {
+  const [events, setEvents] = useState<PointEvent[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPointsLedger(token, { limit: 10 })
+      .then((page) => {
+        if (!cancelled) setEvents(page.items);
+      })
+      .catch(() => {
+        // Best-effort — the section self-hides on failure.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  if (!events || events.length === 0) return null;
+
+  return (
+    <section className="points-history">
+      <h2 className="game-articles__head">Recent activity</h2>
+      <ul className="ledger-list">
+        {events.map((e) => (
+          <li key={e.id} className="ledger-row">
+            <div className="ledger-row__main">
+              <span className="ledger-row__action">
+                {ledgerActionLabel(e.actionType)}
+              </span>
+              {e.note && <span className="ledger-row__note">{e.note}</span>}
+            </div>
+            <div className="ledger-row__side">
+              <span
+                className={`ledger-row__pts ledger-row__pts--${
+                  e.points > 0 ? 'up' : e.points < 0 ? 'down' : 'flat'
+                }`}
+              >
+                {signedPoints(e.points)}
+              </span>
+              <span className="ledger-row__when">{formatWhen(e.createdAt)}</span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -212,6 +382,12 @@ export default function MyPicksPage() {
               </span>
             </div>
           </div>
+
+          {/* My contests + the points ledger. Both self-fetch and self-hide
+              (nothing entered / no ledger rows -> the section doesn't render),
+              so a fan who only makes predictions sees the page unchanged. */}
+          <MyContestsSection token={token} />
+          <RecentActivitySection token={token} />
 
           <section className="points-history">
             <h2 className="game-articles__head">Pick history</h2>
