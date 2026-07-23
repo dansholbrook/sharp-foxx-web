@@ -8860,3 +8860,388 @@ a.follow-sugcard__name:hover {
     transition: none;
   }
 }
+
+/* ============================================================================
+   MOBILE PASS (phase 1) — genuine ~390px phone support.
+
+   Everything below layers on the existing tokens and is scoped to the phone
+   range (the nav's 767/768 split, then one <=767px block). No desktop rule is
+   touched. None of this rendered before app/layout.tsx exported a device-width
+   viewport — mobile browsers were painting the 980px desktop layout scaled to a
+   miniature, so these queries never fired.
+   ============================================================================ */
+
+/* ---- Nav: desktop link row vs. mobile hamburger cluster. The cluster is
+   display:none by default (desktop) and the <=767px block swaps the two. ---- */
+.nav-mobile {
+  display: none;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 44px square tap target; three bars drawn by the middle span + its two
+   pseudo-elements. */
+.nav-hamburger {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+.nav-hamburger:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.08);
+  border-color: var(--accent);
+}
+.nav-hamburger__bars,
+.nav-hamburger__bars::before,
+.nav-hamburger__bars::after {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+}
+.nav-hamburger__bars {
+  position: relative;
+}
+.nav-hamburger__bars::before,
+.nav-hamburger__bars::after {
+  content: '';
+  position: absolute;
+  left: 0;
+}
+.nav-hamburger__bars::before {
+  top: -6px;
+}
+.nav-hamburger__bars::after {
+  top: 6px;
+}
+
+/* Full-screen menu sheet: identity + every nav item + log out. Fixed over the
+   page, above the slide-over (60) and modals (50). */
+.nav-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  overflow-y: auto;
+  animation: nav-sheet-in 0.18s ease;
+}
+@keyframes nav-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.nav-sheet__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.nav-sheet__top .wordmark {
+  margin: 0;
+}
+.nav-sheet__close {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.nav-sheet__identity {
+  padding: 16px 2px 4px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.nav-sheet__links {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+.nav-sheet__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  text-decoration: none;
+}
+.nav-sheet__link:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+.nav-sheet__logout {
+  margin-top: 20px;
+  width: 100%;
+  min-height: 48px;
+}
+
+@media (max-width: 767px) {
+  /* Swap desktop nav row for the mobile cluster. */
+  .nav-links--desktop {
+    display: none;
+  }
+  .nav-mobile {
+    display: flex;
+  }
+
+  /* ---- Page frame: pull in the generous desktop gutters/margins ---- */
+  main {
+    padding: 24px 16px 56px;
+  }
+
+  /* header-row becomes the slim top bar: wordmark left, chip + burger right.
+     The per-page "Signed in as…" line moves into the menu, so hide it here
+     (its markup is identical on every page: .header-row > div > .muted). */
+  .header-row {
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+  }
+  .header-row > div > .muted {
+    display: none;
+  }
+  .header-row .wordmark {
+    margin-bottom: 0;
+  }
+
+  /* ---- Masthead / page-header: tighten type + spacing so it doesn't eat a
+     whole screen. The title already uses clamp(); just rein in the rhythm. ---- */
+  .masthead {
+    margin-bottom: 26px;
+    padding-bottom: 20px;
+  }
+  .masthead-kicker {
+    margin-bottom: 10px;
+  }
+  .masthead-title {
+    margin-bottom: 10px;
+  }
+  .masthead-standfirst {
+    font-size: 0.95rem;
+  }
+  .masthead-head {
+    gap: 14px;
+  }
+  .masthead-actions {
+    width: 100%;
+  }
+  .masthead-actions > * {
+    flex: 1 1 auto;
+  }
+
+  /* ---- Forms: collapse the shared two-column form grid (login, apply, log a
+     sale, add/assign game) to one column. An input's intrinsic min-width won't
+     let a 1fr 1fr grid shrink below ~380px, so it overflowed 390px; min-width:0
+     also lets inputs shrink inside any flex/grid row. ---- */
+  .rep-form {
+    grid-template-columns: 1fr;
+  }
+  input,
+  textarea,
+  select {
+    min-width: 0;
+  }
+
+  /* ---- Touch targets: real action buttons at least 44px tall. Text-style
+     actions (.link-btn: modal/slide-over close, inline links) are excluded so
+     they don't balloon. ---- */
+  button:not(.link-btn) {
+    min-height: 44px;
+  }
+  .chip {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* ---- Sport/tier filter chips: one horizontally-scrolling row instead of a
+     tall wrap. No edge-bleed — .filter-row is sometimes nested inside a padded
+     filter panel (/discover), so it scrolls within its own box. ---- */
+  .filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: -20px 0 22px;
+    padding-bottom: 6px;
+    scrollbar-width: none;
+  }
+  .filter-row::-webkit-scrollbar {
+    display: none;
+  }
+  .filter-row > .chip {
+    flex-shrink: 0;
+  }
+  .points-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .points-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .points-tabs > * {
+    flex-shrink: 0;
+  }
+
+  /* ---- Staff/exec tables (dashboard, field-reps, manager + rep drill-downs,
+     the queue tables): scroll horizontally rather than crush columns. Turning
+     the table itself into a block gives each its own scroll container with no
+     per-page markup. Fan-facing lists (leaderboard, My Picks) aren't tables, so
+     they're untouched and keep their clean card rows. ---- */
+  main table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  /* ---- SlideOver → full-screen sheet on phones (was already 100% at 560px;
+     drop the left border + tighten padding for the edge-to-edge feel). ---- */
+  .slideover-panel {
+    width: 100%;
+    border-left: none;
+  }
+  .slideover-head {
+    padding: 18px 18px 14px;
+  }
+  .slideover-body {
+    padding: 18px;
+  }
+  .slideover-footer {
+    padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  /* ---- Kill horizontal overflow: media never pushes past the viewport, and
+     the body clips any stray wide child. Safe here because the only sticky
+     element (.frail) is display:contents below 1024px, so nothing relies on
+     body being the scroll container. ---- */
+  body {
+    overflow-x: hidden;
+  }
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+  }
+}
+
+/* =================================================================
+   WATCH / PLAY split — the covered-vs-feed surfaces.
+   Scoped to .gamescope-* (the /games schedule + the lean game page) and
+   .playcard-* (feed/rail play cards). Feed games (events.source != null) are
+   ingested scores, contest material for picks — never a Sharp Foxx broadcast —
+   so every treatment here reads QUIETER than a covered card and carries no
+   watch affordance. See THE RULE in app/api.ts.
+   ================================================================= */
+
+/* Compact Sharp Foxx | All games toggle on /games. Chips are already styled;
+   this only lays them in a row. Wraps cleanly at narrow widths. */
+.gamescope-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+/* Feed game card on /games under "All games". The card shell is the shared
+   .tcard; the scrim below knocks the sport gradient back so a feed row never
+   competes visually with a covered broadcast. */
+.gamescope-feedthumb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(19, 17, 13, 0.5);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* "Scores" tag — bottom-right, where a covered card shows Watch. Deliberately
+   muted (no gold, no icon): this card is data, not a broadcast. */
+.gamescope-scorestag {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 1;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(19, 17, 13, 0.62);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+}
+
+/* Lean feed game page: the small header above the scoreboard that stands in for
+   the covered page's video area. */
+.gamescope-playhead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-bottom: 18px;
+}
+
+.gamescope-playhead__tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(19, 17, 13, 0.5);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+}
+
+.gamescope-playhead__note {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* "Scores" tag inside the rail's "Make your picks" cards — pushed to the right
+   of the top row, matching the muted treatment above. */
+.playcard-scorestag {
+  margin-left: auto;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(19, 17, 13, 0.5);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+}

@@ -18,6 +18,7 @@ import {
   getPointsLeaderboard,
   followTargetId,
   followTargetName,
+  isCoveredEvent,
   points,
   FeedItem,
   EventListItem,
@@ -709,19 +710,26 @@ export default function FeedPage() {
 
   // Sports present across BOTH rows — the union drives which chips to show.
   // Games carry a non-null sport enum; articles carry a nullable eventSport.
-  // Sorted for a stable chip order.
+  // Sorted for a stable chip order. Only COVERED games feed the chips: the main
+  // column is a watch surface (feed games live in the rail's pick bands, not
+  // here), so a sport with only feed games would otherwise show a chip that
+  // filters every row to empty.
   const availableSports = useMemo(() => {
     const set = new Set<string>();
-    for (const ev of events ?? []) set.add(ev.sport);
+    for (const ev of events ?? []) if (isCoveredEvent(ev.source)) set.add(ev.sport);
     for (const item of articles ?? []) {
       if (item.eventSport) set.add(item.eventSport);
     }
     return Array.from(set).sort();
   }, [events, articles]);
 
-  // Narrow each row by the selected sport (ALL passes everything through).
+  // Narrow each row by the selected sport (ALL passes everything through). THE
+  // RULE: the feed's main column is a WATCH surface, so every game row here is
+  // covered-only (source IS NULL) -- feed games are contest material and appear
+  // in the rail's "Make your picks" band, never in Live Now / Upcoming /
+  // Results.
   const visibleEvents = (events ?? []).filter(
-    (ev) => sport === ALL || ev.sport === sport,
+    (ev) => isCoveredEvent(ev.source) && (sport === ALL || ev.sport === sport),
   );
   // Live = in progress right now (its own row above Upcoming); Upcoming =
   // scheduled/not-yet-started (excludes live so a game shows in one row, not
@@ -890,7 +898,11 @@ export default function FeedPage() {
           {/* e. MAKE YOUR PICKS — games with a question open now, as compact
               rail rows. Followed teams sort first (no extra fetch). */}
           <div className="frail-open">
-            <OpenGamesBand token={token} follows={followsLoaded ? mine : []} />
+            <OpenGamesBand
+              token={token}
+              follows={followsLoaded ? mine : []}
+              events={events ?? []}
+            />
           </div>
         </aside>
       </div>

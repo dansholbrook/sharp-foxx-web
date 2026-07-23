@@ -28,6 +28,7 @@ import {
   getNationalPredictions,
   getOpenPickGames,
   isNationalOverdue,
+  isFeedEvent,
   points,
   signedPoints,
   EventListItem,
@@ -357,7 +358,13 @@ export function NationalBoardBand({ token }: { token: string }) {
 // 3. MAKE YOUR PICKS
 // ---------------------------------------------------------------------------
 
-function OpenGameCard({ game }: { game: OpenPickGame }) {
+// `isFeed` flags an ingested feed game (source != null). "Make your picks" is a
+// PLAY surface, so it lists games of BOTH kinds -- a feed entry just gets the
+// muted "Scores" tag (no watch language, no live pulse card) so a fan reads it
+// as external contest material, not a Sharp Foxx broadcast. See THE RULE in
+// api.ts. The link still points at /games/[id], which renders the lean
+// feed-variant page for these.
+function OpenGameCard({ game, isFeed }: { game: OpenPickGame; isFeed: boolean }) {
   const home = game.homeTeamName ?? 'TBD';
   const away = game.awayTeamName ?? 'TBD';
   return (
@@ -374,6 +381,7 @@ function OpenGameCard({ game }: { game: OpenPickGame }) {
             {formatKickoff(game.scheduledAt)}
           </span>
         )}
+        {isFeed && <span className="playcard-scorestag">Scores</span>}
       </span>
       <span className="feedpicks-game__matchup">
         {home} <span className="feedpicks-game__vs">vs</span> {away}
@@ -391,13 +399,26 @@ function OpenGameCard({ game }: { game: OpenPickGame }) {
 export function OpenGamesBand({
   token,
   follows,
+  events,
 }: {
   token: string;
   // Already in context on the feed (FollowsProvider loads it once per token), so
   // sorting by it costs nothing extra. See the sort note below.
   follows: FollowMineEntry[];
+  // The feed's already-loaded events, indexed by id to tell covered from feed
+  // games -- /predictions/open-games carries no source, and this join is the
+  // same free lookup YourPicksBand uses. A game absent from the list (outside
+  // the feed's window) is treated as covered: no "Scores" tag rather than a
+  // wrong one.
+  events: EventListItem[];
 }) {
   const [games, setGames] = useState<OpenPickGame[] | null>(null);
+
+  const feedIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of events) if (isFeedEvent(e.source)) set.add(e.id);
+    return set;
+  }, [events]);
 
   useEffect(() => {
     let cancelled = false;
@@ -456,7 +477,7 @@ export function OpenGamesBand({
       </div>
       <div className="row-track feedpicks__track">
         {sorted.map((g) => (
-          <OpenGameCard key={g.eventId} game={g} />
+          <OpenGameCard key={g.eventId} game={g} isFeed={feedIds.has(g.eventId)} />
         ))}
       </div>
     </section>

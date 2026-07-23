@@ -27,12 +27,16 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
-import { getGames, EventListItem } from '../api';
+import { getGames, EventListItem, isCoveredEvent, isFeedEvent } from '../api';
 
 const PAGE_SIZE = 20;
 
 type Tab = 'upcoming' | 'results';
 type Window = 'week' | 'month' | 'all';
+// The WATCH/PLAY scope toggle. 'foxx' (default) = covered Sharp Foxx broadcasts
+// only; 'all' also surfaces ingested feed games, rendered as the quieter,
+// play-only card. See THE RULE in api.ts (isCoveredEvent/isFeedEvent).
+type Scope = 'foxx' | 'all';
 
 // Unlike the feed's date-only thumbnails, a schedule has to answer "tonight?" —
 // so the tip-off time is part of the card, not just the date.
@@ -116,11 +120,61 @@ function windowRange(win: Window, tab: Tab): { dateFrom?: string; dateTo?: strin
   return { dateFrom: from.toISOString(), dateTo: now.toISOString() };
 }
 
+// ---- Feed game card (source != null): the QUIETER, play-only variant shown
+// under "All games". No Watch affordance and no video-implying live pulse card --
+// these are ingested scores, contest material for picks, not a Sharp Foxx
+// broadcast. A muted "Scores" tag stands in for the watch treatment; a live feed
+// game still gets the subtle LIVE text pill (a status, not a stream). Same tcard
+// shell so the grid stays uniform; the .playcard/.gamescope-* scope knocks it
+// back. See THE RULE in api.ts. ----
+function FeedGameCard({ event }: { event: EventListItem }) {
+  const home = event.homeTeam ?? 'TBD';
+  const away = event.awayTeam ?? 'TBD';
+  const hasScore = event.homeScore !== null && event.awayScore !== null;
+  const isLive = event.status === 'live';
+
+  return (
+    <article className="tcard playcard">
+      <Link
+        className="tcard-open"
+        href={`/games/${event.id}`}
+        aria-label={`View ${home} vs ${away} scores`}
+      >
+        <div className={`${thumbClass(event.sport)} gamescope-feedthumb`}>
+          <span className="thumb-tag">{event.sport ?? 'event'}</span>
+          {/* Subtle LIVE text pill only -- never the Watch affordance. */}
+          {isLive && <LiveBadge className="thumb-live" />}
+          <span className="gamescope-scorestag">Scores</span>
+          <div className="thumb-matchup">
+            <span className="thumb-team">{home}</span>
+            {hasScore ? (
+              <span className="thumb-score">
+                {event.homeScore} – {event.awayScore}
+              </span>
+            ) : (
+              <span className="thumb-vs">vs</span>
+            )}
+            <span className="thumb-team">{away}</span>
+          </div>
+        </div>
+        <div className="tcard-body">
+          <div className="tcard-meta">
+            {event.venue && <span className="tcard-meta__seg">{event.venue}</span>}
+            <span className="tcard-meta__seg">{formatWhen(event.scheduledAt)}</span>
+          </div>
+        </div>
+      </Link>
+    </article>
+  );
+}
+
 // ---- Game card: the feed's GameCard markup verbatim, so the schedule reads as
 // the same design language as everything else fans see. The gradient block IS
 // the visual; score replaces "vs" once a result is in, and the whole card links
-// to the game's page at /games/[id]. ----
+// to the game's page at /games/[id]. A feed game (source != null) is a play
+// surface, so it renders the quieter FeedGameCard instead. ----
 function GameCard({ event }: { event: EventListItem }) {
+  if (isFeedEvent(event.source)) return <FeedGameCard event={event} />;
   const home = event.homeTeam ?? 'TBD';
   const away = event.awayTeam ?? 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
@@ -190,6 +244,10 @@ function Games() {
     const w = params.get('window');
     return w === 'week' || w === 'month' ? w : 'all';
   });
+  // Covered-only by default; ?scope=all opts into feed games too.
+  const [scope, setScope] = useState<Scope>(
+    params.get('scope') === 'all' ? 'all' : 'foxx',
+  );
 
   const [items, setItems] = useState<EventListItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -212,9 +270,10 @@ function Games() {
     if (sport) qs.set('sport', sport);
     if (stateCode) qs.set('state', stateCode);
     if (win !== 'all') qs.set('window', win);
+    if (scope !== 'foxx') qs.set('scope', scope);
     const s = qs.toString();
     router.replace(s ? `/games?${s}` : '/games', { scroll: false });
-  }, [router, tab, sport, stateCode, win]);
+  }, [router, tab, sport, stateCode, win, scope]);
 
   const hasFilters = Boolean(sport || stateCode || win !== 'all');
 
@@ -293,6 +352,24 @@ function Games() {
   const inFallback = fallback !== null && items.length === 0;
   const noun = tab === 'upcoming' ? 'game' : 'result';
 
+  // Scope is a client-side VIEW filter over the already-loaded (server-paged)
+  // rows -- the list endpoint has no source param, and at this data volume
+  // filtering the page in the browser is honest and cheap. 'foxx' keeps only
+  // covered games; 'all' passes everything. The count and "Show more" note below
+  // reflect what's actually shown, and a page that comes back all-feed under
+  // 'foxx' gets its own "switch to All games" empty state rather than a false
+  // "no matches". More server pages may still hold covered games, so Show more
+  // stays available while items.length < total regardless of scope.
+  const visible =
+    scope === 'foxx' ? items.filter((e) => isCoveredEvent(e.source)) : items;
+  const visibleFallback =
+    scope === 'foxx'
+      ? (fallback ?? []).filter((e) => isCoveredEvent(e.source))
+      : (fallback ?? []);
+  // Under 'foxx', are there feed rows on this page we filtered out? Drives the
+  // "these are external scores -- switch to All" empty state.
+  const feedFilteredOut = scope === 'foxx' && items.length > visible.length;
+
   return (
     <main className="feed-home gamesdir-page">
       <div className="header-row">
@@ -327,6 +404,29 @@ function Games() {
             onClick={() => setTab(t)}
           >
             {t === 'upcoming' ? 'Upcoming' : 'Results'}
+          </button>
+        ))}
+      </div>
+
+      {/* WATCH/PLAY scope toggle: Sharp Foxx broadcasts (default) vs. every game
+          incl. ingested feed scores. Compact chips, URL-synced like the rest. */}
+      <div
+        className="gamescope-toggle"
+        role="group"
+        aria-label="Which games to show"
+      >
+        {([
+          ['foxx', 'Sharp Foxx'],
+          ['all', 'All games'],
+        ] as Array<[Scope, string]>).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={`chip${scope === value ? ' chip--on' : ''}`}
+            aria-pressed={scope === value}
+            onClick={() => setScope(value)}
+          >
+            {label}
           </button>
         ))}
       </div>
@@ -397,7 +497,7 @@ function Games() {
               <div className="results-empty">
                 <p className="results-empty__title">No games scheduled yet</p>
                 <p className="results-empty__hint">
-                  {fallback.length > 0 ? (
+                  {visibleFallback.length > 0 ? (
                     <>Nothing upcoming on the calendar. Here&apos;s what was played recently.</>
                   ) : (
                     // Genuinely nothing in the graph, either direction. Don't
@@ -410,11 +510,11 @@ function Games() {
                   )}
                 </p>
               </div>
-              {fallback.length > 0 && (
+              {visibleFallback.length > 0 && (
                 <>
                   <h2 className="row-title gamesdir-fallback-title">Recent results</h2>
                   <div className="results-grid">
-                    {fallback.map((ev) => (
+                    {visibleFallback.map((ev) => (
                       <GameCard key={ev.id} event={ev} />
                     ))}
                   </div>
@@ -424,25 +524,51 @@ function Games() {
           ) : (
             <>
               <p className="result-count">
-                {total.toLocaleString()} {total === 1 ? noun : `${noun}s`}
-                {hasFilters ? ' match your filters' : ''}
+                {scope === 'foxx'
+                  ? `${visible.length.toLocaleString()} Sharp Foxx ${
+                      visible.length === 1 ? noun : `${noun}s`
+                    }`
+                  : `${total.toLocaleString()} ${total === 1 ? noun : `${noun}s`}${
+                      hasFilters ? ' match your filters' : ''
+                    }`}
               </p>
 
-              {items.length === 0 ? (
-                <div className="results-empty">
-                  <p className="results-empty__title">No games match these filters</p>
-                  <p className="results-empty__hint">
-                    Try widening them —{' '}
-                    <button type="button" className="link-btn" onClick={clearFilters}>
-                      clear all filters
-                    </button>
-                    .
-                  </p>
-                </div>
+              {visible.length === 0 ? (
+                feedFilteredOut ? (
+                  // All that's here under 'foxx' is feed scores -- point at the
+                  // toggle rather than the filters, which aren't the reason.
+                  <div className="results-empty">
+                    <p className="results-empty__title">
+                      No Sharp Foxx {noun}s here
+                    </p>
+                    <p className="results-empty__hint">
+                      What&apos;s here are external scores. Switch to{' '}
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => setScope('all')}
+                      >
+                        All games
+                      </button>{' '}
+                      to see them.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="results-empty">
+                    <p className="results-empty__title">No games match these filters</p>
+                    <p className="results-empty__hint">
+                      Try widening them —{' '}
+                      <button type="button" className="link-btn" onClick={clearFilters}>
+                        clear all filters
+                      </button>
+                      .
+                    </p>
+                  </div>
+                )
               ) : (
                 <>
                   <div className="results-grid">
-                    {items.map((ev) => (
+                    {visible.map((ev) => (
                       <GameCard key={ev.id} event={ev} />
                     ))}
                   </div>
@@ -458,7 +584,9 @@ function Games() {
                         {loadingMore ? 'Loading…' : 'Show more'}
                       </button>
                       <span className="muted queue-more__note">
-                        Showing {items.length} of {total.toLocaleString()}
+                        {scope === 'foxx'
+                          ? `Showing ${visible.length} Sharp Foxx ${noun}s`
+                          : `Showing ${items.length} of ${total.toLocaleString()}`}
                       </span>
                     </div>
                   )}

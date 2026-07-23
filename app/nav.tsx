@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './auth-context';
 import { usePoints } from './points-context';
 import { navLinksFor } from './roles';
@@ -35,9 +35,31 @@ function PointsChip() {
 // session and bounces to the login page -- the same behavior every page had.
 export function AppNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const { token, user, logout } = useAuth();
 
+  // The hamburger menu (only rendered/visible under 768px). Closes on route
+  // change so tapping a link dismisses it, and locks page scroll while open.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
   function onLogout() {
+    setMenuOpen(false);
     logout();
     router.replace('/');
   }
@@ -76,27 +98,90 @@ export function AppNav() {
     };
   }, [token, canReview]);
 
+  // The review/NIL count badges attach to the same two links in both the desktop
+  // row and the mobile menu, so factor the decision out once.
+  function badgeFor(href: string) {
+    if (href === '/review' && reviewCount != null && reviewCount > 0)
+      return <span className="nav-badge">{reviewCount}</span>;
+    if (href === '/nil-review' && nilReviewCount != null && nilReviewCount > 0)
+      return <span className="nav-badge">{nilReviewCount}</span>;
+    return null;
+  }
+
   return (
-    <div className="nav-links">
-      <PointsChip />
-      {links.map((l) => (
-        <Link key={l.href} href={l.href} className="link-btn">
-          {l.label}
-          {l.href === '/review' && reviewCount != null && reviewCount > 0 && (
-            <span className="nav-badge">{reviewCount}</span>
-          )}
-          {l.href === '/nil-review' &&
-            nilReviewCount != null &&
-            nilReviewCount > 0 && <span className="nav-badge">{nilReviewCount}</span>}
+    <>
+      {/* Desktop (>=768px): the wide uppercase link row, unchanged. */}
+      <div className="nav-links nav-links--desktop">
+        <PointsChip />
+        {links.map((l) => (
+          <Link key={l.href} href={l.href} className="link-btn">
+            {l.label}
+            {badgeFor(l.href)}
+          </Link>
+        ))}
+        <Link href="/account/password" className="link-btn">
+          Change password
         </Link>
-      ))}
-      <Link href="/account/password" className="link-btn">
-        Change password
-      </Link>
-      <button className="link-btn" onClick={onLogout}>
-        Log out
-      </button>
-    </div>
+        <button className="link-btn" onClick={onLogout}>
+          Log out
+        </button>
+      </div>
+
+      {/* Mobile (<768px): a slim cluster of the points chip + a hamburger. */}
+      <div className="nav-mobile">
+        <PointsChip />
+        <button
+          type="button"
+          className="nav-hamburger"
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(true)}
+        >
+          <span className="nav-hamburger__bars" aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Mobile full-screen menu: identity + every nav item + log out. */}
+      {menuOpen && (
+        <div className="nav-sheet" role="dialog" aria-modal="true" aria-label="Menu">
+          <div className="nav-sheet__top">
+            <span className="wordmark">Sharp Foxx</span>
+            <button
+              type="button"
+              className="nav-sheet__close"
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+
+          {user && (
+            <div className="nav-sheet__identity">
+              Signed in as{' '}
+              <span className="mono">{user.displayName ?? user.id}</span>
+              {user.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
+            </div>
+          )}
+
+          <nav className="nav-sheet__links">
+            {links.map((l) => (
+              <Link key={l.href} href={l.href} className="nav-sheet__link">
+                <span>{l.label}</span>
+                {badgeFor(l.href)}
+              </Link>
+            ))}
+            <Link href="/account/password" className="nav-sheet__link">
+              <span>Change password</span>
+            </Link>
+          </nav>
+
+          <button className="nav-sheet__logout" onClick={onLogout}>
+            Log out
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

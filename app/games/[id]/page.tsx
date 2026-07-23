@@ -13,6 +13,7 @@ import {
   getEventSponsorship,
   getLiveEvents,
   getGamePhotos,
+  isFeedEvent,
   EventListItem,
   EventContentItem,
   FeedItem,
@@ -765,10 +766,19 @@ export default function GamePage() {
       .slice(0, 5);
   }, [latest, event]);
 
+  // Branch the whole page on WHO made this game. A feed game (source != null) is
+  // an ingested score, not a Sharp Foxx broadcast, so it gets a lean PLAY layout
+  // -- scoreboard + predictions + more games -- with no video, photos, courtside
+  // feed, sponsor strip, or watch language. A covered game (source IS NULL) is
+  // untouched. See THE RULE in api.ts.
+  const isFeed = isFeedEvent(event?.source);
+
   // Fan live pulse: only polls while this game is live (the hook itself no-ops
   // and tears down when `live` is false). Hooks run before the early returns.
+  // A feed game has no correspondent emitting courtside events, so the pulse is
+  // covered-only -- its scores come from ingestion on the events row, not here.
   const live = event?.status === 'live';
-  const pulse = useLivePulse(token, id, live);
+  const pulse = useLivePulse(token, id, live && !isFeed);
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
@@ -806,61 +816,82 @@ export default function GamePage() {
 
       {!loading && !error && event && (
         <div className="game-layout">
-          <div className="game-main game-main--live-anchor">
-            {live && pulse.takeover && (
-              <SponsorTakeover
-                businessName={sponsorship?.businessName ?? 'our presenting sponsor'}
-                onDismiss={pulse.dismissTakeover}
-              />
-            )}
-            <GameVideo event={event} />
-            <Scoreboard
-              event={event}
-              liveHome={live ? pulse.home : null}
-              liveAway={live ? pulse.away : null}
-              scoreVersion={pulse.scoreVersion}
-              period={live ? pulse.period : null}
-            />
-            {sponsorship && <PresentingSponsorStrip sponsorship={sponsorship} />}
-            {/* Photos ride directly under the video area (single column on
-                mobile puts them right beneath the player). */}
-            <GamePhotos token={token} eventId={id} />
-            {/* Predictions sit ABOVE the courtside feed: after a pick is in,
-                the feed is what settles it, so the question has to come first.
-                It renders on every game (an upcoming one can carry open
-                questions pre-tip) but only polls while live — see POLL_MS. */}
-            <PredictionsSection token={token} eventId={id} live={live} />
-            {live && <LiveFeed items={pulse.feed} />}
-            <ShareRow event={event} />
-
-            <section className="game-articles">
-              <h2 className="game-articles__head">Coverage</h2>
-              {articles && articles.length > 0 ? (
-                <div className="game-covlist">
-                  {articles.map((a) => (
-                    <Link
-                      key={a.id}
-                      href={`/articles/${a.id}`}
-                      className="game-covrow"
-                    >
-                      <span className="game-covrow__title">{a.title}</span>
-                      <span className="game-covrow__date">
-                        {formatDate(a.publishedAt ?? a.createdAt)}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="results-empty">
-                  <p className="results-empty__title">No coverage published yet</p>
-                  <p className="results-empty__hint">
-                    Recaps and features for this game will appear here once
-                    published.
-                  </p>
-                </div>
+          {isFeed ? (
+            // ---- FEED (play) layout: the page's purpose here is the picks, so
+            // it's scoreboard -> predictions, nothing else. No video, photos,
+            // courtside feed, sponsor strip, or watch language. ----
+            <div className="game-main">
+              <div className="gamescope-playhead">
+                <span className="gamescope-playhead__tag">Scores</span>
+                <span className="gamescope-playhead__note">
+                  Live scoreboard · make your pick below
+                </span>
+              </div>
+              <Scoreboard event={event} />
+              {/* The reason this page exists for a feed game. Renders on every
+                  game (an upcoming one can carry open questions pre-tip) but
+                  only polls while live. */}
+              <PredictionsSection token={token} eventId={id} live={live} />
+            </div>
+          ) : (
+            // ---- COVERED layout: the full Sharp Foxx broadcast experience,
+            // unchanged. ----
+            <div className="game-main game-main--live-anchor">
+              {live && pulse.takeover && (
+                <SponsorTakeover
+                  businessName={sponsorship?.businessName ?? 'our presenting sponsor'}
+                  onDismiss={pulse.dismissTakeover}
+                />
               )}
-            </section>
-          </div>
+              <GameVideo event={event} />
+              <Scoreboard
+                event={event}
+                liveHome={live ? pulse.home : null}
+                liveAway={live ? pulse.away : null}
+                scoreVersion={pulse.scoreVersion}
+                period={live ? pulse.period : null}
+              />
+              {sponsorship && <PresentingSponsorStrip sponsorship={sponsorship} />}
+              {/* Photos ride directly under the video area (single column on
+                  mobile puts them right beneath the player). */}
+              <GamePhotos token={token} eventId={id} />
+              {/* Predictions sit ABOVE the courtside feed: after a pick is in,
+                  the feed is what settles it, so the question has to come first.
+                  It renders on every game (an upcoming one can carry open
+                  questions pre-tip) but only polls while live — see POLL_MS. */}
+              <PredictionsSection token={token} eventId={id} live={live} />
+              {live && <LiveFeed items={pulse.feed} />}
+              <ShareRow event={event} />
+
+              <section className="game-articles">
+                <h2 className="game-articles__head">Coverage</h2>
+                {articles && articles.length > 0 ? (
+                  <div className="game-covlist">
+                    {articles.map((a) => (
+                      <Link
+                        key={a.id}
+                        href={`/articles/${a.id}`}
+                        className="game-covrow"
+                      >
+                        <span className="game-covrow__title">{a.title}</span>
+                        <span className="game-covrow__date">
+                          {formatDate(a.publishedAt ?? a.createdAt)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="results-empty">
+                    <p className="results-empty__title">No coverage published yet</p>
+                    <p className="results-empty__hint">
+                      Recaps and features for this game will appear here once
+                      published.
+                    </p>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
 
           <aside className="game-rail">
             <section className="game-rail-section">
@@ -875,27 +906,31 @@ export default function GamePage() {
               </Link>
             </section>
 
-            <section className="game-rail-section">
-              <h2 className="game-rail-title">Latest articles</h2>
-              {latestArticles.length > 0 ? (
-                latestArticles.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/articles/${item.id}`}
-                    className="game-railrow"
-                  >
-                    <span className="game-railrow__title">{item.title}</span>
-                    {item.homeTeam && item.awayTeam && (
-                      <span className="game-railrow__match">
-                        {item.homeTeam} vs {item.awayTeam}
-                      </span>
-                    )}
-                  </Link>
-                ))
-              ) : (
-                <p className="muted">No articles published yet.</p>
-              )}
-            </section>
+            {/* Latest articles is editorial coverage -- a watch concern. A feed
+                game has none, so the section is covered-only. */}
+            {!isFeed && (
+              <section className="game-rail-section">
+                <h2 className="game-rail-title">Latest articles</h2>
+                {latestArticles.length > 0 ? (
+                  latestArticles.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/articles/${item.id}`}
+                      className="game-railrow"
+                    >
+                      <span className="game-railrow__title">{item.title}</span>
+                      {item.homeTeam && item.awayTeam && (
+                        <span className="game-railrow__match">
+                          {item.homeTeam} vs {item.awayTeam}
+                        </span>
+                      )}
+                    </Link>
+                  ))
+                ) : (
+                  <p className="muted">No articles published yet.</p>
+                )}
+              </section>
+            )}
           </aside>
         </div>
       )}

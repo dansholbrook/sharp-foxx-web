@@ -272,6 +272,15 @@ export interface UpdateAssignmentInput {
 export interface EventListItem {
   id: string;
   externalRef: string | null;
+  // WHO produced this event, straight off the events.source column. NULL for a
+  // rep-created COVERED game (the full watch experience -- correspondent,
+  // stream, photos); a non-null tag ('espn' | 'ncaa' | 'manual') for an ingested
+  // FEED game (external scores, contest material for picks only). THE RULE:
+  // watch surfaces render source IS NULL, play surfaces render feed rows. Use
+  // isCoveredEvent/isFeedEvent below rather than testing the string. May be
+  // absent (undefined) on an older deployment whose list projection predates
+  // this field -- treated as covered, the same null-safe stance videoUrl takes.
+  source: string | null;
   sport: 'basketball' | 'football' | 'baseball' | 'hockey' | 'soccer' | 'other';
   homeTeamId: string | null;
   awayTeamId: string | null;
@@ -290,6 +299,22 @@ export interface EventListItem {
   isLocalStream: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// THE WATCH/PLAY SPLIT, in one place. An event is COVERED -- a Sharp Foxx
+// broadcast, with a correspondent, a stream, and photos -- exactly when its
+// source is null (a rep-created game). Any non-null source ('espn' etc.) is a
+// FEED game: ingested external scores that are contest material for picks, never
+// a broadcast. Watch surfaces (the /games default, the feed's live/upcoming
+// rows, the game page's video experience) render covered; play surfaces (the
+// rail's pick bands, the lean feed game page) render feed. Undefined -- the
+// field absent on an old payload -- counts as covered: the conservative default
+// never hides a real Sharp Foxx game behind a missing column.
+export function isFeedEvent(source: string | null | undefined): boolean {
+  return source != null;
+}
+export function isCoveredEvent(source: string | null | undefined): boolean {
+  return source == null;
 }
 
 // PATCH /events/:id/result body (mirrors updateResultSchema in events.service.ts).
