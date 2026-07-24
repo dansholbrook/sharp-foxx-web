@@ -2708,6 +2708,13 @@ export interface ContestConfig {
   // "25 pts/square" where a pick'em shows its entry cost.
   squareCost?: number;
   periodPayouts?: Array<{ period: 1 | 2 | 3 | 'final'; points: number }>;
+  // Survivor config (config bag on a type='survivor' contest — see the round-based
+  // elimination game). Each round carries the slate of eventIds a fan may pick
+  // ONE team from; a team may be used only once across the whole contest. The
+  // survivor picks read (getSurvivorPicks) carries only the CURRENT pick per
+  // round, not this slate, so the board resolves these eventIds to team names via
+  // the events API (getEvents) to render each round's available games.
+  rounds?: Array<{ round: number; eventIds: string[] }>;
   [key: string]: unknown;
 }
 
@@ -3123,3 +3130,81 @@ export const releaseSquare = (
 export function squaresPeriodLabel(period: SquaresPeriod): string {
   return period === 'final' ? 'Final' : `Q${period}`;
 }
+
+// ============================================================================
+// SURVIVOR — the round-based elimination game on a type='survivor' contest. The
+// contest chassis (enter/leaderboard) is shared with pick'em above; this is the
+// round timeline on top. Each round a fan picks ONE team to win from that round's
+// slate; a wrong pick (or no pick by lock) eliminates them, and a team may be
+// used only ONCE across the whole contest. Mirrors survivor.service.ts on the
+// backend. POINTS ONLY: entry costs points like any contest, no money.
+//
+// GET/PUT /contests/:id/picks share the SAME path as the pick'em sheet but return
+// a DIFFERENT shape (a round timeline, not a game sheet) — the backend keys off
+// the contest type. So these are typed and named separately from getPickSheet.
+// ============================================================================
+
+// One round's CURRENT pick, as the survivor picks read carries it. teamId is the
+// team the fan is riding this round (what a re-pick replaces / what the "used
+// teams" set derives from); teamName + opponent render the matchup. gameStatus is
+// the EVENT's status; scores post as it plays. isCorrect is null until graded,
+// then true (survived) / false (eliminated). NOTE the read carries only this
+// current pick per round, NOT the round's full slate — the board resolves the
+// slate from config.rounds[].eventIds via getEvents.
+export interface SurvivorPick {
+  eventId: string;
+  teamId: string;
+  teamName: string;
+  opponent: string;
+  scheduledAt: string;
+  gameStatus: EventListItem['status'];
+  homeScore: number | null;
+  awayScore: number | null;
+  isCorrect: boolean | null;
+}
+
+// One round in the timeline. locked flips at that round's first kickoff (no more
+// picking); pick is null until the fan picks (an unpicked + locked round is what
+// eliminates them). Rounds come back in round order.
+export interface SurvivorRound {
+  round: number;
+  locked: boolean;
+  pick: SurvivorPick | null;
+}
+
+// GET /contests/:id/picks on a survivor contest. entryStatus is the CALLER's
+// standing ('active' = still alive, 'eliminated' = out); contestStatus is the
+// contest's lifecycle status; alive/eliminated are the field-wide survivor counts
+// for the header ("14 alive · 3 out"). Entered fans only (403 otherwise — a
+// participant surface, same as the pick'em sheet).
+export interface SurvivorPicks {
+  entryStatus: 'active' | 'eliminated';
+  contestStatus: ContestStatus;
+  alive: number;
+  eliminated: number;
+  rounds: SurvivorRound[];
+}
+
+// PUT /contests/:id/picks body on a survivor contest — pick teamId from eventId
+// for the given round. The backend upserts (a pre-lock re-pick replaces), so the
+// board sends one round at a time on tap. 409s: the round locked, or the team was
+// already used ("You already used <team> in round <N>", surfaced verbatim inline).
+export interface SurvivorPickInput {
+  round: number;
+  eventId: string;
+  teamId: string;
+}
+
+// The caller's survivor timeline. Entered fans only (403 otherwise). Lazy
+// auto-locks on read, so `locked` per round is honest.
+export const getSurvivorPicks = (token: string, id: string) =>
+  authGet<SurvivorPicks>(`/contests/${id}/picks`, token);
+
+// Submit (or replace, pre-lock) one round's pick. Returns the rebuilt timeline,
+// so the board reconciles its optimistic state from the response. 409s: the round
+// locked, or the team was already used in an earlier round.
+export const submitSurvivorPick = (
+  token: string,
+  id: string,
+  input: SurvivorPickInput,
+) => authPut<SurvivorPicks>(`/contests/${id}/picks`, token, input);

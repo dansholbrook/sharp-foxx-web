@@ -31,6 +31,7 @@ import {
   isNationalOverdue,
   isFeedEvent,
   contestCost,
+  contestTypeLabel,
   squaresPerSquareLabel,
   points,
   signedPoints,
@@ -434,6 +435,9 @@ function ContestRailRow({ contest }: { contest: Contest }) {
     <Link href={`/contests/${contest.id}`} className="railcontest">
       <span className="railcontest__title">{contest.title}</span>
       <span className="railcontest__foot">
+        {/* The type tag distinguishes a Survivor / Squares / Pick'em row at a
+            glance — the lobby leans on it, so the rail should too. */}
+        <span className="railcontest__type">{contestTypeLabel(contest.type)}</span>
         {/* Squares enter free — show the per-square price, not "Free". */}
         <span className="railcontest__cost">
           {contest.type === 'squares'

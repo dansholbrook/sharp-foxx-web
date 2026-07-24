@@ -9806,12 +9806,20 @@ a.follow-sugcard__name:hover {
   gap: 10px;
   font-size: 0.76rem;
 }
+.railcontest__type {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.64rem;
+  font-weight: 600;
+}
 .railcontest__cost {
   color: var(--accent);
   font-weight: 600;
 }
 .railcontest__when {
   color: var(--muted);
+  margin-left: auto;
 }
 
 /* ---- My Picks: my contests + recent activity ---- */
@@ -10626,5 +10634,370 @@ a.follow-sugcard__name:hover {
 @media (prefers-reduced-motion: reduce) {
   .refreport-live__dot {
     animation: none;
+  }
+}
+
+/* ==========================================================================
+   SURVIVOR  (.survivor-* / .survivor-round-* / .survivor-team-*)  — the round
+   based elimination surface on a type='survivor' contest. Built on the existing
+   tokens and the pick'em/squares "won" green vs --warn "lost" language: ALIVE and
+   a survived round borrow the green, ELIMINATED and a lost round read muted/warn.
+   MOBILE-FIRST: the round timeline stacks clean at ~390px and the two team
+   buttons per matchup are thumb-sized. Scoped names, so nothing here reaches the
+   rest of the app.
+   ========================================================================== */
+
+/* ---- Status header: my standing + the field counts ---- */
+.survivor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.survivor-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-strong);
+}
+/* Alive borrows the squares/predict "won" green — the one non-gold "good". */
+.survivor-badge--alive {
+  color: #b4e6c0;
+  background: rgba(47, 92, 58, 0.25);
+  border-color: #2f5c3a;
+}
+/* Eliminated reads muted (a quiet out, not an alarm), with a faint warn tint. */
+.survivor-badge--out {
+  color: var(--muted);
+  background: rgba(92, 43, 43, 0.14);
+  border-color: var(--border-strong);
+}
+.survivor-badge__sub {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.survivor-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+.survivor-counts__alive {
+  color: #b4e6c0;
+  font-weight: 600;
+}
+.survivor-counts__sep {
+  color: var(--muted);
+}
+.survivor-counts__out {
+  color: var(--muted);
+}
+
+/* ---- The timeline ---- */
+.survivor-timeline {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.survivor-round {
+  position: relative;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.survivor-round--missed {
+  border-left-color: var(--warn-border);
+}
+.survivor-round__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.survivor-round__label {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  color: var(--text);
+}
+.survivor-round__lock {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--accent);
+  border: 1px solid var(--accent-dim);
+  background: rgba(201, 163, 78, 0.12);
+}
+.survivor-round__lock--locked {
+  color: var(--muted);
+  border-color: var(--border-strong);
+  background: rgba(19, 17, 13, 0.5);
+}
+
+/* ---- The picked-team readout ---- */
+.survivor-pick {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.survivor-pick--won {
+  border-color: #2f5c3a;
+  border-left-color: #2f5c3a;
+  background: #17251a;
+}
+.survivor-pick--lost {
+  border-left-color: var(--warn-border);
+}
+.survivor-pick__main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.survivor-pick__team {
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.survivor-pick--won .survivor-pick__team {
+  color: #b4e6c0;
+}
+.survivor-pick__vs {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.survivor-pick__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+.survivor-pick__when {
+  color: var(--muted);
+}
+.survivor-pick__score {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.survivor-pick__mark {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.survivor-pick__mark--ok {
+  color: #b4e6c0;
+}
+.survivor-pick__mark--no {
+  color: var(--warn);
+}
+
+/* The missed-round line — a locked round with no pick is an elimination. */
+.survivor-round__missed {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--warn);
+}
+
+/* ---- The pick affordance + slate ---- */
+.survivor-round__pickarea {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.survivor-round__toggle {
+  align-self: flex-start;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.survivor-round__toggle:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.survivor-slate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.survivor-slate__note {
+  margin: 0;
+  font-size: 0.84rem;
+}
+.survivor-slate__error {
+  font-size: 0.78rem;
+  color: var(--warn);
+}
+.survivor-matchup__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.survivor-matchup {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.survivor-matchup--locked {
+  opacity: 0.7;
+}
+.survivor-matchup--missing {
+  padding: 12px;
+  font-size: 0.84rem;
+}
+.survivor-matchup__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 0.76rem;
+}
+.survivor-matchup__when {
+  color: var(--muted);
+}
+.survivor-matchup__status {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+.survivor-matchup__sides {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+.survivor-matchup__at {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+/* The tappable team sides: thumb targets, modeled on .picksheet-side. */
+.survivor-team {
+  flex: 1;
+  min-height: 60px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+  cursor: pointer;
+}
+.survivor-team:hover:not(:disabled) {
+  border-color: var(--accent-dim);
+}
+.survivor-team--on {
+  background: rgba(201, 163, 78, 0.14);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.survivor-team--on:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+/* A team already ridden in another round: visibly spent, and inert. */
+.survivor-team--used {
+  opacity: 0.5;
+}
+.survivor-team:disabled {
+  cursor: default;
+}
+.survivor-team:disabled:not(.survivor-team--used):not(.survivor-team--on) {
+  opacity: 0.55;
+}
+.survivor-team__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+.survivor-team__used {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ---- My-contests survivor standing tag (on /picks) ---- */
+.survivor-tag {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.survivor-tag--alive {
+  color: #b4e6c0;
+  background: rgba(47, 92, 58, 0.25);
+  border: 1px solid #2f5c3a;
+}
+.survivor-tag--out {
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+}
+
+/* ---- Narrow phones: keep the timeline + team buttons comfortable at ~390px ---- */
+@media (max-width: 560px) {
+  .survivor-head {
+    align-items: flex-start;
+  }
+  .survivor-badge {
+    font-size: 0.95rem;
+    padding: 7px 14px;
+  }
+  .survivor-team {
+    min-height: 56px;
+  }
+  .survivor-team__name {
+    font-size: 0.88rem;
+  }
+  .survivor-pick__foot {
+    flex-wrap: wrap;
   }
 }

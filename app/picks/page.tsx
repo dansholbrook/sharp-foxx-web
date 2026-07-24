@@ -193,6 +193,18 @@ function MyContestsSection({ token }: { token: string }) {
                 </span>
               </Link>
               <div className="mycontests-row__side">
+                {/* Survivor lives or dies rather than accruing a big score, so its
+                    standing (Alive/Eliminated off the entry status) is the number
+                    that means something — show it alongside the score. */}
+                {c.type === 'survivor' && (
+                  <span
+                    className={`survivor-tag${
+                      entry.status === 'eliminated' ? ' survivor-tag--out' : ' survivor-tag--alive'
+                    }`}
+                  >
+                    {entry.status === 'eliminated' ? 'Eliminated' : 'Alive'}
+                  </span>
+                )}
                 {entry.rank != null && (
                   <span className="mycontests-row__rank">#{entry.rank}</span>
                 )}

@@ -24,6 +24,7 @@ import { usePoints } from '../../points-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { FanCard } from '../../fan-card';
 import { SquaresBoard } from './squares-board';
+import { SurvivorBoard } from './survivor-board';
 import { canAccess } from '../../roles';
 import {
   getContest,
@@ -901,6 +902,11 @@ export default function ContestPage() {
   // Pick'em and over/under share the exact enter → sheet → scorecard chassis
   // (only the sides differ), so both are "playable" through the same arms below.
   const playable = contest?.type === 'pickem' || contest?.type === 'overunder';
+  // Survivor rides the same chassis SHELL (canceled/draft gating + the enter hero
+  // when not entered), but its entered body is its own round timeline, not the
+  // pick sheet — so it branches to SurvivorBoard below rather than PickSheetView.
+  const isSurvivor = contest?.type === 'survivor';
+  const chassis = playable || isSurvivor;
   const face = contest ? statusFaceKicker(contest) : '';
 
   return (
@@ -942,12 +948,14 @@ export default function ContestPage() {
           </header>
 
           {/* Squares carries its own body (the 10x10 grid across every status);
-              pick'em and over/under split into enter → sheet → scorecard below.
-              Any other type has no fan gameplay in v1 — show the row it is rather
-              than a sheet that would 400. */}
+              survivor carries its own round timeline; pick'em and over/under split
+              into enter → sheet → scorecard. Survivor shares the chassis SHELL
+              (canceled/draft gating + the enter hero when not entered), then hands
+              its entered/locked body to SurvivorBoard. Any other type has no fan
+              gameplay in v1 — show the row it is rather than a sheet that 400s. */}
           {isSquares ? (
             <SquaresBoard contest={contest} />
-          ) : !playable ? (
+          ) : !chassis ? (
             <div className="results-empty">
               <p className="results-empty__title">Not playable yet</p>
               <p className="results-empty__hint">
@@ -971,6 +979,9 @@ export default function ContestPage() {
             </div>
           ) : open && !entered ? (
             <EnterHero contest={contest} onEntered={load} />
+          ) : isSurvivor ? (
+            // Survivor's entered body across open/locked/live/final: the timeline.
+            <SurvivorBoard contest={contest} onWithdrew={load} />
           ) : open && entered ? (
             <PickSheetView contest={contest} onWithdrew={load} />
           ) : (
