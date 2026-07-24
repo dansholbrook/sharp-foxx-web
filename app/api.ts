@@ -813,6 +813,18 @@ async function authDelete(path: string, token: string): Promise<void> {
   if (!res.ok) throw await toAuthError(res);
 }
 
+// DELETE with NO body that parses a JSON response -- the parlay cancel endpoint
+// (DELETE /contests/:id/tickets/:ticketId) names its target in the path and
+// answers { refunded, balance }, which the board needs to move the ⚡ chip.
+async function authDeleteJson<T>(path: string, token: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw await toAuthError(res);
+  return res.json();
+}
+
 // DELETE that CARRIES a JSON body AND parses a JSON response -- the squares
 // release endpoint (DELETE /contests/:id/squares/claim) takes { row, col } and
 // returns { released, balance }. authDelete above stays the bodyless 204 variant.
@@ -2715,6 +2727,18 @@ export interface ContestConfig {
   // round, not this slate, so the board resolves these eventIds to team names via
   // the events API (getEvents) to render each round's available games.
   rounds?: Array<{ round: number; eventIds: string[] }>;
+  // Parlay board config (config bag on a type='parlay_board' contest — see
+  // parlay.type.ts). Entering is FREE; the TICKET is the buy, staked somewhere in
+  // [minStake, maxStake], carrying [minLegs, maxLegs] legs priced by the
+  // multipliers ladder (keys are leg counts as strings, because jsonb). The board
+  // read (getParlayBoard) carries all of this as `rules`, so a card only needs the
+  // stake bounds here — see parlayStakeRangeLabel.
+  minLegs?: number;
+  maxLegs?: number;
+  multipliers?: Record<string, number>;
+  minStake?: number;
+  maxStake?: number;
+  maxTicketsPerUser?: number;
   [key: string]: unknown;
 }
 
@@ -2936,7 +2960,10 @@ export function contestTypeLabel(type: ContestType): string {
     case 'squares':
       return 'Squares';
     case 'parlay_board':
-      return 'Parlay board';
+      // "Parlay" rather than "Parlay board": this label is a BADGE (lobby card,
+      // feed rail, my-contests row) where the short word reads better, and the
+      // board's own page says the rest.
+      return 'Parlay';
     case 'bracket':
       return 'Bracket';
     case 'overunder':
@@ -3208,3 +3235,197 @@ export const submitSurvivorPick = (
   id: string,
   input: SurvivorPickInput,
 ) => authPut<SurvivorPicks>(`/contests/${id}/picks`, token, input);
+
+// ============================================================================
+// PARLAY BOARD — the ticket builder on a type='parlay_board' contest. The contest
+// chassis (enter/leaderboard) is shared with pick'em above; this is the TICKET
+// BOOK on top. Mirrors parlay.service.ts / parlay.type.ts on the backend.
+//
+// TWO LAYERS, the same shape squares uses: ENTERING is FREE (the entry row is
+// just leaderboard presence) and the TICKET is the buy — `stake` points per
+// ticket, 2–4 legs, each leg a team picked to WIN one slate game. Payout =
+// stake × the ladder's multiplier for that leg count (a house table, no odds
+// feed). POINTS ONLY: stakes and payouts are points, never money.
+//
+// TICKETS ARE NOT THE PICK SHEET. /contests/:id/picks serves one revisable sheet
+// per entry (pick'em, survivor); a ticket is an IMMUTABLE PURCHASE a fan may hold
+// many of, so it gets its own sub-resource: /contests/:id/tickets. You don't edit
+// a placed ticket — you cancel it (refund, while the board is open) and build
+// another.
+//
+// LOCKING — the one rule: the CONTEST lock governs everything. The board
+// auto-locks at the slate's EARLIEST kickoff, and from that instant there are no
+// new tickets and no cancels. So the builder is offered on `status === 'open'`
+// only; after that a fan sees their tickets and nothing else.
+// ============================================================================
+
+// A ticket's lifecycle. 'voided' is the mercy exit: enough legs voided (tie,
+// canceled, postponed) that the survivors fell below minLegs, so the stake was
+// refunded. 'won'/'lost' are settled; 'pending' is live.
+export type ParlayTicketStatus = 'pending' | 'won' | 'lost' | 'voided';
+
+// One leg's derived grade. 'void' legs stay ON the ticket (a fan should see WHY
+// their 3-leg ticket became a 2-leg ticket) and drop out of the effective count,
+// which is what REPRICES the ticket to a lower rung of the ladder.
+export type ParlayLegResult = 'pending' | 'won' | 'lost' | 'void';
+
+// One game on the board's slate, as the builder renders it: both teams (ids, for
+// the leg body; names, for the chips), kickoff, and live/final status + score.
+// The team ids are NULLABLE (events.home_team_id / away_team_id are, same as
+// EventListItem) — an unlinked side can't back a leg, so the builder renders that
+// chip inert rather than posting a null teamId.
+export interface ParlaySlateGame {
+  eventId: string;
+  scheduledAt: string;
+  status: EventListItem['status'];
+  homeTeamId: string | null;
+  homeTeam: string | null;
+  awayTeamId: string | null;
+  awayTeam: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+}
+
+// One leg of one of the caller's tickets. `matchup` is the pre-joined
+// "Away @ Home" line (null if either team is unlinked); `result` is the graded
+// mark. The event fields are nullable because the read left-joins them.
+export interface ParlayLeg {
+  legId: string;
+  eventId: string;
+  pickedTeamId: string;
+  pickedTeam: string | null;
+  matchup: string | null;
+  scheduledAt: string | null;
+  eventStatus: EventListItem['status'] | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  result: ParlayLegResult;
+}
+
+// One of the caller's tickets. `multiplier` is `numeric` -> a STRING ("3.00"),
+// same discipline as money: keep it a string, parse only at the render boundary
+// (formatMultiplier). potentialPayout is stake × the CURRENT multiplier — what it
+// pays if every leg still standing wins; on a settled ticket that number is
+// history and payoutPoints is what actually paid. legCount/multiplier are
+// REWRITTEN at settlement when a void drops a leg, so a repriced ticket shows its
+// new rung here.
+export interface ParlayTicket {
+  id: string;
+  contestId: string;
+  stake: number;
+  legCount: number;
+  multiplier: string;
+  potentialPayout: number;
+  status: ParlayTicketStatus;
+  payoutPoints: number | null;
+  settledAt: string | null;
+  createdAt: string;
+  legs: ParlayLeg[];
+}
+
+// The board's rules, exactly as the backend will enforce them. `multipliers` is
+// the ladder keyed by leg count AS A STRING (it lands in jsonb) — read it with
+// String(legCount), and expect a rung for every count in [minLegs, maxLegs].
+export interface ParlayRules {
+  minLegs: number;
+  maxLegs: number;
+  minStake: number;
+  maxStake: number;
+  multipliers: Record<string, number>;
+}
+
+// GET /contests/:id/tickets — the whole builder context in one read: the rules,
+// the caller's tickets (with legs), their ticket count against the cap, and the
+// slate. `status` is the CONTEST status (lazy auto-locked on read, so it's
+// honest): the builder is offered only while it's 'open'. Any authenticated fan
+// may read it — it's a lobby surface — so a non-entrant sees the board with an
+// empty ticket list.
+export interface ParlayBoardRead {
+  contestId: string;
+  status: ContestStatus;
+  rules: ParlayRules;
+  myTicketCount: number;
+  ticketCap: number;
+  slate: ParlaySlateGame[];
+  tickets: ParlayTicket[];
+}
+
+// POST /contests/:id/tickets body. Legs must name DISTINCT slate games, and each
+// teamId must actually play in its game (both are 400s otherwise).
+export interface BuildParlayTicketInput {
+  stake: number;
+  legs: Array<{ eventId: string; teamId: string }>;
+}
+
+// POST /contests/:id/tickets response — the built ticket plus the caller's new
+// balance (the stake was just spent), so the ⚡ chip moves without a wallet
+// re-read. 403 if the caller hasn't entered ("Enter the contest before building a
+// ticket" — the board chains enter → ticket, exactly like squares' claim); 409s:
+// 'Insufficient points', the ticket cap, or the slate having started.
+export interface BuildParlayTicketResult {
+  ticket: ParlayTicket;
+  balance: number;
+}
+
+// DELETE /contests/:id/tickets/:ticketId response. The stake comes back as a
+// signed 'adjustment' (a REFUND, not an earn — it must not inflate lifetime
+// earned), the ticket row is deleted and its cap slot freed. 409 once the board
+// has locked.
+export interface CancelParlayTicketResult {
+  contestId: string;
+  canceledTicketId: string;
+  refunded: number;
+  balance: number;
+}
+
+// The board read. Lazy auto-locks on load, so `status` is honest even if the
+// slate's earliest game kicked off since the row was written.
+export const getParlayBoard = (token: string, id: string) =>
+  authGet<ParlayBoardRead>(`/contests/${id}/tickets`, token);
+
+// Build and stake a ticket. 403s for a caller with no entry, so the board enters
+// first then retries (same chain squares uses for a first claim).
+export const buildParlayTicket = (
+  token: string,
+  id: string,
+  input: BuildParlayTicketInput,
+) => authPost<BuildParlayTicketResult>(`/contests/${id}/tickets`, token, input);
+
+// Tear a ticket up while the board is open — refunds the stake.
+export const cancelParlayTicket = (token: string, id: string, ticketId: string) =>
+  authDeleteJson<CancelParlayTicketResult>(`/contests/${id}/tickets/${ticketId}`, token);
+
+// A multiplier as fans read it: "3" not "3.00", "2.5" not "2.50". Takes either
+// the `numeric` string off a ticket or a plain ladder number; a genuinely
+// unparseable value passes through rather than rendering NaN.
+export function formatMultiplier(multiplier: string | number): string {
+  const n = typeof multiplier === 'number' ? multiplier : Number(multiplier);
+  if (!Number.isFinite(n)) return String(multiplier);
+  return String(Number(n.toFixed(2)));
+}
+
+// The ladder as the board's visual hook: "2 legs ×3 · 3 legs ×6 · 4 legs ×12".
+// Keys are leg counts as strings, so sort them NUMERICALLY (string order would
+// put "10" before "2").
+export function parlayLadderLabel(multipliers: Record<string, number>): string {
+  return Object.entries(multipliers)
+    .map(([legs, mult]) => [Number(legs), mult] as const)
+    .filter(([legs]) => Number.isFinite(legs))
+    .sort((a, b) => a[0] - b[0])
+    .map(([legs, mult]) => `${legs} legs ×${formatMultiplier(mult)}`)
+    .join(' · ');
+}
+
+// A parlay board is FREE to enter -- the TICKET is the buy -- so where a pick'em
+// card shows its entry cost, a parlay card shows the stake range off
+// config.minStake/maxStake ("25–500 pts/ticket"). Falls back to the documented
+// backend defaults (25/500) when the keys are missing on an older/odd row, and
+// collapses to a single figure when the bounds are equal.
+export function parlayStakeRangeLabel(config: ContestConfig): string {
+  const min = typeof config.minStake === 'number' && config.minStake > 0 ? config.minStake : 25;
+  const rawMax = typeof config.maxStake === 'number' && config.maxStake > 0 ? config.maxStake : 500;
+  const max = rawMax >= min ? rawMax : min;
+  return min === max
+    ? `${points(min)} pts/ticket`
+    : `${points(min)}–${points(max)} pts/ticket`;
+}

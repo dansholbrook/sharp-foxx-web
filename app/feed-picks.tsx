@@ -33,6 +33,7 @@ import {
   contestCost,
   contestTypeLabel,
   squaresPerSquareLabel,
+  parlayStakeRangeLabel,
   points,
   signedPoints,
   Contest,
@@ -438,10 +439,13 @@ function ContestRailRow({ contest }: { contest: Contest }) {
         {/* The type tag distinguishes a Survivor / Squares / Pick'em row at a
             glance — the lobby leans on it, so the rail should too. */}
         <span className="railcontest__type">{contestTypeLabel(contest.type)}</span>
-        {/* Squares enter free — show the per-square price, not "Free". */}
+        {/* Squares and parlay boards enter free — show the per-square price /
+            the ticket stake range, not "Free". */}
         <span className="railcontest__cost">
           {contest.type === 'squares'
             ? squaresPerSquareLabel(contest.config)
+            : contest.type === 'parlay_board'
+            ? parlayStakeRangeLabel(contest.config)
             : contestCost(contest.entryCost)}
         </span>
         {countdown && <span className="railcontest__when">{countdown}</span>}

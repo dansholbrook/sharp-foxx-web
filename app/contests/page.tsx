@@ -26,6 +26,7 @@ import {
   contestTypeLabel,
   contestCost,
   squaresPerSquareLabel,
+  parlayStakeRangeLabel,
   Contest,
   ContestStatus,
 } from '../api';
@@ -102,11 +103,14 @@ function ContestCard({ contest }: { contest: Contest }) {
         <p className="contest-card__desc">{contest.description}</p>
       )}
       <div className="contest-card__foot">
-        {/* Squares are FREE to enter — the SQUARE is the buy — so a squares card
-            shows the per-square price where a pick'em shows its entry cost. */}
+        {/* Squares and parlay boards are FREE to enter — the SQUARE / the TICKET
+            is the buy — so their cards show that price where a pick'em shows its
+            entry cost. A parlay's buy is a RANGE (the fan sets the stake). */}
         <span className="contest-card__cost">
           {contest.type === 'squares'
             ? squaresPerSquareLabel(contest.config)
+            : contest.type === 'parlay_board'
+            ? parlayStakeRangeLabel(contest.config)
             : contestCost(contest.entryCost)}
         </span>
         {payoutRanks > 0 && (

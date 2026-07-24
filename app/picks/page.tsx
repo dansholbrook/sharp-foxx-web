@@ -19,10 +19,12 @@ import {
   getMyPicks,
   getContests,
   getContest,
+  getParlayBoard,
   getPointsLedger,
   contestCost,
   contestTypeLabel,
   squaresPerSquareLabel,
+  parlayStakeRangeLabel,
   ledgerActionLabel,
   points,
   signedPoints,
@@ -133,8 +135,22 @@ function contestStatusLabel(status: ContestStatus): string {
   }
 }
 
+// A parlay entry's own line: how many tickets the fan holds and what they've
+// staked. Neither is on the contest detail (the chassis entry carries only the
+// score, which for a board is gross payout WON), so it comes off the board read —
+// the cheapest source, and one that already returns both numbers in one call.
+interface ParlayTally {
+  tickets: number;
+  staked: number;
+}
+
 function MyContestsSection({ token }: { token: string }) {
   const [entries, setEntries] = useState<ContestDetail[] | null>(null);
+  // contestId -> tally, filled in a second best-effort pass over the PARLAY
+  // entries only. A fan holds entries in a handful of contests at most and only
+  // some are boards, so this is a small bounded fan-out on top of the detail one
+  // — and the rows render without it, so a failed read just omits the line.
+  const [parlay, setParlay] = useState<Map<string, ParlayTally>>(new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -146,13 +162,32 @@ function MyContestsSection({ token }: { token: string }) {
         const details = await Promise.all(
           page.items.map((c) => getContest(token, c.id).catch(() => null)),
         );
-        if (!cancelled) {
-          setEntries(
-            details.filter(
-              (d): d is ContestDetail => d !== null && d.myEntry !== null,
-            ),
-          );
+        if (cancelled) return;
+        const mine = details.filter(
+          (d): d is ContestDetail => d !== null && d.myEntry !== null,
+        );
+        setEntries(mine);
+
+        const boards = mine.filter((c) => c.type === 'parlay_board');
+        if (boards.length === 0) return;
+        const tallies = await Promise.all(
+          boards.map((c) =>
+            getParlayBoard(token, c.id)
+              .then((b) => [c.id, b] as const)
+              .catch(() => null),
+          ),
+        );
+        if (cancelled) return;
+        const next = new Map<string, ParlayTally>();
+        for (const row of tallies) {
+          if (!row) continue;
+          const [id, board] = row;
+          next.set(id, {
+            tickets: board.myTicketCount,
+            staked: board.tickets.reduce((sum, t) => sum + t.stake, 0),
+          });
         }
+        setParlay(next);
       } catch {
         // Best-effort: the section just doesn't render.
       }
@@ -184,10 +219,13 @@ function MyContestsSection({ token }: { token: string }) {
                   <span className="mycontests-row__type">
                     {contestTypeLabel(c.type)}
                   </span>
-                  {/* Squares enter free — show the per-square price, not "Free". */}
+                  {/* Squares and parlay boards enter free — show the per-square
+                      price / the ticket stake range, not "Free". */}
                   <span className="mycontests-row__cost">
                     {c.type === 'squares'
                       ? squaresPerSquareLabel(c.config)
+                      : c.type === 'parlay_board'
+                      ? parlayStakeRangeLabel(c.config)
                       : contestCost(c.entryCost)}
                   </span>
                 </span>
@@ -203,6 +241,21 @@ function MyContestsSection({ token }: { token: string }) {
                     }`}
                   >
                     {entry.status === 'eliminated' ? 'Eliminated' : 'Alive'}
+                  </span>
+                )}
+                {/* A parlay board's score is gross payout WON, which says nothing
+                    about how much of the board a fan is actually playing — so the
+                    tickets held and the points staked ride alongside it. */}
+                {c.type === 'parlay_board' && parlay.has(c.id) && (
+                  <span className="parlay-tag">
+                    {parlay.get(c.id)!.tickets}{' '}
+                    {parlay.get(c.id)!.tickets === 1 ? 'ticket' : 'tickets'}
+                    {parlay.get(c.id)!.staked > 0 && (
+                      <span className="parlay-tag__staked">
+                        {' '}
+                        · {points(parlay.get(c.id)!.staked)} staked
+                      </span>
+                    )}
                   </span>
                 )}
                 {entry.rank != null && (

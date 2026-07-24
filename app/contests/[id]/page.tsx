@@ -25,6 +25,7 @@ import { AppNav, AccessDenied } from '../../nav';
 import { FanCard } from '../../fan-card';
 import { SquaresBoard } from './squares-board';
 import { SurvivorBoard } from './survivor-board';
+import { ParlayBoard } from './parlay-board';
 import { canAccess } from '../../roles';
 import {
   getContest,
@@ -899,6 +900,10 @@ export default function ContestPage() {
   const entered = contest?.myEntry != null;
   const open = status === 'open';
   const isSquares = contest?.type === 'squares';
+  // A parlay board, like squares, is FREE to enter — the TICKET is the buy — so
+  // it owns its whole body across every status and enters the fan transparently
+  // on their first PLACE, rather than routing through the enter hero.
+  const isParlay = contest?.type === 'parlay_board';
   // Pick'em and over/under share the exact enter → sheet → scorecard chassis
   // (only the sides differ), so both are "playable" through the same arms below.
   const playable = contest?.type === 'pickem' || contest?.type === 'overunder';
@@ -948,6 +953,7 @@ export default function ContestPage() {
           </header>
 
           {/* Squares carries its own body (the 10x10 grid across every status);
+              the parlay board likewise carries its own ticket builder + book;
               survivor carries its own round timeline; pick'em and over/under split
               into enter → sheet → scorecard. Survivor shares the chassis SHELL
               (canceled/draft gating + the enter hero when not entered), then hands
@@ -955,6 +961,8 @@ export default function ContestPage() {
               gameplay in v1 — show the row it is rather than a sheet that 400s. */}
           {isSquares ? (
             <SquaresBoard contest={contest} />
+          ) : isParlay ? (
+            <ParlayBoard contest={contest} />
           ) : !chassis ? (
             <div className="results-empty">
               <p className="results-empty__title">Not playable yet</p>
