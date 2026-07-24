@@ -21,6 +21,8 @@ import {
   getContest,
   getPointsLedger,
   contestCost,
+  contestTypeLabel,
+  squaresPerSquareLabel,
   ledgerActionLabel,
   points,
   signedPoints,
@@ -179,8 +181,14 @@ function MyContestsSection({ token }: { token: string }) {
                   <span className={`pill contest-pill--${c.status}`}>
                     {contestStatusLabel(c.status)}
                   </span>
+                  <span className="mycontests-row__type">
+                    {contestTypeLabel(c.type)}
+                  </span>
+                  {/* Squares enter free — show the per-square price, not "Free". */}
                   <span className="mycontests-row__cost">
-                    {contestCost(c.entryCost)}
+                    {c.type === 'squares'
+                      ? squaresPerSquareLabel(c.config)
+                      : contestCost(c.entryCost)}
                   </span>
                 </span>
               </Link>

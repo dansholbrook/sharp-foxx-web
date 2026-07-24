@@ -2672,7 +2672,8 @@ export type ContestType =
   | 'survivor'
   | 'squares'
   | 'parlay_board'
-  | 'bracket';
+  | 'bracket'
+  | 'overunder';
 
 // draft/open/locked/live/final/canceled, straight off the contests_status_check.
 // Fans meet a contest at 'open' (enter + pick), then it lazy-locks at the first
@@ -2777,18 +2778,27 @@ export interface ContestLeaderboard {
   me: ContestLeaderboardRow | null;
 }
 
-// A fan's side on one game: home or away. The closed key set the sheet upserts.
+// A fan's side on one game. A pick'em slate picks a TEAM (home/away); an
+// over/under slate picks a DIRECTION on the combined total (over/under). Each is
+// the closed key set its own sheet upserts — the contest type decides which.
 export type PickSide = 'home' | 'away';
+export type OuSide = 'over' | 'under';
+export type PickValue = PickSide | OuSide;
 
 // One row of the pick sheet: a slate game with team names + schedule + live/
 // final scores, the caller's pick and its graded result, and — only once the
-// contest has locked — the crowd's home/away split. `status` here is the EVENT's
-// status (a game can be final while the contest is still live); the sheet-level
+// contest has locked — the crowd's split. `status` here is the EVENT's status (a
+// game can be final while the contest is still live); the sheet-level
 // status/revealed below are the contest's.
+//
+// `line` is the over/under total, present ONLY on an 'overunder' slate (the
+// snapshot frozen at open, so it can't drift). It's a numeric `numeric` column ->
+// a STRING at rest, same money discipline: keep it a string, format at render.
 //
 // `distribution` is present ONLY when the sheet is revealed (locked/live/final);
 // pre-lock the backend omits the key entirely (no herding onto the popular side),
 // so it's optional here and the UI must guard on `revealed` rather than on it.
+// Its shape mirrors the pick set: home/away for pick'em, over/under for O/U.
 export interface PickSheetGame {
   eventId: string;
   homeTeam: string | null;
@@ -2797,10 +2807,11 @@ export interface PickSheetGame {
   status: EventListItem['status'];
   homeScore: number | null;
   awayScore: number | null;
-  pick: PickSide | null;
-  // null until graded; true/false as the game finalizes (a tie sets false).
+  line?: string | null;
+  pick: PickValue | null;
+  // null until graded; true/false as the game finalizes (a tie/push sets false).
   isCorrect: boolean | null;
-  distribution?: { home: number; away: number };
+  distribution?: { home: number; away: number } | { over: number; under: number };
 }
 
 // GET/PUT /contests/:id/picks — the whole sheet. `status` is the contest status
@@ -2821,7 +2832,7 @@ export interface PickSheet {
 // eventIds in a single body are rejected (400); the tap-to-save UI never sends
 // more than one anyway.
 export interface SubmitPicksInput {
-  picks: Array<{ eventId: string; pick: PickSide }>;
+  picks: Array<{ eventId: string; pick: PickValue }>;
 }
 
 // An immutable point_events row (GET /points/ledger items). `points` is SIGNED:
@@ -2921,6 +2932,8 @@ export function contestTypeLabel(type: ContestType): string {
       return 'Parlay board';
     case 'bracket':
       return 'Bracket';
+    case 'overunder':
+      return 'Over/Under';
   }
 }
 

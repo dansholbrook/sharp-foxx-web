@@ -39,7 +39,7 @@ import {
   ContestDetail,
   PickSheet,
   PickSheetGame,
-  PickSide,
+  PickValue,
   ContestLeaderboard,
   ContestLeaderboardRow,
 } from '../../api';
@@ -61,6 +61,15 @@ function formatWhen(iso: string): string {
         hour: 'numeric',
         minute: '2-digit',
       });
+}
+
+// The over/under line reads off the sheet game as a `numeric` STRING ("16.50").
+// Normalize through Number so a stored "16.50" shows as "16.5"; leave a genuinely
+// non-numeric value alone, and dash a missing line (a slate row without one).
+function formatLine(line: string | null | undefined): string {
+  if (line == null) return '—';
+  const n = Number(line);
+  return Number.isFinite(n) ? String(n) : line;
 }
 
 // 1 -> "1st", 2 -> "2nd" … for the payout table.
@@ -193,15 +202,20 @@ function EnterHero({
 // STATE b: the pick sheet (entered, open)
 // ---------------------------------------------------------------------------
 
+// One tappable side. `sub` is the big text (the tap target's headline): the team
+// name for a pick'em, the direction for an over/under. `label` is the small cap
+// above it — a pick'em shows "Home"/"Away"; an over/under omits it (the direction
+// IS the headline, and the line lives in the row's O/U badge). aria-pressed rides
+// the selection either way.
 function SideButton({
-  side,
-  team,
+  label,
+  sub,
   picked,
   disabled,
   onPick,
 }: {
-  side: PickSide;
-  team: string | null;
+  label?: string | null;
+  sub: string | null;
   picked: boolean;
   disabled: boolean;
   onPick: () => void;
@@ -214,26 +228,31 @@ function SideButton({
       disabled={disabled}
       onClick={onPick}
     >
-      <span className="picksheet-side__label">{side === 'home' ? 'Home' : 'Away'}</span>
-      <span className="picksheet-side__team">{team ?? 'TBD'}</span>
+      {label != null && <span className="picksheet-side__label">{label}</span>}
+      <span className="picksheet-side__team">{sub ?? 'TBD'}</span>
     </button>
   );
 }
 
 function PickRow({
   game,
+  ou,
   saving,
   saved,
   error,
   onPick,
 }: {
   game: PickSheetGame;
+  ou: boolean;
   saving: boolean;
   saved: boolean;
   error: string | null;
-  onPick: (side: PickSide) => void;
+  onPick: (side: PickValue) => void;
 }) {
   const locked = gameStarted(game);
+  // An over/under row with no snapshotted line can't be picked (nothing to pick
+  // against); treat it like a started row so a tap can't 400.
+  const noLine = ou && game.line == null;
   return (
     <li className={`picksheet-row${locked ? ' picksheet-row--locked' : ''}`}>
       <div className="picksheet-row__head">
@@ -248,23 +267,48 @@ function PickRow({
           </span>
         ) : null}
       </div>
-      <div className="picksheet-row__sides">
-        <SideButton
-          side="away"
-          team={game.awayTeam}
-          picked={game.pick === 'away'}
-          disabled={locked || saving}
-          onPick={() => onPick('away')}
-        />
-        <span className="picksheet-row__at">@</span>
-        <SideButton
-          side="home"
-          team={game.homeTeam}
-          picked={game.pick === 'home'}
-          disabled={locked || saving}
-          onPick={() => onPick('home')}
-        />
-      </div>
+      {ou ? (
+        <>
+          <div className="ouline-matchup">
+            <span className="ouline-teams">
+              {game.awayTeam ?? 'TBD'} @ {game.homeTeam ?? 'TBD'}
+            </span>
+            <span className="ouline-badge">O/U {formatLine(game.line)}</span>
+          </div>
+          <div className="picksheet-row__sides">
+            <SideButton
+              sub="Over"
+              picked={game.pick === 'over'}
+              disabled={locked || saving || noLine}
+              onPick={() => onPick('over')}
+            />
+            <SideButton
+              sub="Under"
+              picked={game.pick === 'under'}
+              disabled={locked || saving || noLine}
+              onPick={() => onPick('under')}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="picksheet-row__sides">
+          <SideButton
+            label="Away"
+            sub={game.awayTeam}
+            picked={game.pick === 'away'}
+            disabled={locked || saving}
+            onPick={() => onPick('away')}
+          />
+          <span className="picksheet-row__at">@</span>
+          <SideButton
+            label="Home"
+            sub={game.homeTeam}
+            picked={game.pick === 'home'}
+            disabled={locked || saving}
+            onPick={() => onPick('home')}
+          />
+        </div>
+      )}
       {error && <div className="picksheet-row__error">{error}</div>}
     </li>
   );
@@ -279,9 +323,15 @@ function PickSheetView({
 }) {
   const { token } = useAuth();
   const { applyBalance } = usePoints();
+  const ou = contest.type === 'overunder';
   const [sheet, setSheet] = useState<PickSheet | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // A polite live region so a save is announced to a screen reader without
+  // stealing focus (the visual "Saved ✓" is per-row and easy to miss aurally).
+  // The trailing count forces a re-announce when the same side saves twice.
+  const [saveCount, setSaveCount] = useState(0);
 
   // Per-row transient UI: which event is mid-save, which just saved (a 1.5s
   // "Saved ✓"), and which failed. Keyed by eventId so rows are independent.
@@ -328,7 +378,7 @@ function PickSheetView({
   );
 
   const onPick = useCallback(
-    async (eventId: string, side: PickSide) => {
+    async (eventId: string, side: PickValue) => {
       if (!token || !sheet || savingId) return;
       const prev = sheet.games.find((g) => g.eventId === eventId)?.pick ?? null;
       if (prev === side) return; // re-tapping the same side is a no-op
@@ -358,6 +408,7 @@ function PickSheetView({
         setSheet(next);
         setSavingId(null);
         setSavedId(eventId);
+        setSaveCount((n) => n + 1);
         savedTimer.current = setTimeout(() => setSavedId(null), 1500);
       } catch (err) {
         // Revert the optimistic paint and say what went wrong on that row (a
@@ -433,6 +484,7 @@ function PickSheetView({
           <PickRow
             key={g.eventId}
             game={g}
+            ou={ou}
             saving={savingId === g.eventId}
             saved={savedId === g.eventId}
             error={rowError?.eventId === g.eventId ? rowError.message : null}
@@ -440,6 +492,10 @@ function PickSheetView({
           />
         ))}
       </ul>
+
+      <div className="sr-only" role="status" aria-live="polite">
+        {saveCount > 0 ? `Pick saved (${saveCount})` : ''}
+      </div>
 
       <section className="contest-withdraw">
         {withdrawError && <div className="error">{withdrawError}</div>}
@@ -485,37 +541,89 @@ function PickSheetView({
 // STATE c: the scorecard + leaderboard (locked / live / final)
 // ---------------------------------------------------------------------------
 
-// The crowd's home/away split, revealed only once locked. Two proportional bars.
+// The crowd's split, revealed only once locked. Two proportional bars. The
+// distribution shape tells us which contest it is — {over,under} for an O/U slate,
+// {home,away} for a pick'em — so the row doesn't have to thread the type down.
 function DistributionBars({
   distribution,
 }: {
-  distribution: { home: number; away: number };
+  distribution: { home: number; away: number } | { over: number; under: number };
 }) {
-  const total = distribution.home + distribution.away;
+  const ou = 'over' in distribution;
+  // left segment / right segment: Away|Home for pick'em, Under|Over for O/U.
+  // Use the `in` guard inline so TS narrows the union on each access.
+  const left = 'over' in distribution ? distribution.under : distribution.away;
+  const right = 'over' in distribution ? distribution.over : distribution.home;
+  const total = left + right;
   if (total === 0) return null;
-  const homePct = Math.round((distribution.home / total) * 100);
-  const awayPct = 100 - homePct;
+  const rightPct = Math.round((right / total) * 100);
+  const leftPct = 100 - rightPct;
   return (
     <div className="picksheet-dist" aria-label="Crowd pick distribution">
       <div className="picksheet-dist__bar">
-        <span className="picksheet-dist__seg picksheet-dist__seg--away" style={{ width: `${awayPct}%` }} />
-        <span className="picksheet-dist__seg picksheet-dist__seg--home" style={{ width: `${homePct}%` }} />
+        <span className="picksheet-dist__seg picksheet-dist__seg--away" style={{ width: `${leftPct}%` }} />
+        <span className="picksheet-dist__seg picksheet-dist__seg--home" style={{ width: `${rightPct}%` }} />
       </div>
       <div className="picksheet-dist__legend">
-        <span>Away {awayPct}%</span>
-        <span>Home {homePct}%</span>
+        <span>{ou ? 'Under' : 'Away'} {leftPct}%</span>
+        <span>{ou ? 'Over' : 'Home'} {rightPct}%</span>
       </div>
     </div>
   );
 }
 
-function ScoreRow({ game, revealed }: { game: PickSheetGame; revealed: boolean }) {
+function ScoreRow({
+  game,
+  ou,
+  revealed,
+}: {
+  game: PickSheetGame;
+  ou: boolean;
+  revealed: boolean;
+}) {
   const hasScore = game.homeScore !== null && game.awayScore !== null;
   const away = game.awayTeam ?? 'TBD';
   const home = game.homeTeam ?? 'TBD';
   // The result mark rides on the fan's pick once graded.
   const mark =
     game.isCorrect === true ? 'correct' : game.isCorrect === false ? 'wrong' : null;
+
+  if (ou) {
+    // O/U scorecard: the meaningful number is the combined TOTAL vs the line, so
+    // show "Total: 13" (client-computed) once scores post, else the line itself.
+    const total = hasScore ? game.homeScore! + game.awayScore! : null;
+    return (
+      <li className={`scorecard-row${mark ? ` scorecard-row--${mark}` : ''}`}>
+        <div className="scorecard-row__matchup">
+          <span className="scorecard-team">
+            {away} @ {home}
+          </span>
+          <span className="scorecard-row__score">
+            {total !== null ? `Total: ${total}` : `O/U ${formatLine(game.line)}`}
+          </span>
+        </div>
+        <div className="scorecard-row__foot">
+          <span className="scorecard-row__when">
+            {game.status === 'final' ? 'Final' : formatWhen(game.scheduledAt)}
+            {game.line != null && ` · O/U ${formatLine(game.line)}`}
+          </span>
+          {game.pick ? (
+            <span className="scorecard-row__mine">
+              Your pick:{' '}
+              <strong>{game.pick === 'over' ? 'Over' : 'Under'}</strong>
+              {mark === 'correct' && <span className="scorecard-mark scorecard-mark--ok">✓</span>}
+              {mark === 'wrong' && <span className="scorecard-mark scorecard-mark--no">✗</span>}
+            </span>
+          ) : (
+            <span className="scorecard-row__mine muted">No pick</span>
+          )}
+        </div>
+        {revealed && game.distribution && (
+          <DistributionBars distribution={game.distribution} />
+        )}
+      </li>
+    );
+  }
 
   return (
     <li className={`scorecard-row${mark ? ` scorecard-row--${mark}` : ''}`}>
@@ -555,7 +663,7 @@ function ScoreRow({ game, revealed }: { game: PickSheetGame; revealed: boolean }
   );
 }
 
-function Scorecard({ sheet }: { sheet: PickSheet }) {
+function Scorecard({ sheet, ou }: { sheet: PickSheet; ou: boolean }) {
   return (
     <section className="contest-scorecard">
       <div className="contest-scorecard__head">
@@ -569,7 +677,7 @@ function Scorecard({ sheet }: { sheet: PickSheet }) {
       </div>
       <ul className="scorecard-list">
         {sheet.games.map((g) => (
-          <ScoreRow key={g.eventId} game={g} revealed={sheet.revealed} />
+          <ScoreRow key={g.eventId} game={g} ou={ou} revealed={sheet.revealed} />
         ))}
       </ul>
     </section>
@@ -732,7 +840,7 @@ function LockedView({ contest }: { contest: ContestDetail }) {
     <div className="contest-detail__body">
       {error && <div className="error">{error}</div>}
       {entered && sheet ? (
-        <Scorecard sheet={sheet} />
+        <Scorecard sheet={sheet} ou={contest.type === 'overunder'} />
       ) : !entered ? (
         <div className="results-empty">
           <p className="results-empty__title">You didn&apos;t enter this one</p>
@@ -789,8 +897,10 @@ export default function ContestPage() {
   const status = contest?.status;
   const entered = contest?.myEntry != null;
   const open = status === 'open';
-  const isPickem = contest?.type === 'pickem';
   const isSquares = contest?.type === 'squares';
+  // Pick'em and over/under share the exact enter → sheet → scorecard chassis
+  // (only the sides differ), so both are "playable" through the same arms below.
+  const playable = contest?.type === 'pickem' || contest?.type === 'overunder';
   const face = contest ? statusFaceKicker(contest) : '';
 
   return (
@@ -832,12 +942,12 @@ export default function ContestPage() {
           </header>
 
           {/* Squares carries its own body (the 10x10 grid across every status);
-              pick'em splits into enter → sheet → scorecard below. Any other type
-              has no fan gameplay in v1 — show the row it is rather than a sheet
-              that would 400. */}
+              pick'em and over/under split into enter → sheet → scorecard below.
+              Any other type has no fan gameplay in v1 — show the row it is rather
+              than a sheet that would 400. */}
           {isSquares ? (
             <SquaresBoard contest={contest} />
-          ) : !isPickem ? (
+          ) : !playable ? (
             <div className="results-empty">
               <p className="results-empty__title">Not playable yet</p>
               <p className="results-empty__hint">
