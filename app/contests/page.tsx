@@ -1,6 +1,6 @@
 'use client';
 
-// /contests — the contest lobby: browse open pick'em contests, then enter and
+// /contests — the contest lobby: browse open contests, then enter and
 // play on the contest page. POINTS ONLY, the same closed loop as predictions:
 // entry costs points, payouts pay points, nothing here is money.
 //
@@ -198,7 +198,7 @@ export default function ContestsPage() {
 
       <header className="masthead">
         <span className="masthead-kicker">Contests</span>
-        <h1 className="masthead-title">Pick&apos;em contests</h1>
+        <h1 className="masthead-title">Contests</h1>
         <p className="masthead-standfirst">
           Enter with points, fill your sheet, climb the board. Points have no cash
           value — they can&apos;t be bought, redeemed, or cashed out.
@@ -233,7 +233,7 @@ export default function ContestsPage() {
               <p className="results-empty__title">No contests here yet</p>
               <p className="results-empty__hint">
                 {filter === null
-                  ? 'Nothing running right now — check back when a new pick’em opens.'
+                  ? 'Nothing running right now — check back when a new contest opens.'
                   : 'Nothing matches this filter. Try “All”.'}
               </p>
             </div>
