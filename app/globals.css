@@ -10233,3 +10233,354 @@ a.follow-sugcard__name:hover {
     animation: none;
   }
 }
+
+/* =================================================================
+   SIGNUP + REFERRALS
+   The public /join funnel, the rep's share-your-link card (My Sales),
+   and the live referral dashboards (exec /dashboard + territory
+   /managers/[id]). All scoped to .join-* / .refshare-* / .refreport-*
+   on the existing tokens; reuses .card.game, .rep-stat*, .report-table,
+   .pill, .btn-inline, .apply-* and the .rev-chart language.
+   ================================================================= */
+
+/* ---- Login: the two public entry links sit as a small cluster ---- */
+.login-header-links {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---- /join (public signup) ---- */
+/* Slightly narrower than the recruiting form -- it's a short funnel, not an
+   application. Inherits .apply-page's centering/width, tightening it. */
+.join-page {
+  max-width: 560px;
+}
+
+/* "Invited by a correspondent" note above the form when ?ref= is present. */
+.join-ref-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.join-ref-note__badge {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+/* The invite-code affordance: a link-styled toggle that reveals the input. */
+.join-code__toggle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  padding: 0;
+}
+
+/* Actions row: the primary button plus a sign-in nudge beneath it. */
+.join-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.join-signin-nudge {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+/* ---- Rep share card (My Sales) ---- */
+.refshare-lead {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+/* The link + copy button. The URL is the hero; it truncates rather than
+   wrapping so the copy button never gets pushed off a narrow screen. */
+.refshare-linkrow {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.refshare-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.refshare-copy {
+  flex: none;
+}
+
+.refshare-code {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.refshare-code__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.refshare-code__value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.08em;
+}
+
+.refshare-stats .rep-stat {
+  flex-basis: 150px;
+}
+
+/* Recent sign-ups: a compact name/date list, not a table. */
+.refshare-recent {
+  margin-top: 20px;
+}
+
+.refshare-recent__head {
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.refshare-recent__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.refshare-recent__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.refshare-recent__name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.refshare-recent__when {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.refshare-empty {
+  margin-top: 16px;
+}
+
+/* ---- Referral dashboards (exec + territory) ---- */
+.refreport-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* The "live" pill with a softly pulsing dot -- the visible tell that the
+   section re-polls on its own. */
+.refreport-live {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.refreport-live__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: refreport-pulse 2s ease-in-out infinite;
+}
+
+@keyframes refreport-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.refreport-totals .rep-stat,
+.refreport-rollup .rep-stat {
+  flex-basis: 150px;
+}
+
+.refreport-rollup {
+  margin-top: 4px;
+}
+
+/* Tables can overflow their card on a narrow screen -- let them scroll inside
+   their own box rather than pushing the page sideways. */
+.refreport-table-wrap {
+  overflow-x: auto;
+}
+
+.refreport-code {
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+/* ---- The 30-day signup bars: the .rev-chart pattern in referral colors ----
+   Referred is the gold hero; organic is the muted stack above it. Heights are
+   set inline as a % of the busiest day, so the chart self-scales. */
+.refreport-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 140px;
+  margin: 4px 0 6px;
+}
+
+.refreport-chart__col {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  cursor: default;
+}
+
+.refreport-chart__stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  flex: 1;
+  gap: 1px;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+  transition: background 0.15s ease;
+}
+
+.refreport-chart__col:hover .refreport-chart__stack {
+  background: rgba(201, 163, 78, 0.06);
+}
+
+.refreport-chart__bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  flex: none;
+  min-height: 2px;
+}
+
+.refreport-chart__bar--referred {
+  background: var(--accent);
+}
+
+.refreport-chart__bar--organic {
+  background: var(--border-strong);
+}
+
+.refreport-chart__bar--empty {
+  background: var(--border);
+  min-height: 1px;
+}
+
+/* Only the first and last day are captioned -- 30 labels wouldn't fit. */
+.refreport-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+}
+
+.refreport-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.refreport-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.refreport-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.refreport-legend__swatch--referred {
+  background: var(--accent);
+}
+
+.refreport-legend__swatch--organic {
+  background: var(--border-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refreport-live__dot {
+    animation: none;
+  }
+}

@@ -67,9 +67,14 @@ export default function LoginPage() {
     <main className="apply-page">
       <div className="header-row">
         <span className="wordmark">Sharp Foxx</span>
-        <Link href="/apply" className="link-btn">
-          Apply to join
-        </Link>
+        <div className="login-header-links">
+          <Link href="/join" className="link-btn">
+            New here? Join free →
+          </Link>
+          <Link href="/apply" className="link-btn">
+            Apply to join
+          </Link>
+        </div>
       </div>
 
       <div className="masthead">

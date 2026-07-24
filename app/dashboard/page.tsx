@@ -7,12 +7,18 @@ import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import { RevChart, RevChartLegend } from '../rev-chart';
+import { RefTotalsStrip, RefBarChart, RefLeaderboard } from '../refreport';
 import {
   getCommissions,
   getExecutiveReport,
+  getReferralsExecutive,
   CommissionsReport,
   ExecutiveReport,
+  ReferralsExecutiveReport,
 } from '../api';
+
+// Referrals refresh cadence: the section is "live" while the tab is open.
+const REFERRALS_POLL_MS = 30_000;
 
 // Human labels for the commission source_type keys.
 const SOURCE_LABELS: Record<string, string> = {
@@ -47,6 +53,12 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Referrals: polled on its own cadence, independent of the one-shot exec load
+  // above. Best-effort -- a poll failure keeps the last good data on screen
+  // rather than blanking the live section.
+  const [referrals, setReferrals] = useState<ReferralsExecutiveReport | null>(null);
+  const [referralsError, setReferralsError] = useState<string | null>(null);
+
   // No token in memory (e.g. after a page refresh) -> back to login. Skip the
   // fetch entirely for a role that can't use this page -- it would only 403.
   useEffect(() => {
@@ -78,6 +90,35 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [token, router, allowed]);
+
+  // Live referrals: fetch on mount, then re-poll every 30s while the page is
+  // mounted. Separate from the exec load so a slow/failed poll never disturbs the
+  // rest of the dashboard, and the interval is torn down on unmount.
+  useEffect(() => {
+    if (!token || !allowed) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await getReferralsExecutive(token);
+        if (!cancelled) {
+          setReferrals(data);
+          setReferralsError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setReferralsError(
+            err instanceof Error ? err.message : 'Failed to load referrals',
+          );
+        }
+      }
+    };
+    load();
+    const id = window.setInterval(load, REFERRALS_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [token, allowed]);
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
@@ -329,6 +370,74 @@ export default function DashboardPage() {
               </>
             ) : (
               <p className="muted">No commissions recorded.</p>
+            )}
+          </section>
+
+          {/* ---- Referrals: live signups attributed to reps ---- */}
+          <section className="card game refreport-section">
+            <div className="refreport-head">
+              <div>
+                <span className="game-kicker">Growth</span>
+                <h2>Referrals</h2>
+              </div>
+              <span className="refreport-live" title="Refreshes every 30 seconds">
+                <span className="refreport-live__dot" aria-hidden="true" />
+                Live
+              </span>
+            </div>
+            <p className="exec-section__note">
+              Fans brought in by a rep&apos;s <span className="mono">/join</span>{' '}
+              link, versus organic signups. Updates every 30 seconds.
+            </p>
+
+            {referralsError && !referrals && (
+              <div className="error">{referralsError}</div>
+            )}
+            {!referrals && !referralsError && (
+              <p className="muted">Loading referrals…</p>
+            )}
+
+            {referrals && (
+              <>
+                <RefTotalsStrip totals={referrals.totals} />
+
+                <h3 className="terr-section__head">Signups — last 30 days</h3>
+                <RefBarChart
+                  points={referrals.timeseries}
+                  ariaLabel="Referred versus organic signups per day, last 30 days"
+                />
+
+                <h3 className="terr-section__head">Leaderboard</h3>
+                <RefLeaderboard rows={referrals.byRep} variant="exec" />
+
+                <h3 className="terr-section__head">By manager</h3>
+                {referrals.byManager.length > 0 ? (
+                  <div className="refreport-table-wrap">
+                    <table className="report-table refreport-table">
+                      <thead>
+                        <tr>
+                          <th>Manager</th>
+                          <th className="num">Own</th>
+                          <th className="num">Team</th>
+                          <th className="num total">Combined</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {referrals.byManager.map((m) => (
+                          <tr key={m.managerId}>
+                            <td>{m.name}</td>
+                            <td className="num">{m.ownReferrals}</td>
+                            <td className="num">{m.teamReferrals}</td>
+                            <td className="num total">{m.combined}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted">No managers with referrals yet.</p>
+                )}
+              </>
             )}
           </section>
 

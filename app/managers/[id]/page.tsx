@@ -8,13 +8,19 @@ import { AssignGameForm } from '../../assign-game-form';
 import { canAccess } from '../../roles';
 import { QueueTable, Column } from '../../queue-table';
 import { RevChart } from '../../rev-chart';
+import { RefTotalsStrip, RefBarChart, RefLeaderboard } from '../../refreport';
 import {
   getManagerSummary,
   getTerritoryReport,
+  getReferralsTerritory,
   updateFieldRepStatus,
   ManagerSummary,
   TerritoryReport,
+  ReferralsTerritoryReport,
 } from '../../api';
+
+// Territory referrals refresh cadence -- "live" while the page is open.
+const REFERRALS_POLL_MS = 30_000;
 
 // The territory dashboard shows the latest few recent orders inline; the rest
 // are one click away behind "Show all" so the strip stays compact.
@@ -80,6 +86,11 @@ export default function ManagerRosterPage() {
   // Recent activity is capped to the latest few until "Show all" is clicked.
   const [showAllActivity, setShowAllActivity] = useState(false);
 
+  // Territory referrals, polled on its own 30s cadence (same "live" treatment as
+  // the exec dashboard). Best-effort: a failed poll keeps the last good data.
+  const [referrals, setReferrals] = useState<ReferralsTerritoryReport | null>(null);
+  const [referralsError, setReferralsError] = useState<string | null>(null);
+
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
     if (!token) {
@@ -119,6 +130,35 @@ export default function ManagerRosterPage() {
       cancelled = true;
     };
   }, [token, id, router, allowed]);
+
+  // Live territory referrals: fetch on mount, then re-poll every 30s. Separate
+  // from the loads above so a slow/failed poll never disturbs the performance
+  // table, and the interval is torn down on unmount / id change.
+  useEffect(() => {
+    if (!token || !allowed) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await getReferralsTerritory(token, id);
+        if (!cancelled) {
+          setReferrals(data);
+          setReferralsError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setReferralsError(
+            err instanceof Error ? err.message : 'Failed to load referrals',
+          );
+        }
+      }
+    };
+    load();
+    const timer = window.setInterval(load, REFERRALS_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [token, id, allowed]);
 
   // Activate an onboarding rep -> status 'active'. Patches the rep's row in the
   // loaded territory so the Activate button disappears without a full refetch.
@@ -386,6 +426,67 @@ export default function ManagerRosterPage() {
           />
         </section>
       )}
+
+      {/* ---- Referrals: live signups brought in by this territory ---- */}
+      <section className="card game refreport-section">
+        <div className="refreport-head">
+          <div>
+            <span className="game-kicker">Growth</span>
+            <h2>Referrals</h2>
+          </div>
+          <span className="refreport-live" title="Refreshes every 30 seconds">
+            <span className="refreport-live__dot" aria-hidden="true" />
+            Live
+          </span>
+        </div>
+        <p className="exec-section__note">
+          Fans this territory has brought in through rep{' '}
+          <span className="mono">/join</span> links. Updates every 30 seconds.
+        </p>
+
+        {referralsError && !referrals && <div className="error">{referralsError}</div>}
+        {!referrals && !referralsError && <p className="muted">Loading referrals…</p>}
+
+        {referrals && (
+          <>
+            <RefTotalsStrip totals={referrals.totals} />
+
+            {referrals.byManager && (
+              <div className="rep-stats terr-stats refreport-rollup">
+                <div className="rep-stat">
+                  <span className="rep-stat__label">Manager&apos;s own</span>
+                  <span className="rep-stat__value">
+                    {referrals.byManager.ownReferrals}
+                  </span>
+                  <span className="rep-stat__sub">brought in directly</span>
+                </div>
+                <div className="rep-stat">
+                  <span className="rep-stat__label">Team</span>
+                  <span className="rep-stat__value">
+                    {referrals.byManager.teamReferrals}
+                  </span>
+                  <span className="rep-stat__sub">from correspondents</span>
+                </div>
+                <div className="rep-stat">
+                  <span className="rep-stat__label">Combined</span>
+                  <span className="rep-stat__value">
+                    {referrals.byManager.combined}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <h3 className="terr-section__head">Referrals — last 30 days</h3>
+            <RefBarChart
+              points={referrals.timeseries}
+              ariaLabel="Territory referrals per day, last 30 days"
+            />
+
+            <h3 className="terr-section__head">By rep</h3>
+            <RefLeaderboard rows={referrals.perRep} variant="territory" />
+          </>
+        )}
+      </section>
 
       {/* ---- The coaching table ---- */}
       <section className="card game">

@@ -695,6 +695,54 @@ export async function changePassword(
   if (!res.ok) throw await toError(res);
 }
 
+// ---- Public fan self-signup (the /join front door) ----
+
+// POST /auth/signup body (mirrors signupSchema on the backend). password must be
+// >= 8 chars and displayName 2..40; referralCode is the optional /join?ref=CODE
+// attribution, best-effort server-side (a bad code never blocks the signup).
+export interface SignupInput {
+  email: string;
+  password: string;
+  displayName: string;
+  referralCode?: string;
+}
+
+// The zod flatten() shape the signup route returns on a 400, same contract as
+// ApplyValidationError -- signup() throws this so the /join form can render
+// per-field messages against email/password/displayName inputs.
+export class SignupValidationError extends Error {
+  fieldErrors: Record<string, string[]>;
+  formErrors: string[];
+  constructor(fieldErrors: Record<string, string[]>, formErrors: string[]) {
+    super(formErrors[0] ?? 'Please fix the highlighted fields.');
+    this.name = 'SignupValidationError';
+    this.fieldErrors = fieldErrors;
+    this.formErrors = formErrors;
+  }
+}
+
+// PUBLIC self-signup -- no token. Returns the SAME payload as login()
+// (mustChangePassword is always false here), so the /join page auto-logs-in off
+// the response with no second round-trip. A 400 (zod) throws
+// SignupValidationError with per-field messages; a 409 (email already has an
+// account) throws the shared "409 <message>" Error the form turns into a login
+// nudge.
+export async function signup(input: SignupInput): Promise<LoginResponse> {
+  const res = await fetch(`${BASE}/auth/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (res.ok) return res.json();
+  if (res.status === 400) {
+    const body = await res.json().catch(() => null);
+    if (body && (body.fieldErrors || body.formErrors)) {
+      throw new SignupValidationError(body.fieldErrors ?? {}, body.formErrors ?? []);
+    }
+  }
+  throw await toError(res);
+}
+
 async function authGet<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -798,6 +846,98 @@ export const getTerritoryReport = (token: string, id: string) =>
 
 export const getFieldReps = (token: string) =>
   authGet<FieldRep[]>('/field-reps', token);
+
+// ---- Referrals ----
+
+// Mirrors field-reps.service.ts `getMyReferral()` -- the CALLER's own referral
+// hub: their code (minted on first view), a shareable /join?ref= link, live
+// counts, and the last 10 fans they've brought in. RM + field_rep only; a caller
+// with no field_reps row comes back 403 -> "403 No field rep profile for this
+// user", which the share card treats as "nothing to show" and hides itself.
+export interface RepReferral {
+  referralCode: string;
+  shareUrl: string;
+  totalReferred: number;
+  referredThisMonth: number;
+  // joinedAt is users.referred_at (timestamptz ISO); newest-first, capped at 10.
+  recentReferrals: Array<{ displayName: string; joinedAt: string }>;
+}
+
+export const getMyReferral = (token: string) =>
+  authGet<RepReferral>('/field-reps/me/referral', token);
+
+// Mirrors reports.service.ts `referralsExecutive()` -- the org-wide referral
+// dashboard. Admin only (403 otherwise). Every count is a number (the backend
+// Number()s the pg strings at its boundary). byRep is sorted last30 desc.
+export interface ReferralsExecutiveReport {
+  totals: { allTime: number; thisMonth: number; thisWeek: number };
+  byRep: Array<{
+    repId: string;
+    name: string;
+    kind: 'field_rep' | 'regional_manager';
+    managerName: string | null;
+    code: string;
+    totalReferred: number;
+    last30: number;
+    last7: number;
+  }>;
+  byManager: Array<{
+    managerId: string;
+    name: string;
+    ownReferrals: number;
+    teamReferrals: number;
+    combined: number;
+  }>;
+  // Exactly 30 entries, oldest-first, zero-filled: referred vs organic signups
+  // per day, so the bar chart can index it directly (referred + organic = total).
+  timeseries: Array<{
+    date: string;
+    total: number;
+    referred: number;
+    organic: number;
+  }>;
+}
+
+export const getReferralsExecutive = (token: string) =>
+  authGet<ReferralsExecutiveReport>('/reports/referrals', token);
+
+// Mirrors reports.service.ts `referralsTerritory()` -- one manager's referral
+// roster. Admin sees any territory; a regional_manager only their own (else
+// 403). :managerId is the manager's own field_reps id (same id /managers/:id
+// uses). perRep includes the manager's own row (isManager). The timeseries is
+// referred-ONLY (organic signups aren't attributable to a manager). byManager is
+// the single manager's own+team rollup, or null if the row didn't resolve.
+export interface ReferralsTerritoryReport {
+  managerId: string;
+  managerName: string | null;
+  totals: { allTime: number; thisMonth: number; thisWeek: number };
+  byManager: {
+    managerId: string;
+    name: string;
+    ownReferrals: number;
+    teamReferrals: number;
+    combined: number;
+  } | null;
+  perRep: Array<{
+    repId: string;
+    name: string;
+    kind: 'field_rep' | 'regional_manager';
+    status: string;
+    isManager: boolean;
+    code: string | null;
+    totalReferred: number;
+    last30: number;
+    last7: number;
+  }>;
+  // Exactly 30 entries, oldest-first, zero-filled; referred-only.
+  timeseries: Array<{ date: string; referred: number }>;
+}
+
+export const getReferralsTerritory = (token: string, managerId: string) =>
+  authGet<ReferralsTerritoryReport>(
+    `/reports/referrals/territory/${encodeURIComponent(managerId)}`,
+    token,
+  );
 
 export const getManagerReps = (token: string, id: string) =>
   authGet<ManagerRoster>(`/reports/managers/${id}/reps`, token);

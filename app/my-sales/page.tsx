@@ -11,6 +11,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { LogSaleForm } from '../log-sale-form';
+import { RefShareCard } from '../refshare-card';
 import { canAccess } from '../roles';
 import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
@@ -282,6 +283,9 @@ export default function MySalesPage() {
         </div>
       ) : (
         <>
+          {/* ---- Share your referral link (self-hides if no rep profile) ---- */}
+          <RefShareCard token={token} />
+
           {/* ---- My Earnings ---- */}
           <section className="card game">
             <span className="game-kicker">Commissions</span>
