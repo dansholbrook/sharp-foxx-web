@@ -10286,6 +10286,173 @@ a.follow-sugcard__name:hover {
   }
 }
 
+/* ---- v2: THE BOARD SWITCHER (.sqboards-*) ----
+   Boards fill strictly one at a time, so this row of pills is also the game's
+   progress bar: every "Full" pill behind you sold out, exactly one is "Filling",
+   and that one is the only place a tap can land. The pills WRAP on a phone
+   (never a sideways scroller) so the 390px grid below keeps its full width. */
+.sqboards {
+  margin-top: 20px;
+}
+.sqboards__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sqboards__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.sqboards__pill:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+.sqboards__name {
+  color: var(--text);
+}
+.sqboards__sep {
+  opacity: 0.5;
+}
+.sqboards__state {
+  font-weight: 500;
+}
+/* Full boards read as done — settled, behind you, not a call to action. */
+.sqboards__pill--full .sqboards__state {
+  color: var(--muted);
+}
+/* The one board taking claims: gold, the app's "act here" colour. */
+.sqboards__pill--current {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(201, 163, 78, 0.1);
+}
+.sqboards__pill--current .sqboards__name,
+.sqboards__pill--current .sqboards__state {
+  color: var(--accent);
+}
+/* Whichever board the switcher is showing, current or not. */
+.sqboards__pill--shown {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.sqboards__pill--current.sqboards__pill--shown {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.sqboards__here {
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.9;
+}
+/* The count of the fan's own squares on that board. */
+.sqboards__mine {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(201, 163, 78, 0.18);
+  color: var(--accent);
+  font-size: 0.66rem;
+  line-height: 17px;
+  text-align: center;
+}
+.sqboards__note {
+  font-size: 0.78rem;
+  margin: 8px 0 0;
+}
+/* The inline "Go there" jump back to the filling board. */
+.sqboards__jump {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+@media (max-width: 420px) {
+  /* Keep the pills compact enough that two fit a phone row before wrapping. */
+  .sqboards__pill {
+    padding: 6px 10px;
+    font-size: 0.7rem;
+  }
+  .sqboards__here {
+    font-size: 0.62rem;
+  }
+}
+
+/* ---- v2: SHARP FOXX SQUARES + DEDICATED PRIZES ----
+   A board that locks partially filled plays AS-IS and Sharp Foxx owns the empty
+   squares. They are deliberately QUIETER than a claimed square, not louder: the
+   fox mark is a faint watermark, because an SF square is the absence of a fan,
+   not a house player to root against. */
+.sqgrid-cell--sf {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--muted);
+  cursor: default;
+}
+.sqgrid-cell--sf .sqgrid-cell__mark {
+  font-size: 0.72rem;
+  opacity: 0.34;
+  filter: grayscale(0.5);
+}
+.sqgrid-cell--sf:disabled {
+  opacity: 1;
+}
+/* An SF square that WON a period: marked as a landing spot (so the digits are
+   legible) but never in the payout green — nobody was paid. */
+.sqgrid-cell--dedicated {
+  background: rgba(201, 163, 78, 0.07);
+  border-color: var(--accent-dim);
+  color: var(--accent-dim);
+}
+.sqgrid-cell--dedicated .sqgrid-cell__mark {
+  opacity: 0.8;
+  filter: none;
+}
+/* The read-only grid (viewing a full/locked board while another is filling). */
+.sqgrid--readonly .sqgrid-cell--open {
+  cursor: default;
+}
+/* Prize row for a dedicated period. Gold-dim, not green: recorded, not paid. */
+.sqprize__row--dedicated .sqprize__period {
+  color: var(--muted);
+}
+.sqprize__status--dedicated {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  color: var(--accent-dim);
+  border: 1px solid var(--accent-dim);
+  background: rgba(201, 163, 78, 0.07);
+}
+.sqprize__fox {
+  font-size: 0.72rem;
+  filter: grayscale(0.3);
+}
+.sqprize__each {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
 /* =================================================================
    SIGNUP + REFERRALS
    The public /join funnel, the rep's share-your-link card (My Sales),

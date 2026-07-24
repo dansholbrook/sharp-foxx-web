@@ -3008,16 +3008,27 @@ export function ledgerActionLabel(actionType: string): string {
 }
 
 // ============================================================================
-// SQUARES — the 10x10 grid gameplay on a type='squares' contest. The contest
-// chassis (enter/leaderboard) is shared with pick'em above; this is the grid
-// on top. Mirrors squares.service.ts / squares.type.ts on the backend. POINTS
-// ONLY: entering is FREE, each claimed square spends config.squareCost.
+// SQUARES (v2 — MULTI-BOARD) — the 10x10 grid gameplay on a type='squares'
+// contest. The contest chassis (enter/leaderboard) is shared with pick'em above;
+// this is the boards on top. Mirrors squares.service.ts / squares.type.ts on the
+// backend. POINTS ONLY: entering is FREE, each claimed square spends
+// config.squareCost.
+//
+// THE MODEL: a contest runs UNLIMITED BOARDS that fill STRICTLY ONE AT A TIME.
+// Board 2 accepts nothing until board 1's 100 squares are all claimed; filling
+// square #100 spawns the next board in the same transaction. The client never
+// names a board — it claims { row, col } and the server routes to the filling one.
+// At game start EVERY board locks as-is: the partially-filled one plays with its
+// holes and SHARP FOXX OWNS the unclaimed squares. If an SF-owned square wins a
+// period, that prize is DEDICATED TO THE NEXT PROMOTION — recorded, paid to
+// nobody, never kept as revenue.
 //
 // GEOMETRY, pinned once so the UI never guesses: row/col are 0..9 GRID INDICES,
 // not digits. rowDigits are the HOME team's digits (indexed by row); colDigits
-// the AWAY team's (indexed by col). Both are NULL until the grid locks at
-// kickoff (the digit reveal) — pre-lock the headers show "?". A winning square's
-// row lands on the home digit, its col on the away digit.
+// the AWAY team's (indexed by col). Both are NULL until that BOARD locks at
+// kickoff (the digit reveal) — pre-lock the headers show "?". EACH BOARD IS
+// RANDOMIZED INDEPENDENTLY, so board 1's digits say nothing about board 2's. A
+// winning square's row lands on the home digit, its col on the away digit.
 // ============================================================================
 
 // The 1|2|3|'final' boundary a squares prize pays at. 'final' is the whole-game
@@ -3046,37 +3057,38 @@ export interface SquaresClaim {
   mine: boolean;
 }
 
-// A prize-table row BEFORE its period is graded: the base points plus any
-// rolled-in carry from an earlier unclaimed boundary, and the prospective pool
-// that square would pay if it landed now.
+// A prize-table row BEFORE its period is graded, on one board. v2 has no rollover
+// carry, so the prospective pool is simply the configured points.
 export interface SquaresPrizePending {
   period: SquaresPeriod;
   basePoints: number;
   status: 'pending';
-  rolledIn: number;
   prospectivePool: number;
 }
 
-// A prize-table row AFTER grading: 'won' (a claimed winning square) or
-// 'unclaimed' (nobody owned it — its pool rolled out per unclaimedRule). Carries
-// the winning square + the two digits that hit and the points paid.
+// A prize-table row AFTER grading, on one board. Carries the winning square + the
+// two digits that hit.
+//   'won'       — a fan owned the winning square; pointsPaid reached them.
+//   'dedicated' — the winning square was SHARP FOXX's (the board locked partially
+//                 filled). pointsPaid is 0 and dedicatedNote records where the
+//                 prize went: it is DEDICATED TO THE NEXT PROMOTION — not paid to
+//                 anyone, not rolled into the next period, never kept as revenue.
 export interface SquaresPrizeGraded {
   period: SquaresPeriod;
   basePoints: number;
-  status: 'won' | 'unclaimed';
+  status: 'won' | 'dedicated';
   winner: { userId: string; displayName: string | null } | null;
   winningSquare: { row: number; col: number };
   homeDigit: number;
   awayDigit: number;
-  rolledIn: number;
   pointsPaid: number;
-  rolledOut: number;
+  dedicatedNote: string | null;
 }
 
 export type SquaresPrizeRow = SquaresPrizePending | SquaresPrizeGraded;
 
-// A raw period_results row (the grid read's `results`), as each boundary lands.
-// The prizeTable above is the display-ready projection of these; kept typed for
+// A raw period_results row (a board's `periodResults`), as each boundary lands.
+// The board's prizeTable is the display-ready projection of these; kept typed for
 // completeness, the UI reads prizeTable.
 export interface SquaresPeriodResult {
   period: string;
@@ -3087,65 +3099,115 @@ export interface SquaresPeriodResult {
   winnerUserId: string | null;
   winnerName: string | null;
   basePoints: number;
-  rolledIn: number;
   pointsPaid: number;
-  rolledOut: number;
+  sfOwned: boolean;
+  dedicatedNote: string | null;
 }
 
-// GET /contests/:id/squares — the whole grid read. status is the CONTEST status
-// (open → claimable; locked/live/final → digits revealed, no more claims).
+// A board's own lifecycle, distinct from the CONTEST's status:
+//   'filling' — the ONE board taking claims right now (isCurrent).
+//   'full'    — all 100 claimed; closed to claims AND releases; waiting for lock.
+//   'locked'  — the game started; digits revealed; plays as-is (a partial board
+//               keeps its holes, and Sharp Foxx owns them).
+//   'settled' — every configured period boundary graded.
+export type SquaresBoardStatus = 'filling' | 'full' | 'locked' | 'settled';
+
+// ONE BOARD of a squares contest. A contest runs UNLIMITED boards that fill
+// STRICTLY ONE AT A TIME — board 2 takes no claims until board 1's 100 squares are
+// all gone. Each board has its OWN independent digit randomization, so the same
+// game's score lands on a different winning square on every board, and each board
+// pays the contest's prize ladder in parallel.
+export interface SquaresBoard {
+  boardNumber: number; // 1-based fill order
+  status: SquaresBoardStatus;
+  isCurrent: boolean; // true on the one 'filling' board — the only claimable one
+  dimensions: { rows: number; cols: number };
+  rowDigits: number[] | null; // THIS board's home-team digits, null until it locks
+  colDigits: number[] | null; // THIS board's away-team digits, null until it locks
+  lockedAt: string | null;
+  claimedCount: number; // 0..100
+  sfOwnedCount: number; // unclaimed squares on a LOCKED board — Sharp Foxx's; 0 before
+  myClaimCount: number; // the caller's squares on THIS board
+  claimed: SquaresClaim[];
+  prizeTable: SquaresPrizeRow[];
+  periodResults: SquaresPeriodResult[];
+}
+
+// GET /contests/:id/squares — every board of the contest plus the contest-level
+// header they share. status is the CONTEST status (open → the filling board is
+// claimable; locked/live/final → every board's digits revealed, no more claims).
+//
+// BREAKING CHANGE vs v1: the flat single grid (top-level rowDigits/claimed/
+// prizeTable) is now `boards[]`. There is no compat shim — publishing board 1 as
+// "the" grid would be actively wrong once a second board exists.
 export interface SquaresGrid {
   contestId: string;
   status: ContestStatus;
   event: SquaresEvent | null;
   squareCost: number;
-  unclaimedRule: 'rollover' | 'house';
   dimensions: { rows: number; cols: number };
-  rowDigits: number[] | null; // home-team digits, NULL until lock
-  colDigits: number[] | null; // away-team digits, NULL until lock
-  lockedAt: string | null;
-  myClaimCount: number;
-  claimed: SquaresClaim[];
-  prizeTable: SquaresPrizeRow[];
-  results: SquaresPeriodResult[];
+  // The board a claim would land on right now; null once the contest locks and no
+  // board is 'filling' any more.
+  currentBoardNumber: number | null;
+  totalBoards: number;
+  myClaimCount: number; // total across every board; each board carries its own
+  // The board-INVARIANT configured prize ladder — what EVERY board pays at each
+  // boundary. Each board's live table (winners / dedications) is on the board.
+  prizeTable: { period: SquaresPeriod; points: number }[];
+  boards: SquaresBoard[];
 }
 
-// POST /contests/:id/squares/claim response. balance is the caller's new wallet
-// after the spend (null only when squareCost is 0). myClaimCount is their new
-// owned total. 409s: 'That square is already taken', 'Contest is not open for
-// claims', the max-squares cap, or 'Insufficient points'; 403 if not entered.
+// POST /contests/:id/squares/claim response. The request carries NO board — the
+// server routes the claim to the current filling board and tells you which one it
+// landed on. balance is the caller's new wallet after the spend (null only when
+// squareCost is 0); myClaimCount is their new owned total ON THAT BOARD.
+// nextBoardNumber is non-null when this claim filled the board and spawned the
+// next one — the UI slides the fan onto it. 409s: 'That square is already taken',
+// 'Contest is not open for claims', the per-board max-squares cap, or
+// 'Insufficient points'; 403 if not entered.
 export interface SquareClaimResult {
   contestId: string;
+  boardNumber: number;
   claimed: { row: number; col: number };
   squareCost: number;
   myClaimCount: number;
+  boardClaimCount: number; // squares claimed on that board after this claim, 1..100
+  nextBoardNumber: number | null;
   balance: number | null;
 }
 
 // DELETE /contests/:id/squares/claim response (release + refund while open).
-// balance is the wallet after the refund (null when squareCost is 0).
+// balance is the wallet after the refund (null when squareCost is 0). Releases are
+// only allowed on the CURRENT FILLING board — releasing from a board that already
+// filled would punch a hole behind the fill frontier, so those 409 with a message
+// naming the board.
 export interface SquareReleaseResult {
   contestId: string;
+  boardNumber: number;
   released: { row: number; col: number };
   balance: number | null;
 }
 
-// The grid read — any authenticated fan (a lobby surface), entered or not. Lazy
-// auto-locks + reveals digits on first post-kickoff read, so status/rowDigits
-// here are honest.
+// The boards read — any authenticated fan (a lobby surface), entered or not. Lazy
+// auto-locks + reveals EVERY board's digits on first post-kickoff read, so
+// status/rowDigits here are honest.
 export const getSquaresGrid = (token: string, id: string) =>
   authGet<SquaresGrid>(`/contests/${id}/squares`, token);
 
 // Claim one square (entered fans only — 403 'Enter the contest before claiming
 // squares' otherwise, which the board handles by entering first then retrying).
+// NO board parameter by design: the server routes the claim to the contest's
+// current filling board, which is what makes the fill-then-spawn sequence
+// unforgeable. The response says which board it landed on.
 export const claimSquare = (
   token: string,
   id: string,
   ref: { row: number; col: number },
 ) => authPost<SquareClaimResult>(`/contests/${id}/squares/claim`, token, ref);
 
-// Release one of the caller's own squares while the contest is still open; the
-// entry fee for that square is refunded to the wallet.
+// Release one of the caller's own squares while the contest is still open AND the
+// square is on the board that's still filling; the cost is refunded to the wallet.
+// A square on an already-full board is frozen (409).
 export const releaseSquare = (
   token: string,
   id: string,
