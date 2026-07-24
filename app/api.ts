@@ -765,6 +765,22 @@ async function authDelete(path: string, token: string): Promise<void> {
   if (!res.ok) throw await toAuthError(res);
 }
 
+// DELETE that CARRIES a JSON body AND parses a JSON response -- the squares
+// release endpoint (DELETE /contests/:id/squares/claim) takes { row, col } and
+// returns { released, balance }. authDelete above stays the bodyless 204 variant.
+async function authDeleteBody<T>(path: string, token: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toAuthError(res);
+  return res.json();
+}
+
 export const getCommissions = (token: string) =>
   authGet<CommissionsReport>('/reports/commissions', token);
 
@@ -2545,6 +2561,12 @@ export interface ContestConfig {
   payouts?: PayoutRow[];
   eventIds?: string[];
   pointsPerCorrect?: number;
+  // Squares config (config bag on a type='squares' contest — see squares.type.ts):
+  // squareCost is the points a fan spends per claimed square (entry itself is
+  // free), periodPayouts is the per-boundary prize table. Read to show
+  // "25 pts/square" where a pick'em shows its entry cost.
+  squareCost?: number;
+  periodPayouts?: Array<{ period: 1 | 2 | 3 | 'final'; points: number }>;
   [key: string]: unknown;
 }
 
@@ -2767,6 +2789,15 @@ export function contestCost(entryCost: number): string {
   return entryCost > 0 ? `${points(entryCost)} pts` : 'Free';
 }
 
+// A squares contest is FREE to enter -- the SQUARE is the buy -- so where a
+// pick'em card shows its entry cost, a squares card shows the per-square price
+// off config.squareCost ("25 pts/square"). Falls back to "Squares" if the cost
+// key is missing on an older/odd row.
+export function squaresPerSquareLabel(config: ContestConfig): string {
+  const c = config.squareCost;
+  return typeof c === 'number' && c > 0 ? `${points(c)} pts/square` : 'Squares';
+}
+
 // A human line for one ledger row's action_type. Mirrors the backend's action
 // vocabulary (contest_entry/contest_payout/adjustment + the engagement_* set);
 // an unknown type degrades to its slug de-underscored rather than rendering raw.
@@ -2787,4 +2818,155 @@ export function ledgerActionLabel(actionType: string): string {
     default:
       return actionType.replace(/_/g, ' ');
   }
+}
+
+// ============================================================================
+// SQUARES — the 10x10 grid gameplay on a type='squares' contest. The contest
+// chassis (enter/leaderboard) is shared with pick'em above; this is the grid
+// on top. Mirrors squares.service.ts / squares.type.ts on the backend. POINTS
+// ONLY: entering is FREE, each claimed square spends config.squareCost.
+//
+// GEOMETRY, pinned once so the UI never guesses: row/col are 0..9 GRID INDICES,
+// not digits. rowDigits are the HOME team's digits (indexed by row); colDigits
+// the AWAY team's (indexed by col). Both are NULL until the grid locks at
+// kickoff (the digit reveal) — pre-lock the headers show "?". A winning square's
+// row lands on the home digit, its col on the away digit.
+// ============================================================================
+
+// The 1|2|3|'final' boundary a squares prize pays at. 'final' is the whole-game
+// boundary (includes OT); 1/2/3 are the per-period line scores.
+export type SquaresPeriod = 1 | 2 | 3 | 'final';
+
+// The event header the grid read carries for context: team names + live/final
+// score + kickoff. Null only if the joined event row somehow went missing.
+export interface SquaresEvent {
+  id: string;
+  status: EventListItem['status'];
+  homeTeam: string | null;
+  awayTeam: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  scheduledAt: string;
+}
+
+// One occupied square: its grid index (row/col), the owner's display name (null
+// if unlinked), and whether it's the caller's. Open squares are simply absent
+// from the array.
+export interface SquaresClaim {
+  row: number;
+  col: number;
+  displayName: string | null;
+  mine: boolean;
+}
+
+// A prize-table row BEFORE its period is graded: the base points plus any
+// rolled-in carry from an earlier unclaimed boundary, and the prospective pool
+// that square would pay if it landed now.
+export interface SquaresPrizePending {
+  period: SquaresPeriod;
+  basePoints: number;
+  status: 'pending';
+  rolledIn: number;
+  prospectivePool: number;
+}
+
+// A prize-table row AFTER grading: 'won' (a claimed winning square) or
+// 'unclaimed' (nobody owned it — its pool rolled out per unclaimedRule). Carries
+// the winning square + the two digits that hit and the points paid.
+export interface SquaresPrizeGraded {
+  period: SquaresPeriod;
+  basePoints: number;
+  status: 'won' | 'unclaimed';
+  winner: { userId: string; displayName: string | null } | null;
+  winningSquare: { row: number; col: number };
+  homeDigit: number;
+  awayDigit: number;
+  rolledIn: number;
+  pointsPaid: number;
+  rolledOut: number;
+}
+
+export type SquaresPrizeRow = SquaresPrizePending | SquaresPrizeGraded;
+
+// A raw period_results row (the grid read's `results`), as each boundary lands.
+// The prizeTable above is the display-ready projection of these; kept typed for
+// completeness, the UI reads prizeTable.
+export interface SquaresPeriodResult {
+  period: string;
+  homeDigit: number;
+  awayDigit: number;
+  winRow: number;
+  winCol: number;
+  winnerUserId: string | null;
+  winnerName: string | null;
+  basePoints: number;
+  rolledIn: number;
+  pointsPaid: number;
+  rolledOut: number;
+}
+
+// GET /contests/:id/squares — the whole grid read. status is the CONTEST status
+// (open → claimable; locked/live/final → digits revealed, no more claims).
+export interface SquaresGrid {
+  contestId: string;
+  status: ContestStatus;
+  event: SquaresEvent | null;
+  squareCost: number;
+  unclaimedRule: 'rollover' | 'house';
+  dimensions: { rows: number; cols: number };
+  rowDigits: number[] | null; // home-team digits, NULL until lock
+  colDigits: number[] | null; // away-team digits, NULL until lock
+  lockedAt: string | null;
+  myClaimCount: number;
+  claimed: SquaresClaim[];
+  prizeTable: SquaresPrizeRow[];
+  results: SquaresPeriodResult[];
+}
+
+// POST /contests/:id/squares/claim response. balance is the caller's new wallet
+// after the spend (null only when squareCost is 0). myClaimCount is their new
+// owned total. 409s: 'That square is already taken', 'Contest is not open for
+// claims', the max-squares cap, or 'Insufficient points'; 403 if not entered.
+export interface SquareClaimResult {
+  contestId: string;
+  claimed: { row: number; col: number };
+  squareCost: number;
+  myClaimCount: number;
+  balance: number | null;
+}
+
+// DELETE /contests/:id/squares/claim response (release + refund while open).
+// balance is the wallet after the refund (null when squareCost is 0).
+export interface SquareReleaseResult {
+  contestId: string;
+  released: { row: number; col: number };
+  balance: number | null;
+}
+
+// The grid read — any authenticated fan (a lobby surface), entered or not. Lazy
+// auto-locks + reveals digits on first post-kickoff read, so status/rowDigits
+// here are honest.
+export const getSquaresGrid = (token: string, id: string) =>
+  authGet<SquaresGrid>(`/contests/${id}/squares`, token);
+
+// Claim one square (entered fans only — 403 'Enter the contest before claiming
+// squares' otherwise, which the board handles by entering first then retrying).
+export const claimSquare = (
+  token: string,
+  id: string,
+  ref: { row: number; col: number },
+) => authPost<SquareClaimResult>(`/contests/${id}/squares/claim`, token, ref);
+
+// Release one of the caller's own squares while the contest is still open; the
+// entry fee for that square is refunded to the wallet.
+export const releaseSquare = (
+  token: string,
+  id: string,
+  ref: { row: number; col: number },
+) => authDeleteBody<SquareReleaseResult>(`/contests/${id}/squares/claim`, token, ref);
+
+// Display label for a squares period boundary: 1/2/3 → "Q1"/"Q2"/"Q3",
+// 'final' → "Final". (Football-ish, matching the default 4-boundary table.)
+export function squaresPeriodLabel(period: SquaresPeriod): string {
+  return period === 'final' ? 'Final' : `Q${period}`;
 }

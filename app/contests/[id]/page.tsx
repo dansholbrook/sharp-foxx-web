@@ -23,6 +23,7 @@ import { useAuth } from '../../auth-context';
 import { usePoints } from '../../points-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { FanCard } from '../../fan-card';
+import { SquaresBoard } from './squares-board';
 import { canAccess } from '../../roles';
 import {
   getContest,
@@ -789,6 +790,7 @@ export default function ContestPage() {
   const entered = contest?.myEntry != null;
   const open = status === 'open';
   const isPickem = contest?.type === 'pickem';
+  const isSquares = contest?.type === 'squares';
   const face = contest ? statusFaceKicker(contest) : '';
 
   return (
@@ -829,9 +831,13 @@ export default function ContestPage() {
             )}
           </header>
 
-          {/* A non-pick'em contest has no fan gameplay in v1 — show the row it
-              is rather than a sheet that would 400. Only pick'em is playable. */}
-          {!isPickem ? (
+          {/* Squares carries its own body (the 10x10 grid across every status);
+              pick'em splits into enter → sheet → scorecard below. Any other type
+              has no fan gameplay in v1 — show the row it is rather than a sheet
+              that would 400. */}
+          {isSquares ? (
+            <SquaresBoard contest={contest} />
+          ) : !isPickem ? (
             <div className="results-empty">
               <p className="results-empty__title">Not playable yet</p>
               <p className="results-empty__hint">

@@ -9906,3 +9906,330 @@ a.follow-sugcard__name:hover {
     flex-wrap: wrap;
   }
 }
+
+/* ==========================================================================
+   SQUARES  (.sqboard-* / .sqprize-* / .sqgrid-* / .sqrelease-*)  — the 10x10
+   grid surface on a type='squares' contest. Built on the existing tokens and
+   the pick'em/predict green ("won") language. MOBILE-FIRST: the 11-column board
+   (1 digit header + 10 squares) is sized to fit a 390px screen, so cells stay
+   thumb-tappable without a pinch and the .sqgrid-scroll wrapper only kicks in a
+   horizontal scroll on a genuinely tiny viewport. Scoped names, so nothing here
+   reaches the rest of the app.
+   ========================================================================== */
+
+/* ---- Header: matchup, time, cost, my count ---- */
+.sqboard-head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sqboard-matchup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sqboard-matchup__teams {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  color: var(--text);
+}
+.sqboard-at {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.sqboard-matchup__when {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.sqboard-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.sqboard-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sqboard-stat__label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.sqboard-stat__value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.sqboard-stat--won .sqboard-stat__value {
+  color: #b4e6c0;
+}
+
+/* ---- Prize table (per period) ---- */
+.sqprize {
+  margin-top: 22px;
+}
+.sqprize__head {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.sqprize__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sqprize__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 0.85rem;
+}
+.sqprize__row--won {
+  border-color: #2f5c3a;
+  background: #17251a;
+}
+.sqprize__period {
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 38px;
+}
+.sqprize__row--won .sqprize__period {
+  color: #b4e6c0;
+}
+.sqprize__pool {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.sqprize__roll,
+.sqprize__digits {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.sqprize__status {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.sqprize__status--pending,
+.sqprize__status--unclaimed {
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+}
+.sqprize__status--won {
+  color: #b4e6c0;
+  background: rgba(47, 92, 58, 0.25);
+  border: 1px solid #2f5c3a;
+}
+.sqprize__note {
+  font-size: 0.78rem;
+  margin: 8px 0 0;
+}
+
+/* ---- Notes / notice bar / release confirm ---- */
+.sqgrid-note {
+  font-size: 0.82rem;
+  margin: 16px 0 0;
+}
+.sqboard-notice {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: rgba(201, 163, 78, 0.1);
+  border: 1px solid var(--accent-dim);
+}
+.sqrelease {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sqrelease__msg {
+  font-size: 0.88rem;
+  color: var(--text);
+}
+.sqrelease__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.sqrelease__go {
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.sqrelease__go:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- THE GRID ---- */
+.sqgrid-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.sqgrid {
+  display: grid;
+  /* 1 digit-header column (a touch narrower) + 10 equal square columns. fr
+     tracks make the whole board flex to the container, so it fits 390px. */
+  grid-template-columns: minmax(20px, 0.6fr) repeat(10, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+  min-width: 320px; /* below this the wrapper scrolls rather than crushing cells */
+  max-width: 560px; /* on desktop the cells stop growing into slabs */
+  margin: 14px 0 4px;
+}
+.sqgrid-cell,
+.sqgrid-head,
+.sqgrid-corner {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  min-width: 0;
+}
+.sqgrid-head {
+  font-weight: 700;
+  font-size: 0.74rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.sqgrid-corner {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  padding: 2px;
+  overflow: hidden;
+}
+.sqgrid-corner__away,
+.sqgrid-corner__home {
+  font-size: 0.5rem;
+  line-height: 1.1;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.sqgrid-cell {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.08s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.sqgrid-cell__mark {
+  pointer-events: none;
+}
+.sqgrid-cell--open:not(:disabled):hover {
+  border-color: var(--accent-dim);
+  background: rgba(201, 163, 78, 0.08);
+}
+.sqgrid-cell--open:not(:disabled):active {
+  transform: scale(0.94);
+}
+.sqgrid-cell--taken {
+  background: var(--panel);
+  border-color: var(--border-strong);
+  color: var(--text);
+  cursor: default;
+}
+.sqgrid-cell--mine {
+  background: rgba(201, 163, 78, 0.16);
+  border-color: var(--accent);
+  color: var(--accent);
+  cursor: pointer;
+}
+.sqgrid-cell--mine:not(:disabled):hover {
+  background: rgba(201, 163, 78, 0.24);
+}
+/* Win treatment reuses the predict/won green — the one non-gold "good". */
+.sqgrid-cell--won {
+  background: #17251a;
+  border-color: #2f5c3a;
+  color: #b4e6c0;
+}
+.sqgrid-cell--won-mine {
+  border-color: #b4e6c0;
+  box-shadow: inset 0 0 0 1px #2f5c3a;
+  animation: predict-win 0.6s ease-out;
+}
+.sqgrid-cell--claiming {
+  opacity: 0.6;
+}
+.sqgrid-cell--releasing {
+  border-color: var(--warn-border);
+  box-shadow: 0 0 0 2px var(--warn-bg);
+}
+.sqgrid-cell:disabled {
+  cursor: default;
+}
+/* Occupied / won cells stay at full strength even while disabled (post-lock). */
+.sqgrid-cell--taken:disabled,
+.sqgrid-cell--won:disabled,
+.sqgrid-cell--mine:disabled {
+  opacity: 1;
+}
+@keyframes sqgrid-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-2px);
+  }
+  40% {
+    transform: translateX(2px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+.sqgrid-cell--shake {
+  animation: sqgrid-shake 0.4s ease;
+  border-color: var(--warn-border);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sqgrid-cell--shake,
+  .sqgrid-cell--won-mine {
+    animation: none;
+  }
+}

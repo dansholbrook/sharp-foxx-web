@@ -31,6 +31,7 @@ import {
   isNationalOverdue,
   isFeedEvent,
   contestCost,
+  squaresPerSquareLabel,
   points,
   signedPoints,
   Contest,
@@ -433,7 +434,12 @@ function ContestRailRow({ contest }: { contest: Contest }) {
     <Link href={`/contests/${contest.id}`} className="railcontest">
       <span className="railcontest__title">{contest.title}</span>
       <span className="railcontest__foot">
-        <span className="railcontest__cost">{contestCost(contest.entryCost)}</span>
+        {/* Squares enter free — show the per-square price, not "Free". */}
+        <span className="railcontest__cost">
+          {contest.type === 'squares'
+            ? squaresPerSquareLabel(contest.config)
+            : contestCost(contest.entryCost)}
+        </span>
         {countdown && <span className="railcontest__when">{countdown}</span>}
       </span>
     </Link>

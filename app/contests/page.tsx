@@ -25,6 +25,7 @@ import {
   getContests,
   contestTypeLabel,
   contestCost,
+  squaresPerSquareLabel,
   Contest,
   ContestStatus,
 } from '../api';
@@ -101,7 +102,13 @@ function ContestCard({ contest }: { contest: Contest }) {
         <p className="contest-card__desc">{contest.description}</p>
       )}
       <div className="contest-card__foot">
-        <span className="contest-card__cost">{contestCost(contest.entryCost)}</span>
+        {/* Squares are FREE to enter — the SQUARE is the buy — so a squares card
+            shows the per-square price where a pick'em shows its entry cost. */}
+        <span className="contest-card__cost">
+          {contest.type === 'squares'
+            ? squaresPerSquareLabel(contest.config)
+            : contestCost(contest.entryCost)}
+        </span>
         {payoutRanks > 0 && (
           <span className="contest-card__meta">
             {payoutRanks === 1 ? '1 payout' : `${payoutRanks} payouts`}
