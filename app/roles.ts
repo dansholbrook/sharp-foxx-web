@@ -56,6 +56,16 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Contests',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // The Arena: Beat the Oracle, the free daily ride-or-fade. Every role, same
+  // as Contests and for the same reason — the backend's fan routes carry no
+  // @Roles because the Arena is the free front door to the product, and staff
+  // play along. Sits directly after Contests: both are play surfaces, but this
+  // one is the DAILY one, so it leads the pair a fan opens out of habit.
+  {
+    href: '/oracle',
+    label: 'Oracle',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
   // The fan's pick history + points wallet, and the points leaderboard. Both
   // PAGES are open to every role (staff can pick too — the backend deliberately
   // allows it), but only the fan roles carry the nav LINKS: staff nav is already
@@ -273,6 +283,15 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   // open-by-default fallback so the intent reads alongside the points surfaces.
   {
     match: (p) => p === '/contests' || p.startsWith('/contests/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
+  // The Arena. Open to EVERY authenticated role, matching the all-roles nav
+  // link and the backend's deliberately ungated fan routes (today / pick /
+  // history / leaderboard carry no @Roles at all). Listed explicitly rather
+  // than left to the open-by-default fallback, for the same reason the points
+  // and contest surfaces are: the gate is the interesting part.
+  {
+    match: (p) => p === '/oracle',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
 ];

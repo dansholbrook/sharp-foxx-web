@@ -9,6 +9,7 @@ import { usePoints } from '../points-context';
 import { FollowButton } from '../follow-button';
 import { FanCard } from '../fan-card';
 import { AppNav } from '../nav';
+import { OracleTeaser } from '../oracle-teaser';
 import {
   YourPicksBand,
   NationalBoardBand,
@@ -877,6 +878,14 @@ export default function FeedPage() {
             desktop; interleaves into the single column on mobile. Every section
             below self-hides when empty, so the rail is never a column of gaps. */}
         <aside className="frail" aria-label="Your points">
+          {/* a0. TODAY'S ORACLE — the daily-habit hook, first in the rail
+              because it's the only band here that EXPIRES (at kickoff). Stays
+              up after the fan picks, showing their side and the lock time;
+              self-hides only when no day is scheduled. */}
+          <div className="frail-oracle">
+            <OracleTeaser token={token} />
+          </div>
+
           {/* a. POINTS HERO — balance large, lifetime under, the two doors. */}
           <PointsHero />
 

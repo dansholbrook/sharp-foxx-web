@@ -8646,6 +8646,7 @@ a.follow-sugcard__name:hover {
 .frail-picks:empty,
 .frail-natboard:empty,
 .frail-contests:empty,
+.frail-oracle:empty,
 .frail-open:empty {
   display: none;
 }
@@ -8844,6 +8845,12 @@ a.follow-sugcard__name:hover {
     display: contents;
   }
 
+  /* The Oracle teaser leads on mobile, ahead of even the points hero: it is
+     the one band that expires, and a phone user who opens the feed at 6pm
+     needs to see tonight's call before their balance. */
+  .frail-oracle {
+    order: 0;
+  }
   .frail-points {
     order: 1;
   }
@@ -12618,5 +12625,1140 @@ a.follow-sugcard__name:hover {
 
   .economy-prow__actions {
     width: 100%;
+  }
+}
+
+/* ============================================================================
+   BEAT THE ORACLE — /oracle, and the feed teaser.
+   ============================================================================
+   MYSTIC-PREMIUM ON THE EXISTING TOKENS. Not one new colour: the card is the
+   same warm near-black and single gold accent as everything else, pushed
+   further only in DEPTH — a radial glow behind the fox mark, a deeper gradient
+   panel, and the dial lit from within. Kitsch would be purple, sparkles and a
+   second accent; this is the same palette turned up.
+
+   MOBILE-FIRST, AT 390px. The base rules here ARE the phone layout: the card is
+   a single column, the dial sits above the call, and the two buttons are a
+   full-width pair. The only breakpoint widens them side by side and lets the
+   dial ride beside the text — the phone never pays for the desktop case.
+
+   THE BUTTONS ARE THE BIGGEST TAP TARGETS ON THE SITE, by intent: 96px tall on
+   a phone, the whole block tappable, nothing else competing for the thumb. The
+   game is two taps a day and this is the tap.
+   ============================================================================ */
+
+.oracle-page {
+  max-width: 720px;
+}
+
+/* ---- The card ------------------------------------------------------------ */
+
+.oracle-card {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 28px;
+  padding: 26px 18px 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  /* The mystic panel: a warmer, deeper gradient than .card, lit from the top
+     where the fox mark sits. */
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(201, 163, 78, 0.16), transparent 60%),
+    linear-gradient(180deg, #221d14 0%, var(--panel) 55%, #17140e 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 18px 40px rgba(0, 0, 0, 0.42);
+  text-align: center;
+}
+
+/* A hairline of gold along the top edge — the "this one is special" tell that
+   distinguishes the Oracle card from every other panel on the site. */
+.oracle-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent) 35%,
+    var(--accent-hover) 50%,
+    var(--accent) 65%,
+    transparent
+  );
+  opacity: 0.7;
+}
+
+.oracle-card--graded {
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(201, 163, 78, 0.1), transparent 60%),
+    linear-gradient(180deg, #1e1a13 0%, var(--panel) 60%, #17140e 100%);
+}
+
+/* LOCKED: the glow banks down. Kickoff has passed, the fan's call is frozen and
+   nothing on the card is actionable any more — so the gold recedes rather than
+   continuing to invite a tap that would 409. */
+.oracle-card--locked::before {
+  opacity: 0.3;
+}
+
+.oracle-card--locked .oracle-mark::before {
+  animation: none;
+  opacity: 0.5;
+}
+
+/* ---- The Oracle's presence ---------------------------------------------- */
+
+.oracle-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* The mark: a fox with an orb tucked at its shoulder, standing in a ring of
+   light. Composed from two glyphs and a radial gradient — no image asset, so
+   nothing to 404 and it scales with the type. */
+.oracle-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 74px;
+  height: 74px;
+  margin-bottom: 6px;
+}
+
+.oracle-mark::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(201, 163, 78, 0.24) 0%,
+    rgba(201, 163, 78, 0.07) 45%,
+    transparent 70%
+  );
+  animation: oracle-breathe 6s ease-in-out infinite;
+}
+
+.oracle-mark__fox {
+  font-size: 2.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+}
+
+/* The orb hangs off the fox's lower-right, small enough to read as an
+   attribute rather than a second subject. */
+.oracle-mark__orb {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 1.25rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(201, 163, 78, 0.55));
+}
+
+.oracle-mark--rests::before {
+  animation: none;
+  opacity: 0.4;
+}
+
+.oracle-mark--rests .oracle-mark__fox,
+.oracle-mark--rests .oracle-mark__orb {
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}
+
+@keyframes oracle-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.oracle-kicker {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.oracle-proclaim {
+  margin: 2px 0 0;
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+  text-shadow: 0 0 18px rgba(201, 163, 78, 0.28);
+}
+
+.oracle-matchup {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---- The call + the dial ------------------------------------------------- */
+
+.oracle-call {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 22px;
+}
+
+.oracle-call__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.oracle-call__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+/* The team, as big as the card can carry it — this is the sentence the whole
+   screen exists to deliver. Clamped so a long school name still fits a 390px
+   phone without wrapping to three lines. */
+.oracle-call__team {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 7vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.oracle-call__conf {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* THE CONFIDENCE DIAL. One conic-gradient painted to --pct of a turn, with the
+   centre punched out by a mask so it reads as a ring rather than a pie. The
+   mask is doubled (-webkit- first) for Safari, which is most of this audience. */
+.oracle-dial {
+  position: relative;
+  flex: 0 0 auto;
+  width: 104px;
+  height: 104px;
+  display: grid;
+  place-items: center;
+}
+
+.oracle-dial__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -90deg,
+    var(--accent-dim) 0%,
+    var(--accent) calc(var(--pct) * 0.6%),
+    var(--accent-hover) calc(var(--pct) * 1%),
+    rgba(255, 255, 255, 0.06) calc(var(--pct) * 1%),
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  -webkit-mask: radial-gradient(closest-side, transparent 71%, #000 72%);
+  mask: radial-gradient(closest-side, transparent 71%, #000 72%);
+  filter: drop-shadow(0 0 10px rgba(201, 163, 78, 0.35));
+  animation: oracle-dial-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* The dial fills in on arrival — the one piece of theatre on the card, and it
+   runs once. */
+@keyframes oracle-dial-in {
+  from {
+    opacity: 0;
+    transform: rotate(-24deg) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.oracle-dial__hub {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  color: var(--text);
+}
+
+.oracle-dial__pct {
+  font-family: var(--font-serif);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.oracle-dial__unit {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+}
+
+/* ---- THE TWO BUTTONS ----------------------------------------------------- */
+
+.oracle-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.oracle-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* The biggest tap target on the site. 96px is a deliberate overshoot of the
+     44px minimum: this is the one action the page exists for, and a thumb
+     should not have to aim. */
+  min-height: 96px;
+  padding: 14px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-raised);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.oracle-btn:hover:not(:disabled) {
+  border-color: var(--accent-dim);
+  background: #262117;
+}
+
+.oracle-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.oracle-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.oracle-btn__verb {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+/* THE PAYOUT LIVES ON THE BUTTON. It is the entire decision, so it is set at
+   button-label weight rather than as a caption. */
+.oracle-btn__pay {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.oracle-btn__hint {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+/* RIDE is the safe, warm side (with the house); FADE is the defiant one, so it
+   carries the gold. Both stay inside the one-accent rule — the difference is
+   emphasis, not hue. */
+.oracle-btn--ride .oracle-btn__verb {
+  color: var(--text);
+}
+
+.oracle-btn--fade {
+  border-color: var(--accent-dim);
+  background: linear-gradient(180deg, #2a2317, var(--panel-raised));
+}
+
+.oracle-btn--fade .oracle-btn__verb {
+  color: var(--accent);
+}
+
+.oracle-btn--fade:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(201, 163, 78, 0.25);
+}
+
+/* The optimistic state: the tapped button commits visually before the response
+   lands, so the tap feels instant on a slow connection. */
+.oracle-btn--picking {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, #33291a, #241f16);
+  opacity: 1;
+}
+
+/* ---- Locked in: what the buttons become --------------------------------- */
+
+.oracle-locked-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin: 0 0 16px;
+  padding: 16px 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(201, 163, 78, 0.1), transparent);
+}
+
+.oracle-locked-in__badge {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.oracle-locked-in__text {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.oracle-locked-in__pay {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* The inline streak celebration, where the buttons were. */
+.oracle-celebrate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: -6px 0 16px;
+  animation: oracle-rise 420ms ease both;
+}
+
+.oracle-celebrate__streak {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.oracle-celebrate__freeze {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #9fc7d8;
+}
+
+@keyframes oracle-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.oracle-error {
+  margin: 0 0 14px;
+  text-align: left;
+}
+
+/* ---- The live split ------------------------------------------------------ */
+
+.oracle-split {
+  margin: 0 0 16px;
+}
+
+.oracle-split__labels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.oracle-split__label strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.oracle-split__label--fade strong {
+  color: var(--accent);
+}
+
+.oracle-split__bar {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  /* The FADE side is the track; the RIDE side is painted over it, so the bar
+     reads left-to-right as riders-then-faders with one element. */
+  background: linear-gradient(180deg, var(--accent-dim), var(--accent));
+  border: 1px solid var(--border-strong);
+}
+
+.oracle-split__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--ride-pct);
+  background: linear-gradient(180deg, #4a4335, #373126);
+  border-right: 1px solid var(--bg);
+  transition: width 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* No picks yet: a flat, quiet track rather than a 50/50 split that would read
+   as real data. */
+.oracle-split__bar--empty {
+  background: var(--border);
+  border-style: dashed;
+}
+
+.oracle-split__bar--empty .oracle-split__fill {
+  display: none;
+}
+
+.oracle-split__none {
+  margin: 8px 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* ---- The clock / locked footer ------------------------------------------ */
+
+.oracle-foot {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.oracle-foot__clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.oracle-foot__tick {
+  font-size: 0.9rem;
+}
+
+.oracle-foot__at {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.oracle-foot__locked {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---- The score line ------------------------------------------------------ */
+
+.oracle-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.oracle-score__live {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.oracle-score__side {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.oracle-score__team {
+  color: var(--muted);
+}
+
+.oracle-score__num {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.oracle-score__at {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ---- GRADED: the reveal -------------------------------------------------- */
+
+.oracle-reveal {
+  margin: 0 0 18px;
+  padding: 20px 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel-raised);
+  animation: oracle-rise 480ms ease both;
+}
+
+.oracle-reveal--win {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(201, 163, 78, 0.14), transparent);
+  box-shadow: 0 0 30px rgba(201, 163, 78, 0.12) inset;
+}
+
+/* A LOSS IS NEVER PAINTED AS AN ALARM. --warn is the "something is wrong"
+   colour and losing a free daily pick is not that; the loss card is simply
+   quieter than the win, which is the whole difference. */
+.oracle-reveal--loss {
+  border-color: var(--border-strong);
+}
+
+.oracle-reveal--void {
+  border-style: dashed;
+}
+
+.oracle-reveal__points {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 2.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 0 26px rgba(201, 163, 78, 0.35);
+}
+
+.oracle-reveal__headline {
+  margin: 8px 0 0;
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.oracle-reveal--win .oracle-reveal__headline {
+  color: var(--accent);
+}
+
+.oracle-reveal__sub {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.oracle-reveal__result {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.oracle-reveal__result strong {
+  color: var(--text);
+}
+
+/* ---- NO DAY: the Oracle rests ------------------------------------------- */
+
+.oracle-card--rests {
+  padding: 34px 18px 30px;
+}
+
+.oracle-rests__title {
+  margin: 6px 0 0;
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.oracle-rests__sub {
+  margin: 8px auto 0;
+  max-width: 34ch;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+/* ---- THE STREAKS RAIL ---------------------------------------------------- */
+
+.oracle-rail {
+  margin: 0 0 28px;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.oracle-rail__streaks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.oracle-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 6px;
+  border-radius: 12px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+}
+
+.oracle-stat__icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.oracle-stat__value {
+  font-family: var(--font-serif);
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--text);
+}
+
+.oracle-stat__label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* The play streak is the one a fan nurses, so it gets the gold. */
+.oracle-stat--play .oracle-stat__value {
+  color: var(--accent);
+}
+
+/* ---- Freezes ------------------------------------------------------------- */
+
+.oracle-freezes {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.oracle-freezes__tokens {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* An unearned freeze is a dimmed ghost of an earned one — the slot is visible,
+   so the cap needs no sentence. */
+.oracle-freeze {
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.2;
+  filter: grayscale(1);
+}
+
+.oracle-freeze--on {
+  opacity: 1;
+  filter: none;
+  text-shadow: 0 0 10px rgba(159, 199, 216, 0.45);
+}
+
+.oracle-freezes__count {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.oracle-freezes__progress {
+  height: 5px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.oracle-freezes__fill {
+  height: 100%;
+  width: var(--pct);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6f93a3, #9fc7d8);
+  transition: width 400ms ease;
+}
+
+.oracle-freezes__hint {
+  margin: 8px 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* ---- Badges -------------------------------------------------------------- */
+
+.oracle-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.oracle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-dim);
+  background: linear-gradient(180deg, rgba(201, 163, 78, 0.12), transparent);
+}
+
+.oracle-badge__icon {
+  font-size: 1rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(201, 163, 78, 0.4));
+}
+
+.oracle-badge__name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accent);
+}
+
+/* ---- Section furniture (history + boards) ------------------------------- */
+
+.oracle-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.oracle-section__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+
+.oracle-history,
+.oracle-boards {
+  margin: 0 0 28px;
+}
+
+.oracle-history__record {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.oracle-history__fades {
+  color: var(--accent);
+}
+
+/* ---- History rows -------------------------------------------------------- */
+
+.oracle-hlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.oracle-hrow {
+  display: grid;
+  /* date · R/F · matchup (flexes) · glyph · points */
+  grid-template-columns: 52px 22px 1fr 18px 54px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 0.8rem;
+}
+
+.oracle-hrow--pending {
+  border-style: dashed;
+}
+
+.oracle-hrow--win {
+  border-color: var(--accent-dim);
+}
+
+.oracle-hrow__date {
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+/* R / F, as a token — the letter is the fastest read down a column of thirty. */
+.oracle-hrow__choice {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.oracle-hrow__choice--fade {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.oracle-hrow__matchup {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.oracle-hrow__glyph {
+  text-align: center;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.oracle-hrow--win .oracle-hrow__glyph {
+  color: var(--accent);
+}
+
+.oracle-hrow__pts {
+  text-align: right;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* ---- Boards -------------------------------------------------------------- */
+
+.oracle-boards__window {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.oracle-boards .points-tabs {
+  margin-bottom: 14px;
+}
+
+.oracle-slayer-mark {
+  margin-left: 6px;
+  font-size: 0.85rem;
+}
+
+.oracle-fineprint {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---- Desktop: the dial rides beside the call, buttons keep their pair ---- */
+
+@media (min-width: 560px) {
+  .oracle-card {
+    padding: 32px 28px 26px;
+  }
+
+  .oracle-call {
+    flex-direction: row;
+    justify-content: center;
+    gap: 24px;
+  }
+
+  .oracle-call__text {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .oracle-btn {
+    min-height: 108px;
+  }
+
+  .oracle-hrow {
+    grid-template-columns: 64px 24px 1fr 20px 64px;
+    font-size: 0.85rem;
+  }
+}
+
+/* ---- THE FEED TEASER ----------------------------------------------------- */
+
+.oracle-teaser__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.oracle-teaser .row-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+}
+
+.oracle-teaser__mark {
+  font-size: 0.95rem;
+  filter: drop-shadow(0 0 6px rgba(201, 163, 78, 0.4));
+}
+
+.oracle-teaser__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 12px;
+  background:
+    radial-gradient(140% 90% at 0% 0%, rgba(201, 163, 78, 0.14), transparent 65%),
+    var(--panel);
+  text-decoration: none;
+  color: var(--text);
+  transition:
+    border-color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.oracle-teaser__card:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.oracle-teaser__call {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.oracle-teaser__team {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.oracle-teaser__conf {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.oracle-teaser__state {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.oracle-teaser__state--open {
+  color: var(--accent);
+}
+
+.oracle-teaser__state--fade {
+  color: var(--accent);
+}
+
+.oracle-teaser__state--win {
+  color: var(--accent);
+}
+
+.oracle-teaser__state--none,
+.oracle-teaser__state--void,
+.oracle-teaser__state--loss {
+  color: var(--muted);
+}
+
+.oracle-teaser__when {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ---- Reduced motion: the card still LOOKS lit, it just stops moving ------
+   Every animation here is decorative — the dial's arc, the split's width and
+   the reveal all carry their meaning in their final state, so removing the
+   transition costs nothing and keeps the fill/percentage exactly as drawn. */
+
+@media (prefers-reduced-motion: reduce) {
+  .oracle-mark::before {
+    animation: none;
+  }
+
+  .oracle-dial__ring {
+    animation: none;
+  }
+
+  .oracle-celebrate,
+  .oracle-reveal {
+    animation: none;
+  }
+
+  .oracle-split__fill,
+  .oracle-freezes__fill {
+    transition: none;
+  }
+
+  .oracle-btn,
+  .oracle-teaser__card {
+    transition: none;
+  }
+
+  .oracle-btn:active:not(:disabled),
+  .oracle-teaser__card:hover {
+    transform: none;
   }
 }

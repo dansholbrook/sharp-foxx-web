@@ -3832,3 +3832,322 @@ export function promotionWindowState(
   if (now >= ends) return 'past';
   return 'active';
 }
+
+// ============================================================================
+// BEAT THE ORACLE — the first Arena game, under /arena/oracle.
+//
+// FREE, DAILY, ONE PICK. Not a contest: no entry cost, no entry row, no
+// lifecycle beyond "today's game" — which is why it mounts at /arena/<game>
+// rather than under /contests. Mirrors oracle.service.ts on the backend.
+//
+// EVERY FAN ROUTE HERE IS UNGATED (no @Roles) — any authenticated caller plays,
+// staff included. The Arena is the free front door, so the nav link and the
+// page access are all-roles, matching.
+//
+// THE OUTCOME FIELD IS THE CONTRACT. The backend collapses three nullable
+// columns (day status, correct, points) into ONE 'pending' | 'win' | 'loss' |
+// 'void' on both the day card's myPick and every history row. Nothing here
+// re-derives it from the parts — a client that inferred "graded" from
+// `correct !== null` would call a voided day a loss.
+// ============================================================================
+
+// Oracle day lifecycle. 'scheduled' is included for completeness but a fan
+// never sees it: GET /arena/oracle/today runs ensureOpen first, which flips any
+// due day to 'open' before the card is built.
+export type OracleDayStatus = 'scheduled' | 'open' | 'graded' | 'voided';
+
+// Which side of the matchup — the Oracle's call, and the settled result.
+export type OracleSide = 'home' | 'away';
+
+// Ride WITH the house engine, or FADE it. Riding is safe and pays flat; fading
+// pays the Oracle's own odds back at whoever beat it.
+export type OracleChoice = 'ride' | 'fade';
+
+// How one pick turned out. Pre-derived server-side — see the header.
+export type OracleOutcome = 'pending' | 'win' | 'loss' | 'void';
+
+// What recordPlay did to the play streak. 'frozen' in particular is a thing the
+// UI must ANNOUNCE (a freeze was spent to save the streak), not swallow;
+// 'already_recorded' is the idempotent re-pick and says nothing new.
+export type StreakOutcome =
+  | 'started'
+  | 'continued'
+  | 'frozen'
+  | 'reset'
+  | 'already_recorded';
+
+// The shared Arena streak block — identical on the day card and the pick
+// response, so both render it through the same component.
+export interface OracleStreaks {
+  // Showing up. Moves on distinct played days; a missed day is forgiven by a
+  // freeze or resets it.
+  playStreak: number;
+  // Being right. Moves only on results, and a VOID never touches it.
+  winStreak: number;
+  bestWinStreak: number;
+  // Banked forgiveness, 0..2 (MAX_FREEZES on the backend).
+  freezes: number;
+  // Played days banked toward the next freeze, 0..6.
+  freezeProgress: number;
+  // Derived server-side so the rail never does the arithmetic. Reads 0 when the
+  // fan is at the freeze cap — the card hides the line there rather than
+  // promising a freeze that can't land.
+  daysToNextFreeze: number;
+  lastPlayedDate: string | null;
+}
+
+// A badge the fan owns. The backend deliberately ships NO names or art — what a
+// fan EARNED must not change with a redesign — so the copy lives client-side,
+// keyed off `key`. See oracleBadgeMeta.
+export interface OracleBadge {
+  key: string;
+  earnedAt: string;
+  // Snapshot data captured at earn time (which streak, which pick). Display
+  // only; nothing branches on it.
+  metadata: Record<string, unknown> | null;
+}
+
+// Today's card. Everything the Oracle screen renders about the game itself.
+export interface OracleDay {
+  id: string;
+  date: string;
+  status: OracleDayStatus;
+  // "Away at Home", already assembled (a team with no row degrades to TBD).
+  matchup: string;
+  homeTeam: string | null;
+  awayTeam: string | null;
+  oracle: {
+    side: OracleSide;
+    // 50..95, per the CHECK constraint. Never 100 — the fade multiplier would
+    // divide by zero.
+    confidence: number;
+    // Which actual team the Oracle is on, so the card says "the Oracle likes
+    // Milwaukee" without joining sides to names.
+    team: string | null;
+  };
+  // What each side pays TODAY, at this day's confidence, with the current
+  // admin-tuned reward values — PRE-COMPUTED, so the buttons show the number
+  // that lands in the wallet rather than a base plus a formula.
+  payouts: { ride: number; fade: number };
+  // The live ride/fade split. The social pressure IS the feature.
+  split: { ride: number; fade: number; total: number };
+  // Picks close at KICKOFF (the event's scheduled_at), not at midnight.
+  locksAt: string;
+  locked: boolean;
+  event: {
+    id: string;
+    status: string;
+    homeScore: number | null;
+    awayScore: number | null;
+  };
+  // Which side actually covered. null while open, and null on a VOID — a
+  // washed day has no answer, which is different from not having one yet.
+  resultSide: OracleSide | null;
+  myPick: {
+    choice: OracleChoice;
+    outcome: OracleOutcome;
+    pointsAwarded: number | null;
+  } | null;
+}
+
+// GET /arena/oracle/today. `day: null` is NOT an error — a day with no game
+// still returns the streak block, because the streak is why the fan opened the
+// app and 404ing the screen would hide it.
+export interface OracleToday {
+  date: string;
+  day: OracleDay | null;
+  streaks: OracleStreaks;
+  badges: OracleBadge[];
+}
+
+// POST /arena/oracle/pick response.
+export interface OraclePickResult {
+  pick: { id: string; choice: OracleChoice; createdAt: string };
+  date: string;
+  lockedAt: string;
+  streaks: OracleStreaks;
+  streakOutcome: StreakOutcome;
+  // Freezes spent covering missed days (0 unless streakOutcome === 'frozen').
+  freezesConsumed: number;
+  // True when this play crossed the 7-day mark and minted a freeze.
+  freezeEarned: boolean;
+}
+
+export interface OracleHistoryItem {
+  pickId: string;
+  date: string;
+  matchup: string;
+  choice: OracleChoice;
+  oracleSide: OracleSide;
+  confidence: number;
+  resultSide: OracleSide | null;
+  outcome: OracleOutcome;
+  pointsAwarded: number | null;
+}
+
+// GET /arena/oracle/history — the last 30, with the fan's record over exactly
+// that window so the header line needs no second call. Voids are excluded from
+// both sides of the record: a washed day was neither a win nor a loss.
+export interface OracleHistory {
+  items: OracleHistoryItem[];
+  record: { wins: number; losses: number; fadeWins: number; window: number };
+}
+
+// GET /arena/oracle/leaderboard — TWO boards, because they answer two different
+// questions. Weekly points is "who is winning right now" (resets Monday ET, and
+// is summed from the LEDGER so streak bonuses count). Slayers is career fade
+// wins, never resets, and is the game's status symbol.
+export interface OracleLeaderboards {
+  weekly: {
+    window: string;
+    items: Array<{
+      rank: number;
+      userId: string;
+      displayName: string;
+      points: number;
+      picks: number;
+    }>;
+  };
+  slayers: {
+    window: string;
+    items: Array<{
+      rank: number;
+      userId: string;
+      displayName: string;
+      fadeWins: number;
+      hasBadge: boolean;
+    }>;
+  };
+}
+
+export const getOracleToday = (token: string) =>
+  authGet<OracleToday>('/arena/oracle/today', token);
+
+// 404 = nothing scheduled today, 409 = locked at kickoff OR already picked.
+// All three surface as the shared "<status> <message>" Error; the card matches
+// on the status prefix to decide whether to re-read the day (a 409 means the
+// screen is stale) or just say what happened.
+export const submitOraclePick = (token: string, choice: OracleChoice) =>
+  authPost<OraclePickResult>('/arena/oracle/pick', token, { choice });
+
+export const getOracleHistory = (token: string) =>
+  authGet<OracleHistory>('/arena/oracle/history', token);
+
+export const getOracleLeaderboard = (token: string) =>
+  authGet<OracleLeaderboards>('/arena/oracle/leaderboard', token);
+
+// ---- Oracle display helpers -------------------------------------------------
+
+// The badge copy the backend deliberately doesn't ship. Keys mirror
+// ORACLE_BADGES in arena-items.service.ts; an unknown key (a badge shipped by a
+// newer API than this build) degrades to a generic medallion rather than
+// rendering nothing, because a fan who EARNED something must always see it.
+export function oracleBadgeMeta(key: string): {
+  icon: string;
+  name: string;
+  hint: string;
+} {
+  switch (key) {
+    case 'oracle_slayer':
+      return {
+        icon: '🏆',
+        name: 'Oracle Slayer',
+        hint: '10 career fade wins — you beat the house on purpose',
+      };
+    case 'oracle_streak_10':
+      return { icon: '🔮', name: 'Ten Straight', hint: '10-win streak' };
+    case 'oracle_streak_20':
+      return { icon: '👑', name: 'Twenty Straight', hint: '20-win streak' };
+    default:
+      return { icon: '🎖️', name: key.replace(/_/g, ' '), hint: 'Arena badge' };
+  }
+}
+
+// "Locks in 1h 24m" / "Locks in 45s" / "Locking now". Coarse above an hour,
+// down to seconds in the last minute — the granularity a fan actually reads at
+// each distance, and the reason the card's ticker runs every second.
+export function oracleLockCountdown(locksAt: string, now: number = Date.now()): string {
+  const ms = new Date(locksAt).getTime() - now;
+  if (Number.isNaN(ms)) return '';
+  if (ms <= 0) return 'Locking now';
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `Locks in ${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `Locks in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Locks in ${hrs}h ${mins % 60}m`;
+  return `Locks in ${Math.round(hrs / 24)}d`;
+}
+
+// "You're FADING the Oracle" / "You're RIDING with the Oracle" — the locked-in
+// state the buttons become.
+export function oracleChoiceLabel(choice: OracleChoice): string {
+  return choice === 'fade'
+    ? "You're FADING the Oracle"
+    : "You're RIDING with the Oracle";
+}
+
+// The graded reveal, in the fan's own terms. FOUR readings, not two, because a
+// RIDE and a FADE lose for opposite reasons and one line can't cover both:
+// a fade loss means the Oracle was right, but a ride loss means the Oracle was
+// WRONG and the fan went with it. Telling a rider "the Oracle was right" after
+// they lost alongside it is simply false.
+//
+// Never mocking, in any branch — the fan comes back tomorrow.
+export function oracleOutcomeCopy(
+  choice: OracleChoice,
+  outcome: OracleOutcome,
+): { headline: string; sub: string } {
+  if (outcome === 'void') {
+    return {
+      headline: 'Pushed — streaks safe.',
+      sub: 'The game was washed, so nothing counted against you. Your streaks carry.',
+    };
+  }
+  if (outcome === 'pending') {
+    return {
+      headline: 'The machine and the crowd await the final.',
+      sub: 'Your call is locked in. Come back when this one settles.',
+    };
+  }
+  if (outcome === 'win') {
+    return choice === 'fade'
+      ? {
+          headline: 'You beat the Oracle.',
+          sub: 'You took the other side and the other side landed.',
+        }
+      : {
+          headline: 'You rode it home.',
+          sub: 'The Oracle called it and you were right there with it.',
+        };
+  }
+  return choice === 'fade'
+    ? {
+        headline: 'The Oracle was right.',
+        sub: 'It held this time. There is another call tomorrow.',
+      }
+    : {
+        headline: 'The Oracle missed this one.',
+        sub: 'You rode with it and it went the other way. Tomorrow is a fresh call.',
+      };
+}
+
+// The inline celebration after a pick lands. Reads the streak's OWN account of
+// what happened rather than diffing numbers client-side — 'frozen' and 'reset'
+// are both "the play streak moved" to a diff, and they mean opposite things.
+export function streakOutcomeCopy(
+  outcome: StreakOutcome,
+  streaks: OracleStreaks,
+  freezesConsumed: number,
+): string {
+  switch (outcome) {
+    case 'frozen':
+      return `❄️ ${
+        freezesConsumed === 1 ? 'A freeze' : `${freezesConsumed} freezes`
+      } saved your streak — ${streaks.playStreak} 🔥`;
+    case 'reset':
+      return `Fresh start — play streak: ${streaks.playStreak} 🔥`;
+    default:
+      return `Play streak: ${streaks.playStreak} 🔥`;
+  }
+}
