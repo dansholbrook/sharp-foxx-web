@@ -14,6 +14,7 @@ import { useAuth } from '../auth-context';
 import { usePoints } from '../points-context';
 import { AppNav, AccessDenied } from '../nav';
 import { FanRecordLine, recordFromPicks } from '../fan-card';
+import { WaysToEarn } from '../ways-to-earn';
 import { canAccess } from '../roles';
 import {
   getMyPicks,
@@ -460,6 +461,11 @@ export default function MyPicksPage() {
               (nothing entered / no ledger rows -> the section doesn't render),
               so a fan who only makes predictions sees the page unchanged. */}
           <MyContestsSection token={token} />
+          {/* Ways to earn sits directly ABOVE Recent activity, which is the
+              honest reading order: here's how points arrive, and here's the
+              record of them arriving. Self-fetches and self-hides like its
+              neighbours. */}
+          <WaysToEarn token={token} />
           <RecentActivitySection token={token} />
 
           <section className="points-history">

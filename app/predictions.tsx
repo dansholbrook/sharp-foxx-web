@@ -389,12 +389,20 @@ function CollapsedSummary({
 // different copies of the same race conditions.
 //
 // `fetchRows` MUST be stable (useCallback it) — it keys the initial load.
+//
+// `onPicked` is the board's chance to do something scope-specific after a pick
+// LANDS (not after a 409). Today that's exactly one thing: the National Board
+// reports a national_pick earn. It lives here as a callback rather than as a
+// `scope` flag because the state machine has no business knowing what a national
+// question is — it knows a pick succeeded, and hands that fact upward.
 export function usePickBoard<T extends PredictionBase>({
   token,
   fetchRows,
+  onPicked,
 }: {
   token: string;
   fetchRows: () => Promise<T[]>;
+  onPicked?: () => void;
 }) {
   const { applyBalance } = usePoints();
   const [rows, setRows] = useState<T[] | null>(null);
@@ -465,6 +473,10 @@ export function usePickBoard<T extends PredictionBase>({
         // The response carries the fan's new balance straight out of the
         // server-side debit — the ⚡ chip updates from that, no refetch.
         applyBalance(result.balance);
+        // The pick is in. Fire the board's after-hook BEFORE the re-read so the
+        // earn (and its toast) isn't queued behind a network round-trip the fan
+        // isn't waiting on. It must not throw — useEngagementEarn never does.
+        onPicked?.();
         // Re-read the board so the counts/shares are the server's truth rather
         // than our +1, and the row comes back carrying a real myPick.
         await load();
@@ -487,7 +499,7 @@ export function usePickBoard<T extends PredictionBase>({
         });
       }
     },
-    [token, applyBalance, load],
+    [token, applyBalance, load, onPicked],
   );
 
   return { rows, load, onPick, optimistic, errors };

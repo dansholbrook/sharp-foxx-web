@@ -3,6 +3,7 @@ import './globals.css';
 import { AuthProvider } from './auth-context';
 import { FollowsProvider } from './follows-context';
 import { PointsProvider } from './points-context';
+import { EarnProvider } from './earn-context';
 
 export const metadata: Metadata = {
   title: 'Sharp Foxx — Admin',
@@ -21,10 +22,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        {/* PROVIDER ORDER IS LOAD-BEARING. Points must wrap Earn (an earn pushes
+            its new balance at the ⚡ chip), and Earn must wrap Follows (a
+            successful follow is itself an earn — see follows-context.tsx).
+            Auth wraps all three; nothing below it works without a token. */}
         <AuthProvider>
-          <FollowsProvider>
-            <PointsProvider>{children}</PointsProvider>
-          </FollowsProvider>
+          <PointsProvider>
+            <EarnProvider>
+              <FollowsProvider>{children}</FollowsProvider>
+            </EarnProvider>
+          </PointsProvider>
         </AuthProvider>
       </body>
     </html>

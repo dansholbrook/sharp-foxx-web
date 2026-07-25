@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
+import { useArticleReadEarn } from '../../earn-hooks';
 import { AppNav } from '../../nav';
 import {
   getContentItem,
@@ -96,6 +97,11 @@ export default function ArticlePage() {
   const byline = feedItem?.author
     ? `By ${feedItem.author} · Sharp Foxx`
     : 'By Sharp Foxx';
+
+  // "Read an article" earns once the fan has actually spent 20s here AND scrolled
+  // most of the way down — armed only once the story is on screen, so a loader,
+  // an error, or a not-found never pays. Hooks run before the early returns.
+  useArticleReadEarn(id, !loading && !error && !notFound && item !== null);
 
   if (!token) return null;
 

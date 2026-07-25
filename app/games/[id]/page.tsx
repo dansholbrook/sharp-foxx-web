@@ -23,6 +23,7 @@ import {
 } from '../../api';
 import { toYouTubeEmbed } from '../../video';
 import { PredictionsSection } from '../../predictions';
+import { useWatchLiveGameEarn } from '../../earn-hooks';
 
 // The shared pulsing LIVE badge (dot + wordmark). Styling/animation live in the
 // scoped .live-badge classes in globals.css so it reads identically here, on the
@@ -779,6 +780,12 @@ export default function GamePage() {
   // covered-only -- its scores come from ingestion on the events row, not here.
   const live = event?.status === 'live';
   const pulse = useLivePulse(token, id, live && !isFeed);
+
+  // "Watch a live game" earns after three minutes of VISIBLE time on this page.
+  // Same gate as the pulse — COVERED and LIVE: an ingested feed game is a
+  // scoreboard, not a Sharp Foxx broadcast, and there is nothing to watch on it.
+  // A backgrounded tab doesn't accumulate (see useWatchLiveGameEarn).
+  useWatchLiveGameEarn(id, live && !isFeed);
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;

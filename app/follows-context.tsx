@@ -19,6 +19,7 @@ import {
   ReactNode,
 } from 'react';
 import { useAuth } from './auth-context';
+import { useEngagementEarn } from './earn-context';
 import {
   getMyFollows,
   followTarget,
@@ -53,6 +54,10 @@ const FollowsContext = createContext<FollowsState | undefined>(undefined);
 
 export function FollowsProvider({ children }: { children: ReactNode }) {
   const { token } = useAuth();
+  // A follow is an EARN (team_follow, 20 pts). Fired here rather than in each
+  // Follow button so every surface that can follow — profile hero, team hero,
+  // suggestion card — pays identically without knowing about the economy.
+  const earn = useEngagementEarn();
   const [mine, setMine] = useState<FollowMineEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -116,6 +121,16 @@ export function FollowsProvider({ children }: { children: ReactNode }) {
           await unfollowTarget(token, { targetType: entry.targetType, targetId });
         } else {
           await followTarget(token, { targetType: entry.targetType, targetId });
+          // Only on the FOLLOW branch, and only after the POST resolved. The
+          // seeded intent is "your first 5 follows pay"; what actually enforces
+          // that today is the action's daily cap of 5, so the honest v1 is to
+          // report every successful follow and let the ledger decide — a fan
+          // past the cap gets a silent no-op, which is the whole point of the
+          // capped/skipped contract. Not awaited: the follow is already done and
+          // the button must not wait on a garnish. POST /follows is idempotent,
+          // so a re-follow of something already followed reports again and is
+          // capped rather than double-paying.
+          void earn('team_follow');
         }
       } catch {
         // Revert to the pre-toggle membership.
@@ -128,7 +143,7 @@ export function FollowsProvider({ children }: { children: ReactNode }) {
         );
       }
     },
-    [token, keys],
+    [token, keys, earn],
   );
 
   const value = useMemo<FollowsState>(

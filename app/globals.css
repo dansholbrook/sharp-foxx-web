@@ -11905,3 +11905,664 @@ a.follow-sugcard__name:hover {
     flex: 1;
   }
 }
+
+/* ===========================================================================
+   THE EARN TOAST — the quiet "+25 ⚡" moment.
+   =========================================================================== */
+
+/* The strip is always mounted (it's the aria-live region — a live region has to
+   exist BEFORE its contents change for a screen reader to announce them), so it
+   must not eat clicks when empty. pointer-events are re-enabled per toast only
+   for its own box, and nothing in a toast is interactive anyway. */
+.earntoast-strip {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.earntoast {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 132px;
+  padding: 10px 16px;
+  background: var(--panel-raised);
+  border: 1px solid var(--accent-dim);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+  animation: earntoast-in 0.22s ease-out;
+}
+
+.earntoast__amount {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.15rem;
+  line-height: 1.1;
+  color: var(--accent);
+}
+
+.earntoast__bolt {
+  font-size: 0.9rem;
+}
+
+/* The promotion line: smaller and muted, because the NUMBER is the reward and
+   the promotion is the explanation for its size. */
+.earntoast__promo {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@keyframes earntoast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile: bottom-CENTER, above the thumb's usual resting place. */
+@media (max-width: 640px) {
+  .earntoast-strip {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    align-items: center;
+  }
+}
+
+/* A fan who asked for less motion gets the toast without the slide. */
+@media (prefers-reduced-motion: reduce) {
+  .earntoast {
+    animation: none;
+  }
+}
+
+/* ===========================================================================
+   WAYS TO EARN — the fan-facing earn menu on /picks. Mobile-first: rows stack
+   into label-over-value at narrow widths and only go side-by-side once there's
+   room for both.
+   =========================================================================== */
+
+.earnmenu {
+  margin-top: 32px;
+}
+
+.earnmenu__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.earnmenu__title {
+  margin-bottom: 0;
+}
+
+.earnmenu__sub {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+/* The promotion banner strip, above the rows it explains. */
+.earnmenu-promos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.earnmenu-promo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(
+    90deg,
+    rgba(201, 163, 78, 0.14),
+    rgba(201, 163, 78, 0.03)
+  );
+  border: 1px solid var(--accent-dim);
+  border-radius: 10px;
+}
+
+.earnmenu-promo__bolt {
+  color: var(--accent);
+}
+
+.earnmenu-promo__name {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.earnmenu-promo__terms {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.earnmenu-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.earnmenu-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 13px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.earnmenu-row:first-child {
+  border-top: none;
+}
+
+/* Done for today: muted, not hidden. The action is still real and still worth
+   knowing about — it just isn't paying again until tomorrow. */
+.earnmenu-row--done {
+  opacity: 0.62;
+}
+
+.earnmenu-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 210px;
+}
+
+.earnmenu-row__label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.earnmenu-row__desc {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.earnmenu-row__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.earnmenu-row__value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* The struck-through base value only renders when a promotion is boosting the
+   row — it's the "was" that makes the "now" mean something. */
+.earnmenu-row__base {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.earnmenu-row__pts {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.earnmenu-row__pts--boosted {
+  color: var(--accent);
+}
+
+.earnmenu-row__progress {
+  font-size: 0.74rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.earnmenu-row__progress--done {
+  color: var(--accent-dim);
+}
+
+.earnmenu-row__check {
+  margin-right: 4px;
+}
+
+/* ===========================================================================
+   /economy — THE ADMIN CONSOLE. A staff tool, so it leans desktop (the actions
+   table lays out in four columns from 900px up); below that every row folds
+   into a stack that still works one-handed at 390px.
+   =========================================================================== */
+
+.economy-readonly {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.economy-section {
+  margin-top: 36px;
+}
+
+.economy-section__head h2 {
+  margin-bottom: 6px;
+}
+
+.economy-section__note {
+  max-width: 68ch;
+  margin: 0 0 16px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+/* ---- Actions table ---- */
+
+.economy-atable {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.economy-arow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* A disabled action is muted but fully legible and fully editable — an admin
+   came here precisely to find (and often to re-enable) it. */
+.economy-arow--off {
+  background: var(--bg);
+  opacity: 0.7;
+}
+
+.economy-arow__id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.economy-arow__type {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  color: var(--accent);
+}
+
+/* The audit stamp is deliberately quiet: it matters when you go looking for it
+   ("who moved check-in to 100?"), never before. */
+.economy-arow__audit {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.economy-arow__copy,
+.economy-arow__nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.economy-arow__copy .economy-field {
+  flex: 1 1 240px;
+}
+
+.economy-arow__save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.economy-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.economy-field--num {
+  flex: 0 0 118px;
+  max-width: 118px;
+}
+
+.economy-field--wide {
+  flex: 1 1 280px;
+}
+
+.economy-field__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.economy-field__help {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.economy-field input {
+  padding: 9px 11px;
+  font-size: 0.9rem;
+}
+
+.economy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-end;
+  padding-bottom: 9px;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.economy-toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.economy-savebtn,
+.economy-newbtn,
+.economy-submit {
+  margin-top: 0;
+  padding: 9px 18px;
+  font-size: 0.72rem;
+}
+
+.economy-saved {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* Inline field-level failure, next to the button that refused. Not the .error
+   box: that's a page-level statement, and this is one row's problem. */
+.economy-rowerr {
+  font-size: 0.8rem;
+  color: var(--warn);
+}
+
+.economy-danger:hover:not(:disabled) {
+  color: var(--warn);
+}
+
+/* Four-across once there's room: identity, copy, numbers, save. */
+@media (min-width: 900px) {
+  .economy-arow {
+    grid-template-columns: 200px minmax(0, 1.4fr) auto auto;
+    align-items: start;
+  }
+
+  .economy-arow__id {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .economy-arow__save {
+    flex-direction: column;
+    align-items: flex-start;
+    padding-top: 22px;
+  }
+}
+
+/* ---- Promotions ---- */
+
+.economy-createbox {
+  margin: 4px 0 20px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+}
+
+.economy-createbox__title {
+  margin: 0 0 12px;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  color: var(--accent);
+}
+
+.economy-pform {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.economy-pform__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.economy-pform__grid .economy-field {
+  flex: 1 1 200px;
+}
+
+/* The multiplier keeps its narrow width even inside the flexible grid — it's a
+   two-character number and a wide box would imply otherwise. */
+.economy-pform__grid .economy-field--num {
+  flex: 0 0 118px;
+}
+
+.economy-applies {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.economy-applies legend {
+  padding: 0 6px;
+}
+
+.economy-applies__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.economy-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.economy-chip--on {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.economy-chip input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.economy-pform__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.economy-plist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.economy-prow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.economy-prow--off {
+  opacity: 0.66;
+}
+
+.economy-prow__main {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+.economy-prow__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.economy-prow__mult {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.economy-prow__name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.economy-prow__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.79rem;
+  color: var(--muted);
+}
+
+.economy-prow__applies {
+  color: var(--muted);
+}
+
+.economy-prow__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+/* Row-level failure (a 409 on a delete that raced a start, say) spans the row
+   rather than sitting in one corner of it. */
+.economy-prow__err {
+  flex: 1 1 100%;
+  margin-top: 0;
+}
+
+.economy-prow .economy-pform {
+  flex: 1 1 100%;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* The window chips. upcoming/active/past are the same three states the API's
+   ?scope filter uses, so they're worth naming identically. */
+.economy-pchip {
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.economy-pchip--active {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.economy-pchip--upcoming {
+  color: var(--text);
+}
+
+.economy-pchip--off {
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+
+@media (max-width: 520px) {
+  .economy-field--num {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .economy-toggle {
+    align-self: flex-start;
+    padding-bottom: 0;
+  }
+
+  .economy-prow__actions {
+    width: 100%;
+  }
+}

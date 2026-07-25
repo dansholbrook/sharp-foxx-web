@@ -2986,8 +2986,14 @@ export function squaresPerSquareLabel(config: ContestConfig): string {
 }
 
 // A human line for one ledger row's action_type. Mirrors the backend's action
-// vocabulary (contest_entry/contest_payout/adjustment + the engagement_* set);
+// vocabulary (contest_entry/contest_payout/adjustment + the engagement set);
 // an unknown type degrades to its slug de-underscored rather than rendering raw.
+//
+// BOTH SPELLINGS of the engagement actions are here on purpose. The canonical
+// keys (article_read, watch_live_game, …) are what the economy writes today; the
+// engagement_* names are what the pre-economy ledger wrote, and point_events is
+// APPEND-ONLY, so those historical rows are still in a fan's statement and still
+// need a label. See LEGACY_ACTION_ALIASES in engagement-actions.ts.
 export function ledgerActionLabel(actionType: string): string {
   switch (actionType) {
     case 'contest_entry':
@@ -2996,10 +3002,19 @@ export function ledgerActionLabel(actionType: string): string {
       return 'Contest payout';
     case 'adjustment':
       return 'Adjustment';
+    case 'daily_checkin':
+      return 'Daily check-in';
+    case 'team_follow':
+      return 'Followed a team';
+    case 'referral_bonus':
+      return 'Referral bonus';
+    case 'article_read':
     case 'engagement_article_read':
       return 'Read an article';
+    case 'watch_live_game':
     case 'engagement_game_watch':
       return 'Watched a game';
+    case 'national_pick':
     case 'engagement_national_pick':
       return 'National pick';
     default:
@@ -3490,4 +3505,240 @@ export function parlayStakeRangeLabel(config: ContestConfig): string {
   return min === max
     ? `${points(min)} pts/ticket`
     : `${points(min)}–${points(max)} pts/ticket`;
+}
+
+// ============================================================================
+// THE ENGAGEMENT ECONOMY — what passive activity is worth, and the admin dials
+// that set it. Mirrors economy.service.ts / points-ledger.service.ts.
+//
+// POINTS ONLY, same as everything else on this ledger: a closed-loop score with
+// no cash value. An "earn" is a fan being paid for showing up, reading, and
+// picking — never for spending money.
+//
+// TWO AUDIENCES, one table pair, and the split matters for the types below:
+//   * FAN   — GET /points/earn-menu + POST /points/engagement. Point values come
+//             back PRE-MULTIPLIED (a live 2x weekend turns a 25-point check-in
+//             into 50) with the promotion named alongside, so the UI never does
+//             the arithmetic. Multipliers here are NUMBERS: the backend's config
+//             cache is the one place the numeric(3,1) crosses to Number().
+//   * ADMIN — GET/PATCH /economy/actions, CRUD /economy/promotions. These return
+//             raw table rows, so a promotion's multiplier arrives as the numeric
+//             STRING pg hands over. Format it with formatMultiplier(), never
+//             math on it — same rule money lives under (CLAUDE.md).
+// ============================================================================
+
+// Every action_type the economy knows. The set is CODE-DEFINED on the backend
+// (engagement-actions.ts): each one needs a hook that can actually fire it, so
+// admins tune the rows but never add or remove them. Mirrored here because the
+// promotion editor's applies-to picker has to offer exactly this list.
+export const ENGAGEMENT_ACTION_TYPES = [
+  'daily_checkin',
+  'watch_live_game',
+  'article_read',
+  'national_pick',
+  'team_follow',
+  'referral_bonus',
+] as const;
+
+export type EngagementActionType = (typeof ENGAGEMENT_ACTION_TYPES)[number];
+
+// What a CLIENT may self-report. referral_bonus is server-fired only — it's
+// worth 100 points and pays SOMEONE ELSE, so a self-reportable one would be a
+// mint. The endpoint's zod enum enforces this; the type stops us sending it.
+export type ClientEarnAction = Exclude<EngagementActionType, 'referral_bonus'>;
+
+// POST /points/engagement's answer. THE IMPORTANT PART: an engagement earn
+// never errors at the fan. Hitting today's cap comes back `capped`, a disabled
+// or zero-valued action comes back `skipped`, and BOTH carry a null balance and
+// null points — nothing was written. Only a real earn has numbers in it.
+export interface EarnResult {
+  balance: number | null;
+  lifetimeEarned: number | null;
+  // Today's limit swallowed it.
+  capped: boolean;
+  // The action is off, unknown, or priced at 0.
+  skipped: boolean;
+  eventId: string | null;
+  // What actually landed, promotion already applied.
+  points: number | null;
+  // Set only when a promotion boosted this earn — what to tell the fan.
+  promotion: { name: string; multiplier: number } | null;
+}
+
+// Report an engagement action. Fire-and-mostly-forget: see useEngagementEarn in
+// earn-context.tsx, which is the only thing that should call this.
+export const earnEngagement = (token: string, actionType: ClientEarnAction) =>
+  authPost<EarnResult>('/points/engagement', token, { actionType });
+
+// One live promotion, as the banner strip reads it. appliesTo null = every
+// engagement earn, which the UI words differently ("on everything").
+export interface EarnMenuPromotion {
+  name: string;
+  multiplier: number;
+  endsAt: string;
+  appliesTo: string[] | null;
+}
+
+// One row of the Ways-to-earn panel. `points` is what it pays RIGHT NOW;
+// `basePoints` is the unpromoted value, which only differs when `promotion` is
+// set — that pair is what lets the panel strike the old number through instead
+// of showing a bigger one with no explanation. dailyCap 0 = uncapped, in which
+// case remainingToday is null (render "unlimited", never "0 left").
+export interface EarnMenuItem {
+  actionType: string;
+  label: string;
+  description: string | null;
+  points: number;
+  basePoints: number;
+  dailyCap: number;
+  usedToday: number;
+  remainingToday: number | null;
+  promotion: { name: string; multiplier: number; endsAt: string } | null;
+}
+
+export interface EarnMenu {
+  items: EarnMenuItem[];
+  promotions: EarnMenuPromotion[];
+}
+
+// The whole panel in one call — enabled actions at today's price, the caller's
+// usage against each cap, and the live promotion banners. Open to every
+// authenticated role (everyone has a wallet).
+export const getEarnMenu = (token: string) =>
+  authGet<EarnMenu>('/points/earn-menu', token);
+
+// ---- Admin: the actions table ----------------------------------------------
+
+// A raw engagement_actions row. updatedAt/updatedBy are null until an admin has
+// tuned it — "never touched since seed" is a real state the console shows.
+export interface EngagementAction {
+  id: string;
+  actionType: string;
+  label: string;
+  description: string | null;
+  points: number;
+  dailyCap: number;
+  enabled: boolean;
+  sortOrder: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+// PATCH body. Every field optional, but an EMPTY patch is a 400 (it would stamp
+// the audit trail for a non-event). `description: null` CLEARS it; omitting it
+// leaves it alone — the one field where null and undefined differ.
+export interface UpdateEngagementActionInput {
+  points?: number;
+  dailyCap?: number;
+  enabled?: boolean;
+  label?: string;
+  description?: string | null;
+  sortOrder?: number;
+}
+
+// The DB CHECK bounds, mirrored here so the console can refuse an out-of-range
+// value before the round-trip. The backend's zod mirrors the same constraints —
+// three copies of one truth, on purpose: the DB is the guarantee, zod turns a
+// violation into a readable 400, and this turns it into an inline field error.
+export const ACTION_POINTS_MAX = 500;
+export const ACTION_DAILY_CAP_MAX = 20;
+
+// Every row, DISABLED INCLUDED — a disabled action is what an admin came for.
+// admin + regional_manager (RM is read-only; the PATCH below 403s for them).
+export const getEngagementActions = (token: string) =>
+  authGet<{ items: EngagementAction[] }>('/economy/actions', token);
+
+// Tune one action. Admin only. There is deliberately no create/delete: the
+// action SET ships with code (a hook must exist to fire it), so `enabled: false`
+// is the delete equivalent — it stops paying, the row and its history survive.
+export const updateEngagementAction = (
+  token: string,
+  id: string,
+  input: UpdateEngagementActionInput,
+) => authPatch<EngagementAction>(`/economy/actions/${id}`, token, input);
+
+// ---- Admin: promotions ------------------------------------------------------
+
+// Filters by WINDOW relative to now, not by `enabled`: a disabled promotion
+// inside its window still lists as active (with enabled:false), because that's
+// exactly what an admin asking "why isn't the 2x running?" needs to see.
+export type PromotionScope = 'upcoming' | 'active' | 'past' | 'all';
+
+// A raw point_promotions row. `multiplier` is the numeric STRING pg returns —
+// formatMultiplier() to display, Number() only where arithmetic is unavoidable.
+export interface PointPromotion {
+  id: string;
+  name: string;
+  multiplier: string;
+  startsAt: string;
+  endsAt: string;
+  // null = ALL engagement earns (the platform-wide case).
+  appliesTo: string[] | null;
+  enabled: boolean;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface CreatePromotionInput {
+  name: string;
+  // 1–5. Sent as a NUMBER (the API's zod takes a number and does the .toFixed(1)
+  // itself before handing pg the decimal string).
+  multiplier: number;
+  startsAt: string;
+  endsAt: string;
+  appliesTo?: string[] | null;
+  enabled?: boolean;
+}
+
+export interface UpdatePromotionInput {
+  name?: string;
+  multiplier?: number;
+  startsAt?: string;
+  endsAt?: string;
+  // null WIDENS to all engagement earns; omitted leaves the targeting alone.
+  appliesTo?: string[] | null;
+  enabled?: boolean;
+}
+
+export const PROMOTION_MULTIPLIER_MIN = 1;
+export const PROMOTION_MULTIPLIER_MAX = 5;
+
+export const getPromotions = (token: string, scope: PromotionScope = 'all') =>
+  authGet<{ items: PointPromotion[]; scope: PromotionScope }>(
+    `/economy/promotions?scope=${scope}`,
+    token,
+  );
+
+export const createPointPromotion = (token: string, input: CreatePromotionInput) =>
+  authPost<PointPromotion>('/economy/promotions', token, input);
+
+// Any field, including the enabled kill switch, on a RUNNING promotion — that's
+// the point of having one (a 5x melting the economy gets turned down at 9pm).
+export const updatePointPromotion = (
+  token: string,
+  id: string,
+  input: UpdatePromotionInput,
+) => authPatch<PointPromotion>(`/economy/promotions/${id}`, token, input);
+
+// Hard delete ONLY while startsAt is still in the future. A promotion that has
+// run is referenced by ledger notes and comes back 409 — the console shows
+// Disable instead of Delete for those, so this should never see one.
+export const deletePointPromotion = (token: string, id: string) =>
+  authDeleteJson<{ deleted: boolean; id: string }>(
+    `/economy/promotions/${id}`,
+    token,
+  );
+
+// Where a promotion sits relative to now. Derived client-side for the row chips
+// on the admin page (the list is fetched with scope=all so all three show at
+// once); the server's own scope filter uses the same boundaries.
+export function promotionWindowState(
+  p: Pick<PointPromotion, 'startsAt' | 'endsAt'>,
+  now: number = Date.now(),
+): 'upcoming' | 'active' | 'past' {
+  const starts = new Date(p.startsAt).getTime();
+  const ends = new Date(p.endsAt).getTime();
+  if (now < starts) return 'upcoming';
+  if (now >= ends) return 'past';
+  return 'active';
 }

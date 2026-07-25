@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { PickCard, usePickBoard } from './predictions';
 import { usePoints } from './points-context';
+import { useEngagementEarn } from './earn-context';
 import {
   getMyPicks,
   getNationalPredictions,
@@ -287,12 +288,21 @@ function NationalCaption({ p }: { p: NationalPrediction }) {
 export function NationalBoardBand({ token }: { token: string }) {
   const [expanded, setExpanded] = useState(false);
   const fetchRows = useCallback(() => getNationalPredictions(token), [token]);
+  // Calling a house question is an EARN (national_pick, 10 pts, capped at 2/day).
+  // Wired here and not in usePickBoard because a GAME pick is not this action —
+  // the game board shares the same state machine and must stay silent.
+  const earn = useEngagementEarn();
+  const onPicked = useCallback(() => void earn('national_pick'), [earn]);
   // The SAME state machine the game board runs on — optimistic taps, per-card
   // 409s, the balance push. A fan picks a house question right here on the feed.
   // No poll: a national question settles on a scale of weeks, so there is
   // nothing to poll for, and the feed shouldn't pay for a timer that never
   // changes anything. The board re-reads itself after each pick.
-  const { rows, onPick, optimistic, errors } = usePickBoard({ token, fetchRows });
+  const { rows, onPick, optimistic, errors } = usePickBoard({
+    token,
+    fetchRows,
+    onPicked,
+  });
 
   // The accordion. These cards are FULL pick cards stacked one-per-row at rail
   // width, so two open questions used to make the rail enormous. Here each card

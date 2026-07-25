@@ -100,6 +100,13 @@ const NAV_ITEMS: NavItem[] = [
   // exactly what a national question isn't. Sits last among the staff queues,
   // next to Reports: like Reports, it's a house-wide surface, not territory work.
   { href: '/national-admin', label: 'National', roles: ['admin', 'regional_manager'] },
+  // The engagement economy console: what each passive action pays, and the
+  // scheduled multiplier windows. admin + regional_manager, matching the
+  // backend's ECONOMY_READ_ROLES — but an RM sees it READ-ONLY, because every
+  // write route narrows to @Roles('admin'). An RM needs to answer "why did my
+  // fans stop earning check-in points?" without being able to move the economy.
+  // Next to National and Reports: another house-wide surface, not territory work.
+  { href: '/economy', label: 'Economy', roles: ['admin', 'regional_manager'] },
   { href: '/dashboard', label: 'Reports', roles: ['admin'] },
 ];
 
@@ -151,6 +158,11 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   // depends on the scope in the body/row -- so this gate keeps a rep off a page
   // whose every button would 403 rather than duplicating that check.
   { match: (p) => p === '/national-admin', roles: ['admin', 'regional_manager'] },
+  // The economy console. Same READ gate as the backend (admin + RM); the page
+  // itself renders read-only for an RM rather than letting them fire writes that
+  // would 403. Same pattern as /national-admin: keep the role off pages whose
+  // every button fails, and narrow within the page where the backend narrows.
+  { match: (p) => p === '/economy', roles: ['admin', 'regional_manager'] },
   // The athlete's NIL home (deliverables + wallet) -- athlete-only.
   { match: (p) => p === '/nil', roles: ['athlete'] },
   // Staff NIL review queue -- same gate as GET /nil/review-queue.
