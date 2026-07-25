@@ -8646,7 +8646,7 @@ a.follow-sugcard__name:hover {
 .frail-picks:empty,
 .frail-natboard:empty,
 .frail-contests:empty,
-.frail-oracle:empty,
+.frail-arena:empty,
 .frail-open:empty {
   display: none;
 }
@@ -8848,7 +8848,7 @@ a.follow-sugcard__name:hover {
   /* The Oracle teaser leads on mobile, ahead of even the points hero: it is
      the one band that expires, and a phone user who opens the feed at 6pm
      needs to see tonight's call before their balance. */
-  .frail-oracle {
+  .frail-arena {
     order: 0;
   }
   .frail-points {
@@ -13628,28 +13628,33 @@ a.follow-sugcard__name:hover {
   }
 }
 
-/* ---- THE FEED TEASER ----------------------------------------------------- */
+/* ---- THE FEED TEASER (now Arena-wide, not Oracle-only) -------------------
+   ONE card for every Arena game — see arena-teaser.tsx for the priority ladder.
+   The styling stays exactly what the Oracle's teaser was: a single gold-edged
+   tile in the rail, lit from its top-left corner. It was never Oracle-specific
+   in anything but its class names, and a fan should not be able to tell that the
+   band now speaks for two games. */
 
-.oracle-teaser__head {
+.arena-teaser__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 12px;
 }
 
-.oracle-teaser .row-title {
+.arena-teaser .row-title {
   display: flex;
   align-items: center;
   gap: 7px;
   margin: 0;
 }
 
-.oracle-teaser__mark {
+.arena-teaser__mark {
   font-size: 0.95rem;
   filter: drop-shadow(0 0 6px rgba(201, 163, 78, 0.4));
 }
 
-.oracle-teaser__card {
+.arena-teaser__card {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -13666,34 +13671,29 @@ a.follow-sugcard__name:hover {
     transform 0.12s ease;
 }
 
-.oracle-teaser__card:hover {
+.arena-teaser__card:hover {
   border-color: var(--accent);
   text-decoration: none;
   transform: translateY(-1px);
 }
 
-.oracle-teaser__call {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.oracle-teaser__team {
+/* The headline line. Serif, because it is the one sentence on the card that is
+   doing the selling — and it wraps rather than truncating: a town name or a
+   team name cut off mid-word is worse than two lines. */
+.arena-teaser__lead {
   font-family: var(--font-serif);
-  font-size: 1.1rem;
-  font-weight: 700;
-  line-height: 1.15;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.25;
   color: var(--text);
 }
 
-.oracle-teaser__conf {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--accent);
+.arena-teaser__lead strong {
+  font-weight: 700;
+  color: var(--accent-hover);
 }
 
-.oracle-teaser__state {
+.arena-teaser__state {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -13705,25 +13705,19 @@ a.follow-sugcard__name:hover {
   color: var(--text);
 }
 
-.oracle-teaser__state--open {
+/* GOLD FOR WHAT WANTS THE FAN, muted for what is already done. 'riding' keeps
+   the gold because something of theirs is still live tonight. */
+.arena-teaser__state--open,
+.arena-teaser__state--riding,
+.arena-teaser__state--win {
   color: var(--accent);
 }
 
-.oracle-teaser__state--fade {
-  color: var(--accent);
-}
-
-.oracle-teaser__state--win {
-  color: var(--accent);
-}
-
-.oracle-teaser__state--none,
-.oracle-teaser__state--void,
-.oracle-teaser__state--loss {
+.arena-teaser__state--quiet {
   color: var(--muted);
 }
 
-.oracle-teaser__when {
+.arena-teaser__when {
   font-weight: 400;
   color: var(--muted);
 }
@@ -13753,12 +13747,1571 @@ a.follow-sugcard__name:hover {
   }
 
   .oracle-btn,
-  .oracle-teaser__card {
+  .arena-teaser__card {
     transition: none;
   }
 
   .oracle-btn:active:not(:disabled),
-  .oracle-teaser__card:hover {
+  .arena-teaser__card:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================================
+   THE ARENA HUB — /arena.
+   ============================================================================
+   THE SAME PALETTE, ARRANGED AS A LOBBY. Not one new colour and not one new
+   font: the hub is the warm near-black and the single gold accent every other
+   surface uses, and what makes it read as a destination is COMPOSITION — a
+   marquee at the top, a strip of the fan's own identity under it, and the games
+   as full-bleed tiles rather than as a list.
+
+   MOBILE-FIRST AT 390px. The base rules ARE the phone: the games stack in one
+   column, each tile is a full-width tap target, and the strip wraps. The only
+   breakpoint puts the tiles side by side once there is room — the phone never
+   pays for the desktop case.
+
+   THE TILES ARE LINKS, so every hover/active affordance lives on the whole
+   block. A card that shows today's state and does nothing when you tap the
+   middle of it is a card that has taught the fan not to tap it.
+   ============================================================================ */
+
+.arena-page {
+  max-width: 860px;
+}
+
+/* ---- The marquee --------------------------------------------------------- */
+
+.arena-hero {
+  margin: 0 0 22px;
+  padding: 26px 18px 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 80% at 50% -20%, rgba(201, 163, 78, 0.18), transparent 62%),
+    linear-gradient(180deg, #221d14 0%, var(--panel) 60%, #17140e 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 18px 40px rgba(0, 0, 0, 0.42);
+  text-align: center;
+}
+
+.arena-hero__mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 66px;
+  height: 66px;
+  margin-bottom: 4px;
+}
+
+/* The ring of light behind the fox — the same breathing glow the Oracle's mark
+   uses, reused rather than re-tuned so the two surfaces are visibly one family. */
+.arena-hero__mark::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(201, 163, 78, 0.26) 0%,
+    rgba(201, 163, 78, 0.08) 45%,
+    transparent 70%
+  );
+  animation: oracle-breathe 6s ease-in-out infinite;
+}
+
+.arena-hero__fox {
+  font-size: 2.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+}
+
+.arena-hero__title {
+  margin: 2px 0 6px;
+  font-family: var(--font-serif);
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.arena-hero__standfirst {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+/* ---- The shared strip ---------------------------------------------------- */
+
+.arena-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.arena-strip__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.arena-strip__empty {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.arena-strip__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.arena-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--panel-raised);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.arena-chip__game {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.arena-chip__stat {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.arena-chip__freezes {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 0.72rem;
+}
+
+/* An unearned freeze is drawn, not omitted: the cap is legible without a
+   sentence explaining it. */
+.arena-freeze {
+  opacity: 0.22;
+  filter: grayscale(1);
+}
+
+.arena-freeze--on {
+  opacity: 1;
+  filter: none;
+}
+
+.arena-medallions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.arena-medallion {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  background: rgba(201, 163, 78, 0.09);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+a.arena-medallion:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.arena-medallion__icon {
+  font-size: 0.9rem;
+}
+
+/* ---- The game tiles ------------------------------------------------------ */
+
+.arena-games {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 0 22px;
+}
+
+.arena-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    transform 0.12s ease,
+    box-shadow 0.15s ease;
+}
+
+a.arena-tile:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36);
+}
+
+a.arena-tile:active {
+  transform: translateY(0);
+}
+
+/* Each game gets its own corner light, so the two tiles are distinguishable at
+   a glance without either leaving the palette. */
+.arena-tile--oracle {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(201, 163, 78, 0.13), transparent 60%),
+    var(--panel);
+}
+
+.arena-tile--trail {
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(201, 163, 78, 0.11), transparent 60%),
+    var(--panel);
+}
+
+/* The coming-soon tile is deliberately flatter and dimmer: it is a promise, not
+   an invitation, and it must not compete with the two games that ARE playable. */
+.arena-tile--dead {
+  border-style: dashed;
+  border-color: var(--border);
+  background: transparent;
+  cursor: default;
+}
+
+.arena-tile__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.arena-tile__mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: rgba(201, 163, 78, 0.08);
+}
+
+.arena-tile--soon .arena-tile__mark {
+  background: transparent;
+  opacity: 0.55;
+}
+
+.arena-tile__glyph {
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+/* The second glyph hangs off the first's lower-right — an attribute, not a
+   second subject. Same composition as the Oracle card's mark. */
+.arena-tile__glyph--sub {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  font-size: 0.85rem;
+  filter: drop-shadow(0 0 5px rgba(201, 163, 78, 0.5));
+}
+
+.arena-tile__names {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.arena-tile__name {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.arena-tile__tagline {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.arena-tile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.arena-tile__placeholder {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.arena-tile__where {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.arena-tile__town {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.arena-tile__region {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* THE STATUS LINE — the whole reason a tile exists. Sized up from the tagline
+   deliberately: the game's NAME is furniture, and today's state is the news. */
+.arena-tile__state {
+  display: block;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.arena-tile__state--open {
+  color: var(--accent);
+}
+
+.arena-tile__state--ride,
+.arena-tile__state--fade {
+  color: var(--accent-hover);
+}
+
+.arena-tile__state--win {
+  color: var(--accent);
+}
+
+.arena-tile__state--quiet,
+.arena-tile__state--soon {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.arena-tile__pts {
+  margin-right: 6px;
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+}
+
+.arena-tile__when {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.arena-tile__nextpill {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking);
+  color: var(--accent);
+  vertical-align: 1px;
+}
+
+.arena-tile__soonfoot {
+  margin: 0;
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The position bar on the Trail tile. Same fill treatment as every other
+   progress meter on the site. */
+.arena-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.arena-progress__track {
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-raised);
+  overflow: hidden;
+}
+
+.arena-progress__fill {
+  width: var(--pct, 0%);
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent-hover));
+  transition: width 0.4s ease;
+}
+
+.arena-progress__label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.arena-fineprint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---- Wider than a phone: the games sit side by side. --------------------- */
+
+@media (min-width: 720px) {
+  .arena-games {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .arena-tile {
+    flex: 1 1 260px;
+  }
+
+  .arena-hero__title {
+    font-size: 2.3rem;
+  }
+}
+
+/* ============================================================================
+   THE FOXX TRAIL — /arena/trail.
+   ============================================================================
+   THE ROAD-TRIP REGISTER, ON THE SAME TOKENS. Where the Oracle card is lit from
+   within (a machine with an opinion), the Trail is lit like a roadside at dusk:
+   the same gold, used as a ROUTE rather than as a glow. Nothing new in the
+   palette; what changes is that the accent is drawn as a LINE.
+
+   MOBILE-FIRST, AND THE MAP IS WHY THIS IS EASY. A route is an ordered list and
+   a phone is a tall scroll, so the map's base layout is already the right one at
+   390px — the desktop rule only stops the road getting silly-wide. Every other
+   block here is a single column that widens rather than rearranges.
+
+   THE TWO PICK BUTTONS ARE THUMB-SIZED, matching the Oracle's: 88px on a phone,
+   the whole block tappable, team names at full weight. The game is one tap a day
+   and this is the tap.
+   ============================================================================ */
+
+.trail-page {
+  max-width: 720px;
+}
+
+.trail-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.trail-section__title {
+  margin: 0 0 12px;
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.trail-section__head .trail-section__title {
+  margin: 0;
+}
+
+/* ---- Today's town card --------------------------------------------------- */
+
+.trail-card {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 24px;
+  padding: 24px 18px 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background:
+    radial-gradient(130% 60% at 50% 0%, rgba(201, 163, 78, 0.13), transparent 62%),
+    linear-gradient(180deg, #201c14 0%, var(--panel) 55%, #17140e 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 18px 40px rgba(0, 0, 0, 0.42);
+  text-align: center;
+}
+
+/* The hairline of gold along the top edge — the road entering the card. Same
+   "this one is special" tell the Oracle card carries. */
+.trail-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent) 35%,
+    var(--accent-hover) 50%,
+    var(--accent) 65%,
+    transparent
+  );
+  opacity: 0.7;
+}
+
+/* LOCKED: the gold banks down. First pitch has passed and nothing on the card
+   is actionable, so it stops inviting a tap that would 409. */
+.trail-card--locked::before {
+  opacity: 0.3;
+}
+
+.trail-card--quiet,
+.trail-card--rest {
+  background: linear-gradient(180deg, #1c1811 0%, var(--panel) 70%);
+}
+
+.trail-mark {
+  font-size: 2.2rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+}
+
+.trail-kicker {
+  margin: 6px 0 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.trail-quiet__title {
+  margin: 8px 0 6px;
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.trail-quiet__sub {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+/* ---- The town as the hero ------------------------------------------------ */
+
+.trail-town {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.trail-town__lede {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 10px 0 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.trail-town__bus {
+  font-size: 1.1rem;
+}
+
+/* THE TOWN NAME. The biggest type on the page, by a distance — the place is the
+   subject, and everything else on the card is context for it. */
+.trail-town__name {
+  margin: 2px 0 4px;
+  font-family: var(--font-serif);
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1.08;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.trail-town__region {
+  padding: 3px 10px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* THE CORRESPONDENT'S LINE. Editorial italics in the masthead serif — the one
+   piece of authored voice on the card, and it should read like a dispatch
+   rather than like UI copy. */
+.trail-town__intro {
+  max-width: 44ch;
+  margin: 14px auto 0;
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.trail-town__school {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.trail-matchup {
+  margin: 18px 0 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ---- Rest stop ----------------------------------------------------------- */
+
+.trail-rest {
+  margin-top: 18px;
+  padding: 18px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+
+.trail-rest__icon {
+  font-size: 1.6rem;
+}
+
+.trail-rest__headline {
+  margin: 6px 0 4px;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.trail-rest__sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---- The two buttons ----------------------------------------------------- */
+
+.trail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+
+.trail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 88px;
+  padding: 12px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 100% at 50% 0%, rgba(201, 163, 78, 0.14), transparent 70%),
+    var(--panel-raised);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.1s ease,
+    background 0.15s ease;
+}
+
+.trail-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.trail-btn:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.trail-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* The button the fan just hit, before the response lands. */
+.trail-btn--picking {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.16);
+  opacity: 1;
+}
+
+.trail-btn__team {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.trail-btn__hint {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---- The frozen call ----------------------------------------------------- */
+
+.trail-locked-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin: 4px 0 16px;
+  padding: 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 14px;
+  background: rgba(201, 163, 78, 0.1);
+}
+
+.trail-locked-in__badge {
+  font-size: 1.4rem;
+}
+
+.trail-locked-in__text {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.trail-locked-in__text strong {
+  color: var(--accent-hover);
+}
+
+.trail-locked-in__pay {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* ---- The celebration ----------------------------------------------------- */
+
+.trail-celebrate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px dashed var(--accent-dim);
+  border-radius: 12px;
+  animation: trail-rise 0.4s ease-out;
+}
+
+.trail-celebrate__streak {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.trail-celebrate__freeze,
+.trail-celebrate__chest {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.trail-error {
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+/* ---- The reveal ---------------------------------------------------------- */
+
+.trail-reveal {
+  margin: 4px 0 16px;
+  padding: 16px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel-raised);
+  animation: trail-rise 0.45s ease-out;
+}
+
+.trail-reveal--win {
+  border-color: var(--accent-dim);
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgba(201, 163, 78, 0.18), transparent 70%),
+    var(--panel-raised);
+}
+
+.trail-reveal__points {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--accent-hover);
+}
+
+.trail-reveal__headline {
+  margin: 4px 0 4px;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.trail-reveal__sub {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.trail-reveal__result {
+  margin: 10px 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.trail-reveal__result strong {
+  color: var(--text);
+}
+
+/* ---- The split ----------------------------------------------------------- */
+
+.trail-split {
+  margin: 0 0 14px;
+}
+
+.trail-split__labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.trail-split__label strong {
+  color: var(--text);
+}
+
+.trail-split__label--home {
+  text-align: right;
+}
+
+.trail-split__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-raised);
+  overflow: hidden;
+}
+
+.trail-split__bar--empty {
+  opacity: 0.5;
+}
+
+/* Away on the left, home on the right — the way the matchup string reads. */
+.trail-split__fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--accent-hover) 0%,
+    var(--accent-hover) var(--away-pct, 50%),
+    var(--border-strong) var(--away-pct, 50%),
+    var(--border-strong) 100%
+  );
+  transition: background 0.4s ease;
+}
+
+.trail-split__none {
+  margin: 6px 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* ---- Score + clock ------------------------------------------------------- */
+
+.trail-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.trail-score__live {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.trail-score__side {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.trail-score__team {
+  color: var(--muted);
+}
+
+.trail-score__num {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.trail-score__at {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.trail-foot {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.trail-foot__clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.trail-foot__at {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.trail-foot__locked {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---- The streak rail ----------------------------------------------------- */
+
+.trail-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 0 26px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.trail-rail__streaks {
+  display: flex;
+  gap: 10px;
+}
+
+.trail-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  flex: 1 1 0;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+
+.trail-stat__icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.trail-stat__value {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.trail-stat__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+.trail-freezes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.trail-freezes__tokens {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.trail-freeze {
+  opacity: 0.22;
+  filter: grayscale(1);
+}
+
+.trail-freeze--on {
+  opacity: 1;
+  filter: none;
+}
+
+.trail-freezes__count {
+  margin-left: 4px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.trail-freezes__hint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* THE SCENIC ROUTE — seven pips, not "5/7". The ask is "come back twice more",
+   and seven boxes say that where a fraction makes the fan do the subtraction. */
+.trail-scenic {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.trail-scenic__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.trail-scenic__title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.trail-scenic__hint {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.trail-scenic__pips {
+  display: flex;
+  gap: 5px;
+}
+
+.trail-pip {
+  flex: 1 1 0;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  transition: background 0.3s ease;
+}
+
+.trail-pip--on {
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-dim));
+  border-color: var(--accent-dim);
+}
+
+/* ============================================================================
+   THE ROUTE MAP — the centrepiece.
+   ============================================================================
+   ONE GOLD LINE DOWN THE PAGE, drawn as an absolutely-positioned gradient on the
+   list itself rather than as a border per row: a per-row border would break at
+   every leg header and leave the road in pieces. The line runs BEHIND the
+   headers, which is exactly what a road does when it passes a sign.
+
+   The line's ends are inset by the height of half a marker, so the road starts
+   AT town one and finishes AT the last town rather than bleeding off the block.
+
+   A WON STOP GLOWS. That is the whole reward loop made visible: scroll the map
+   and the trip you have taken is lit and the road ahead is not. Under
+   prefers-reduced-motion the glow STAYS (it is a static shadow, and it carries
+   meaning) — only the bus's pulse stops.
+   ============================================================================ */
+
+.trail-map {
+  margin: 0 0 26px;
+}
+
+.trail-map__count {
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.trail-road {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trail-road::before {
+  content: '';
+  position: absolute;
+  top: 26px;
+  bottom: 26px;
+  left: 20px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    var(--accent-dim) 0%,
+    rgba(169, 134, 59, 0.35) 45%,
+    rgba(169, 134, 59, 0.18) 100%
+  );
+}
+
+.trail-stopwrap {
+  position: relative;
+}
+
+/* ---- Leg headers --------------------------------------------------------- */
+
+.trail-leg {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  /* Indented past the road (which runs at x=20px) rather than sitting on an
+     opaque strip: the line carries on behind the sign, which is what a road
+     does when it passes one. */
+  margin: 18px 0 6px;
+  padding: 4px 0 4px 52px;
+}
+
+.trail-stopwrap:first-child .trail-leg {
+  margin-top: 0;
+}
+
+.trail-leg__name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.trail-leg__count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.trail-leg--done .trail-leg__name,
+.trail-leg--done .trail-leg__count {
+  color: var(--accent);
+}
+
+.trail-leg__trophy {
+  font-size: 0.85rem;
+}
+
+/* ---- Stops --------------------------------------------------------------- */
+
+.trail-stop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+
+.trail-stop__marker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 30px;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+/* AHEAD: a hollow dot on the line. No emoji — the road ahead is quiet. */
+.trail-stop--ahead .trail-stop__marker::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--bg);
+}
+
+/* WON: the marker sits in a lit disc, and the glow is the reward. */
+.trail-stop--won .trail-stop__marker::before {
+  content: '';
+  position: absolute;
+  inset: 0 6px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(201, 163, 78, 0.32) 0%,
+    rgba(201, 163, 78, 0.1) 55%,
+    transparent 72%
+  );
+  box-shadow: 0 0 12px rgba(201, 163, 78, 0.28);
+}
+
+.trail-stop--won .trail-stop__marker {
+  filter: drop-shadow(0 0 5px rgba(201, 163, 78, 0.5));
+}
+
+/* CURRENT: the bus, bigger than everything else on the road, breathing. */
+.trail-stop--current .trail-stop__marker {
+  font-size: 1.4rem;
+  filter: drop-shadow(0 0 8px rgba(201, 163, 78, 0.55));
+  animation: trail-bus 2.8s ease-in-out infinite;
+}
+
+.trail-stop__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.trail-stop__name {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--muted);
+}
+
+.trail-stop--won .trail-stop__name {
+  color: var(--text);
+}
+
+.trail-stop--current .trail-stop__name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+}
+
+.trail-stop__here {
+  padding: 2px 7px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.trail-stop__meta {
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* The road ahead is dimmed rather than hidden — a fan should be able to read
+   where they are going, just not mistake it for where they have been. */
+.trail-stop--ahead .trail-stop__meta {
+  opacity: 0.75;
+}
+
+.trail-stop__when {
+  color: var(--accent-dim);
+}
+
+.trail-road__end {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 12px;
+  background: rgba(201, 163, 78, 0.1);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+}
+
+/* ---- The pennant book ---------------------------------------------------- */
+
+.trail-book {
+  margin: 0 0 26px;
+}
+
+.trail-book__count {
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.trail-trophies {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.trail-trophy {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 12px;
+  background: rgba(201, 163, 78, 0.09);
+}
+
+.trail-trophy__icon {
+  font-size: 1.5rem;
+}
+
+.trail-trophy__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.trail-trophy__title {
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.trail-trophy__sub {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+/* THE PENNANTS AS SMALL COLLECTIBLE CARDS. A grid rather than a list: a fan
+   mid-season holds dozens, and a column of dozens is an inventory screen where a
+   grid is a scrapbook page. Two up on a phone, more as the width allows. */
+.trail-pennants {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trail-pennant {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(201, 163, 78, 0.12), transparent 62%),
+    var(--panel-raised);
+}
+
+.trail-pennant__flag {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.trail-pennant__town {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.trail-pennant__region {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.trail-pennant__date {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* ---- The boards ---------------------------------------------------------- */
+
+.trail-boards {
+  margin: 0 0 26px;
+}
+
+.trail-boards__window {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.trail-fineprint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---- Wider than a phone -------------------------------------------------- */
+
+@media (min-width: 560px) {
+  .trail-card {
+    padding: 30px 26px 24px;
+  }
+
+  .trail-town__name {
+    font-size: 2.5rem;
+  }
+
+  /* The two team buttons side by side once there is room for both names. */
+  .trail-actions {
+    flex-direction: row;
+  }
+
+  .trail-btn {
+    flex: 1 1 0;
+    min-height: 96px;
+  }
+}
+
+@keyframes trail-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The bus idling at its stop. Tiny — a marker that bounced would drag the eye
+   away from the town names, which are what the map is for. */
+@keyframes trail-bus {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* ---- Reduced motion ------------------------------------------------------
+   THE GLOWS STAY, THE MOVEMENT GOES. Every glow here is a static box-shadow
+   carrying meaning — a lit stop is a stop you took — so removing it would
+   remove information. What goes is everything that moves on its own: the hero's
+   breathing ring, the bus's idle, the reveal and celebration rises, and the
+   transitions on the bars and the tap targets. */
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-hero__mark::before {
+    animation: none;
+  }
+
+  .trail-stop--current .trail-stop__marker {
+    animation: none;
+  }
+
+  .trail-celebrate,
+  .trail-reveal {
+    animation: none;
+  }
+
+  .arena-progress__fill,
+  .trail-split__fill,
+  .trail-pip {
+    transition: none;
+  }
+
+  .arena-tile,
+  .trail-btn {
+    transition: none;
+  }
+
+  a.arena-tile:hover,
+  a.arena-tile:active,
+  .trail-btn:active:not(:disabled) {
     transform: none;
   }
 }

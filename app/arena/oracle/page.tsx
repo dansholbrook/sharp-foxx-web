@@ -25,9 +25,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
-import { canAccess } from '../roles';
+import { useAuth } from '../../auth-context';
+import { AppNav, AccessDenied } from '../../nav';
+import { canAccess } from '../../roles';
 import { TodayCard } from './today-card';
 import {
   getOracleHistory,
@@ -44,7 +44,7 @@ import {
   OracleStreaks,
   OracleToday,
   OracleBadge,
-} from '../api';
+} from '../../api';
 
 // The split moves while the crowd picks; nothing else on the card does. Same
 // 30s the contest boards use.

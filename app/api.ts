@@ -4151,3 +4151,395 @@ export function streakOutcomeCopy(
       return `Play streak: ${streaks.playStreak} 🔥`;
   }
 }
+
+// ============================================================================
+// FOXX TRAIL — the second Arena game, under /arena/trail.
+//
+// A SEASON, NOT A DAY. The Oracle is one call with no memory beyond a streak;
+// the Trail is a route of ordered towns, a per-fan POSITION on that route, and a
+// collection (pennants) that accumulates over months. Same free-daily chassis,
+// same streak block, completely different shape of progress — which is why the
+// two games get two sections here rather than one generic one.
+//
+// THE STREAK BLOCK IS SHARED, deliberately and on the backend's own terms
+// (trail.service.ts's streakBlock is a copy of the Oracle's, so "the streak
+// widget is one component that renders against any Arena game's response").
+// Aliased below rather than re-declared — two identical interfaces would drift.
+//
+// THE OUTCOME FIELD IS THE CONTRACT, same as the Oracle: myPick.outcome arrives
+// pre-collapsed to pending/win/loss/void. Nothing here re-derives it from the
+// day status and a nullable `correct`.
+//
+// TWO SHAPES THE BACKEND IS INCONSISTENT ABOUT, both typed defensively here
+// because a client that assumed the happy path would crash on an empty platform:
+//   * GET /map's no-season branch omits `seasonTrophyHeld` entirely.
+//   * GET /leaderboard's no-season branch returns `season_board: null` (snake
+//     case) instead of `seasonBoard`, so the field is genuinely absent there.
+// Both are optional below. Do NOT "fix" them by asserting — the null branches
+// are what an un-seeded environment returns.
+// ============================================================================
+
+// Trail day lifecycle. A fan never sees 'scheduled' (GET today runs the auto-
+// open sweep first) and 'voided' is how a REST STOP resolves in v1.
+export type TrailDayStatus = 'scheduled' | 'open' | 'graded' | 'voided';
+
+// Which team. The Trail has no house opinion to ride or fade — you pick a side.
+export type TrailSide = 'home' | 'away';
+
+// Same pre-derived outcome union the Oracle ships.
+export type TrailOutcome = 'pending' | 'win' | 'loss' | 'void';
+
+// The shared Arena streak block, under the name the Arena surfaces use. Same
+// object the Oracle returns — see the header.
+export type ArenaStreaks = OracleStreaks;
+
+// The lock countdown is Arena-shared, not Oracle-specific: both games lock at
+// first pitch and both read the same coarse-to-fine string. Re-exported under
+// the Arena name rather than duplicated; the Oracle's own files keep the name
+// they were written against.
+export const arenaLockCountdown = oracleLockCountdown;
+
+// The season the bus is driving. `sport` is free text on purpose (a demo season
+// on a sport we don't stream yet must not need an ALTER TYPE).
+export interface TrailSeason {
+  id: string;
+  sport: string;
+  name: string;
+  startsOn: string | null;
+  endsOn: string | null;
+  status: string;
+  createdAt: string;
+}
+
+// A town's school, when the route pinned one. Null for a town with no linked
+// institution — the route is editorial, and a stop can be a place rather than a
+// program.
+export interface TrailSchool {
+  name: string;
+  mascot: string | null;
+  city: string | null;
+  stateCode: string | null;
+}
+
+// Today's stop. NOTE the field name: the day card calls it `name`, while the
+// MAP's town rows call the same thing `townName`. Mirrored as-is rather than
+// normalised — these are the contract, and quietly renaming one would hide a
+// backend change behind a client that still compiled.
+export interface TrailTown {
+  id: string;
+  positionIndex: number;
+  name: string;
+  region: string;
+  // The correspondent's one-liner about the place. The thing that makes this a
+  // town rather than a fixture, and the only editorial copy on the card.
+  intro: string | null;
+  school: TrailSchool | null;
+}
+
+export interface TrailDay {
+  id: string;
+  date: string;
+  status: TrailDayStatus;
+  town: TrailTown;
+  // STATED, not inferred from a null event: a rest stop is its own card (the
+  // bus parked), and v1 auto-voids it so streaks survive untouched.
+  restStop: boolean;
+  // "Away at Home", pre-assembled. NULL on a rest stop — there is no game.
+  matchup: string | null;
+  homeTeam: string | null;
+  awayTeam: string | null;
+  // The live split. The social pressure IS the feature, same as the Oracle's.
+  split: { home: number; away: number; total: number };
+  // Kickoff, which is also the lock. NULL on a rest stop.
+  locksAt: string | null;
+  // Defaults TRUE server-side when there is no event to compare against, so a
+  // rest stop never reads as pickable.
+  locked: boolean;
+  event: {
+    id: string;
+    status: string;
+    homeScore: number | null;
+    awayScore: number | null;
+  } | null;
+  // Which side actually covered. null while open, and null on a rest stop.
+  winnerSide: TrailSide | null;
+  myPick: {
+    side: TrailSide;
+    outcome: TrailOutcome;
+    pointsAwarded: number | null;
+  } | null;
+}
+
+// The Scenic Route: seven played days in one ET week opens a chest. All-or-
+// nothing by design — a partial reward for five days would make the seventh
+// optional.
+export interface TrailScenicRoute {
+  weekStart: string;
+  daysPlayed: number;
+  daysToChest: number;
+  earnedThisWeek: boolean;
+}
+
+// Where the fan is on the route. Zeros (never null) for a fan who hasn't played
+// this season — "town 0 of 6" is the honest starting line.
+export interface TrailProgress {
+  position: number;
+  pennants: number;
+  townCount: number;
+  // Pre-rendered server-side ("town 1 of 6") so every client says it the same
+  // way. Rendered verbatim; nothing here rebuilds it from the parts.
+  label: string;
+  scenicRoute: TrailScenicRoute;
+}
+
+// GET /arena/trail/today. `season: null` (no active season) and `day: null` (no
+// town scheduled) are BOTH normal — the streak block still renders, because the
+// streak is why the fan opened the app.
+export interface TrailToday {
+  date: string;
+  season: TrailSeason | null;
+  day: TrailDay | null;
+  progress: TrailProgress | null;
+  streaks: ArenaStreaks;
+  // Duplicates progress.scenicRoute when a season is live; null when none is.
+  scenicRoute: TrailScenicRoute | null;
+}
+
+// POST /arena/trail/pick response. The chest fires inside the same transaction
+// as the pick, so it lands here rather than on a later read.
+export interface TrailPickResult {
+  pick: { id: string; side: TrailSide; createdAt: string };
+  date: string;
+  town: { name: string; region: string };
+  seasonName: string;
+  lockedAt: string | null;
+  streaks: ArenaStreaks;
+  streakOutcome: StreakOutcome;
+  freezesConsumed: number;
+  freezeEarned: boolean;
+  scenicRoute: {
+    weekStart: string;
+    daysPlayed: number;
+    daysToChest: number;
+    // null unless THIS play was the seventh of the week. `freezeGranted: false`
+    // means the fan was already at the freeze cap — a fact, not an error.
+    chest: { points: number; freezeGranted: boolean } | null;
+  };
+}
+
+// One stop on the map. `pennant` is this fan's own — the backend joins their
+// user_items in, so the client never asks "do I own this town" per row.
+export interface TrailMapTown {
+  id: string;
+  positionIndex: number;
+  townName: string;
+  region: string;
+  intro: string | null;
+  school: TrailSchool | null;
+  pennant: boolean;
+  earnedAt: string | null;
+  // When (and whether) this town has its day on the calendar yet, so the map can
+  // say "coming Thursday" ahead of the bus.
+  scheduledDate: string | null;
+  dayStatus: TrailDayStatus | null;
+}
+
+// A leg of the route. `complete` is counted from pennants held; `trophyHeld` is
+// the durable item row. Shown side by side deliberately — a leg that reads
+// complete with no trophy is a grading bug that should be visible.
+export interface TrailRegion {
+  region: string;
+  towns: number;
+  pennants: number;
+  complete: boolean;
+  trophyKey: string;
+  trophyHeld: boolean;
+}
+
+export interface TrailMap {
+  season: TrailSeason | null;
+  towns: TrailMapTown[];
+  regions: TrailRegion[];
+  progress: TrailProgress | null;
+  // Absent on the no-season branch — see the header.
+  seasonTrophyHeld?: boolean;
+}
+
+// A collected item. The backend ships NO names or art (what a fan EARNED must
+// not change with a redesign); `metadata` is the snapshot captured at earn time
+// and is the only reason the pennant book can render a town that a completed
+// season has since archived.
+export interface TrailItem {
+  key: string;
+  type: string;
+  earnedAt: string;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface TrailPennants {
+  pennants: TrailItem[];
+  trophies: TrailItem[];
+  totals: { pennants: number; trophies: number };
+}
+
+// GET /arena/trail/leaderboard — two boards answering two questions. WEEKLY is
+// what keeps the game joinable (a fan who finds the Trail in week nine can't
+// catch a 40-town position but can absolutely win this week); SEASON is the
+// standings.
+export interface TrailLeaderboards {
+  season: TrailSeason | null;
+  weekly: {
+    window: string;
+    items: Array<{
+      rank: number;
+      userId: string;
+      displayName: string;
+      pennants: number;
+      plays: number;
+    }>;
+  } | null;
+  // Optional, not merely nullable — the no-season branch omits the key. See the
+  // header.
+  seasonBoard?: {
+    window: string;
+    townCount: number;
+    items: Array<{
+      rank: number;
+      userId: string;
+      displayName: string;
+      position: number;
+      pennants: number;
+    }>;
+  } | null;
+}
+
+export const getTrailToday = (token: string) =>
+  authGet<TrailToday>('/arena/trail/today', token);
+
+// 404 = no season or no town today, 409 = rest stop / locked at first pitch /
+// already called. Same "<status> <message>" Error every route here throws; the
+// town card matches on the prefix to decide whether to re-read (a 409 means the
+// screen is stale) or just say what happened.
+export const submitTrailPick = (token: string, side: TrailSide) =>
+  authPost<TrailPickResult>('/arena/trail/pick', token, { side });
+
+export const getTrailMap = (token: string) =>
+  authGet<TrailMap>('/arena/trail/map', token);
+
+export const getTrailPennants = (token: string) =>
+  authGet<TrailPennants>('/arena/trail/pennants', token);
+
+export const getTrailLeaderboard = (token: string) =>
+  authGet<TrailLeaderboards>('/arena/trail/leaderboard', token);
+
+// ---- Trail display helpers --------------------------------------------------
+
+// Which actual team a side is, for a button that has to say "Milwaukee" rather
+// than "home". Degrades to the side's own name rather than to null so the
+// button always has a label.
+export function trailSideTeam(day: TrailDay, side: TrailSide): string {
+  const team = side === 'home' ? day.homeTeam : day.awayTeam;
+  return team ?? (side === 'home' ? 'Home' : 'Away');
+}
+
+// The graded reveal, in the fan's own terms. FOUR readings, because the Trail's
+// loss is not the Oracle's: a wrong call here doesn't cost you your place, it
+// just means the bus doesn't move. Saying "you lost" would be both harsher and
+// less true than "the bus waits", which is the actual game state.
+//
+// Never mocking, in any branch — the fan comes back tomorrow, and tomorrow is
+// the same town.
+export function trailOutcomeCopy(
+  outcome: TrailOutcome,
+  town: string,
+  progress: { position: number; townCount: number } | null,
+): { headline: string; sub: string } {
+  if (outcome === 'void') {
+    return {
+      headline: 'Rest stop — streaks safe.',
+      sub: 'No game to call, so nothing counted against you. Your streaks carry.',
+    };
+  }
+  if (outcome === 'pending') {
+    return {
+      headline: 'The bus is idling.',
+      sub: 'Your call is locked in. Come back when this one settles.',
+    };
+  }
+  if (outcome === 'win') {
+    return {
+      headline: `PENNANT CLAIMED: ${town} 🏁`,
+      sub: progress
+        ? `The bus rolls on (town ${progress.position} of ${progress.townCount}).`
+        : 'The bus rolls on.',
+    };
+  }
+  return {
+    headline: 'The bus waits.',
+    sub: `Same town, new chance tomorrow. ${town} isn't going anywhere.`,
+  };
+}
+
+// The inline celebration after a Trail pick lands. Same three-way read as the
+// Oracle's (a freeze SAVING a streak and a streak RESETTING are both "the number
+// moved" to a diff, and they mean opposite things) — in the Trail's voice.
+export function trailStreakCopy(
+  outcome: StreakOutcome,
+  streaks: ArenaStreaks,
+  freezesConsumed: number,
+): string {
+  switch (outcome) {
+    case 'frozen':
+      return `❄️ ${
+        freezesConsumed === 1 ? 'A freeze' : `${freezesConsumed} freezes`
+      } saved your streak — play streak ${streaks.playStreak} 🔥`;
+    case 'reset':
+      return `Back on the bus — play streak ${streaks.playStreak} 🔥`;
+    default:
+      return `The bus is boarding — play streak ${streaks.playStreak} 🔥`;
+  }
+}
+
+// The pennant book's card copy, read out of the earn-time SNAPSHOT rather than
+// out of a live town row — which is the whole reason the snapshot exists. A
+// pennant minted before a field was captured degrades to something renderable
+// instead of blanking a card the fan genuinely earned.
+export function trailItemMeta(item: TrailItem): {
+  title: string;
+  region: string | null;
+  season: string | null;
+  date: string | null;
+} {
+  const m = item.metadata ?? {};
+  const str = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() !== '' ? v : null;
+  return {
+    title: str(m.townName) ?? str(m.region) ?? 'Collected',
+    region: str(m.region),
+    season: str(m.seasonName),
+    date: str(m.date) ?? item.earnedAt.slice(0, 10),
+  };
+}
+
+// A trophy's copy. Leg trophies carry a region, the season trophy doesn't — one
+// glyph and one line each, keyed off what the snapshot actually holds.
+export function trailTrophyMeta(item: TrailItem): {
+  icon: string;
+  title: string;
+  sub: string | null;
+} {
+  const meta = trailItemMeta(item);
+  const towns = typeof item.metadata?.towns === 'number' ? item.metadata.towns : null;
+  if (meta.region) {
+    return {
+      icon: '🏆',
+      title: `${meta.region} — leg complete`,
+      sub: towns ? `Every one of ${towns} towns` : meta.season,
+    };
+  }
+  return {
+    icon: '👑',
+    title: meta.season ? `${meta.season} — the whole road` : 'Season complete',
+    sub: towns ? `All ${towns} towns` : null,
+  };
+}

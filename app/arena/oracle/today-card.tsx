@@ -35,7 +35,7 @@ import {
   oracleOutcomeCopy,
   points,
   streakOutcomeCopy,
-} from '../api';
+} from '../../api';
 
 // The dial and the split bar both animate; both stop dead under reduced motion
 // (see globals.css). Nothing here branches on the preference — the CSS owns it,

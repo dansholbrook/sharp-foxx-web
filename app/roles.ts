@@ -56,14 +56,17 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Contests',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
-  // The Arena: Beat the Oracle, the free daily ride-or-fade. Every role, same
-  // as Contests and for the same reason — the backend's fan routes carry no
-  // @Roles because the Arena is the free front door to the product, and staff
-  // play along. Sits directly after Contests: both are play surfaces, but this
-  // one is the DAILY one, so it leads the pair a fan opens out of habit.
+  // The Arena: the free daily games — Beat the Oracle, the Foxx Trail, and
+  // whatever lands next. ONE nav item, and the hub at /arena is where a fan
+  // chooses; a link per game would grow the nav every time the Arena does, and
+  // would bury the category itself. Every role, same as Contests and for the
+  // same reason — the backend's fan routes carry no @Roles because the Arena is
+  // the free front door to the product, and staff play along. Sits directly
+  // after Contests: both are play surfaces, but this one is the DAILY one, so
+  // it leads the pair a fan opens out of habit.
   {
-    href: '/oracle',
-    label: 'Oracle',
+    href: '/arena',
+    label: 'Arena',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
   // The fan's pick history + points wallet, and the points leaderboard. Both
@@ -285,13 +288,15 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p === '/contests' || p.startsWith('/contests/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
-  // The Arena. Open to EVERY authenticated role, matching the all-roles nav
-  // link and the backend's deliberately ungated fan routes (today / pick /
-  // history / leaderboard carry no @Roles at all). Listed explicitly rather
-  // than left to the open-by-default fallback, for the same reason the points
-  // and contest surfaces are: the gate is the interesting part.
+  // The Arena — the hub and every game under it (/arena/oracle, /arena/trail,
+  // and whatever mounts next). Open to EVERY authenticated role, matching the
+  // all-roles nav link and the backend's deliberately ungated fan routes (every
+  // today / pick / map / leaderboard route in the arena module carries no
+  // @Roles at all). ONE prefix rule rather than a line per game: the Arena's
+  // gate is a property of the Arena, and a new game that had to remember to add
+  // itself here would ship as a 403 for everyone.
   {
-    match: (p) => p === '/oracle',
+    match: (p) => p === '/arena' || p.startsWith('/arena/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
 ];
