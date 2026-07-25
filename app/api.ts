@@ -3320,9 +3320,19 @@ export const submitSurvivorPick = (
 //
 // TWO LAYERS, the same shape squares uses: ENTERING is FREE (the entry row is
 // just leaderboard presence) and the TICKET is the buy — `stake` points per
-// ticket, 2–4 legs, each leg a team picked to WIN one slate game. Payout =
-// stake × the ladder's multiplier for that leg count (a house table, no odds
-// feed). POINTS ONLY: stakes and payouts are points, never money.
+// ticket, 2–4 legs. Payout = stake × the ladder's multiplier for that leg count (a
+// house table, no odds feed). POINTS ONLY: stakes and payouts are points, never
+// money.
+//
+// A LEG IS A PICK ON A LINED MARKET — a game's TOTAL (over/under) or its SPREAD
+// (favorite/underdog against the number). NOT a "team to win": moneyline legs were
+// deleted, because a fixed multiplier ladder is only fair over markets that are
+// ~50/50 by construction, and a betting line is exactly the number that makes both
+// sides even. Stacking four favorites on a fixed ladder was free points.
+//
+// ONE LEG PER GAME, ACROSS MARKETS: a ticket may not pair a game's total with its
+// own spread (correlated outcomes sold as two independent legs). Tapping a sibling
+// chip on an already-legged game SWAPS the pick rather than adding a second leg.
 //
 // TICKETS ARE NOT THE PICK SHEET. /contests/:id/picks serves one revisable sheet
 // per entry (pick'em, survivor); a ticket is an IMMUTABLE PURCHASE a fan may hold
@@ -3346,11 +3356,29 @@ export type ParlayTicketStatus = 'pending' | 'won' | 'lost' | 'voided';
 // which is what REPRICES the ticket to a lower rung of the ladder.
 export type ParlayLegResult = 'pending' | 'won' | 'lost' | 'void';
 
+// Which market a leg is on, and which side of it. 'total' pairs with over|under;
+// 'spread' pairs with favorite|underdog. The backend enforces the pairing with a
+// DB CHECK, so an impossible combination is unrepresentable rather than merely
+// rejected.
+export type ParlayMarket = 'total' | 'spread';
+export type ParlayPick = 'over' | 'under' | 'favorite' | 'underdog';
+
 // One game on the board's slate, as the builder renders it: both teams (ids, for
-// the leg body; names, for the chips), kickoff, and live/final status + score.
+// the leg body; names, for the chips), kickoff, live/final status + score, and the
+// CURRENT lines for both markets — which is what the four chips are built from.
 // The team ids are NULLABLE (events.home_team_id / away_team_id are, same as
-// EventListItem) — an unlinked side can't back a leg, so the builder renders that
-// chip inert rather than posting a null teamId.
+// EventListItem) — an unlinked side can't be named, so those rows render inert.
+//
+// THE LINES ARE STRINGS (`numeric` out of pg): keep them strings and format at the
+// render boundary, so a half-point line never round-trips through a float.
+//
+// PER-MARKET AVAILABILITY is the point of these being independently nullable:
+//   totalLine null      → no O/U chips on this game
+//   spreadFavorite null → no spread chips on this game (the line and the favorite
+//                         always arrive together or not at all, folded into one
+//                         object so there's a single "is there a spread?" test)
+//   both null           → the row renders with inert "No line yet" chips
+// A game with only one lined market is still fully playable on that market.
 export interface ParlaySlateGame {
   eventId: string;
   scheduledAt: string;
@@ -3361,16 +3389,34 @@ export interface ParlaySlateGame {
   awayTeam: string | null;
   homeScore: number | null;
   awayScore: number | null;
+  totalLine: string | null;
+  spreadLine: string | null;
+  spreadFavorite: { id: string; name: string | null } | null;
 }
 
 // One leg of one of the caller's tickets. `matchup` is the pre-joined
 // "Away @ Home" line (null if either team is unlinked); `result` is the graded
 // mark. The event fields are nullable because the read left-joins them.
+//
+// market / pick / line / favoriteTeam are THIS LEG'S FROZEN SNAPSHOT, taken when
+// the ticket was placed — not the game's current line. That's why the slip can say
+// "OVER 16.5" or "MIL -1.5" and stay truthful after the live line moves, or even
+// after the live spread flips which team is favored. Render these, never the
+// slate's; they are what the leg actually grades against.
+//
+// favoriteTeam / underdogTeam are populated for spread legs only (null on a total —
+// nothing is favored in an over/under). Both sides are sent because a slip must
+// name the team the pick is ON: "COL +1.5", not "MIL +1.5", which would read as
+// Milwaukee being the underdog.
 export interface ParlayLeg {
   legId: string;
   eventId: string;
-  pickedTeamId: string;
-  pickedTeam: string | null;
+  market: ParlayMarket;
+  pick: ParlayPick;
+  line: string;
+  favoriteTeamId: string | null;
+  favoriteTeam: string | null;
+  underdogTeam: string | null;
   matchup: string | null;
   scheduledAt: string | null;
   eventStatus: EventListItem['status'] | null;
@@ -3427,11 +3473,19 @@ export interface ParlayBoardRead {
   tickets: ParlayTicket[];
 }
 
-// POST /contests/:id/tickets body. Legs must name DISTINCT slate games, and each
-// teamId must actually play in its game (both are 400s otherwise).
+// POST /contests/:id/tickets body. Legs must name DISTINCT slate games (one leg per
+// game even across markets) and each leg's market must be LINED on its game — both
+// are 400s otherwise, the second naming the game ("No spread yet on Rockies @
+// Brewers").
+//
+// NOTE WHAT IS NOT SENT: the line. The server snapshots the game's CURRENT line
+// onto the leg at creation. A client that could name its own line could name a
+// stale or invented one, so the client picks a SIDE and the house says the number.
+// This is also why a placed ticket is never edited — you cancel and rebuild, which
+// re-snapshots at the then-current lines.
 export interface BuildParlayTicketInput {
   stake: number;
-  legs: Array<{ eventId: string; teamId: string }>;
+  legs: Array<{ eventId: string; market: ParlayMarket; pick: ParlayPick }>;
 }
 
 // POST /contests/:id/tickets response — the built ticket plus the caller's new
@@ -3479,6 +3533,42 @@ export function formatMultiplier(multiplier: string | number): string {
   const n = typeof multiplier === 'number' ? multiplier : Number(multiplier);
   if (!Number.isFinite(n)) return String(multiplier);
   return String(Number(n.toFixed(2)));
+}
+
+// A line as fans read it: "16.5" not "16.50", "3" not "3.0". Lines arrive as
+// `numeric` strings, so this is the one place they become display text — never a
+// float on the way through (a .5 line must survive verbatim). An unparseable value
+// passes through rather than rendering NaN, same posture as formatMultiplier.
+export function formatLine(line: string | number): string {
+  const n = typeof line === 'number' ? line : Number(line);
+  if (!Number.isFinite(n)) return String(line);
+  return String(Number(n.toFixed(2)));
+}
+
+// A leg's market pick as the SLIP shows it — the ticket's own frozen snapshot:
+//   total  → "OVER 16.5" / "UNDER 16.5"
+//   spread → "MIL -1.5" (took the favorite) / "COL +1.5" (took the underdog)
+//
+// The spread label names THE TEAM THE PICK IS ON, with the sign that team carries:
+// the favorite gives points (−), the underdog gets them (+). Naming the favorite
+// either way and just flipping the sign would produce "MIL +1.5", which every
+// reader parses as Milwaukee being the underdog — the exact opposite of the pick.
+// Falls back to a generic anchor when that side's team name didn't come through
+// (an unlinked team row).
+export function parlayLegLabel(leg: {
+  market: ParlayMarket;
+  pick: ParlayPick;
+  line: string;
+  favoriteTeam?: string | null;
+  underdogTeam?: string | null;
+}): string {
+  const line = formatLine(leg.line);
+  if (leg.market === 'total') {
+    return `${leg.pick === 'over' ? 'OVER' : 'UNDER'} ${line}`;
+  }
+  return leg.pick === 'favorite'
+    ? `${leg.favoriteTeam ?? 'Favorite'} -${line}`
+    : `${leg.underdogTeam ?? 'Underdog'} +${line}`;
 }
 
 // The ladder as the board's visual hook: "2 legs ×3 · 3 legs ×6 · 4 legs ×12".

@@ -22,7 +22,20 @@
 // between kickoff and the lazy lock) renders inert rather than offering a chip
 // that would 409.
 //
-// MOBILE-FIRST: the builder is a phone activity. Team chips are thumb-sized, and
+// WHAT A LEG IS (the correction this file was reworked for): a pick on a LINED
+// MARKET — a game's TOTAL (over/under) or its SPREAD (favorite/underdog against
+// the number) — NOT a team picked to win. Moneyline legs are gone, because a fixed
+// multiplier ladder can only be fair over markets that are ~50/50 by construction,
+// and a line is precisely the number that evens both sides. So each slate row
+// offers up to FOUR chips (O / U / FAV− / DOG+) instead of two team chips, and a
+// game with no lines yet renders inert.
+//
+// ONE LEG PER GAME, ACROSS MARKETS: tapping any chip on an already-legged game
+// SWAPS the pick in place (its slip slot is kept) rather than adding a second leg.
+// The backend refuses a total+spread pair on one game — those outcomes correlate,
+// and selling them as two independent legs is the mispricing the rework removed.
+//
+// MOBILE-FIRST: the builder is a phone activity. Market chips are thumb-sized, and
 // the TICKET STUB docks to the bottom of the viewport on a phone (sticky, below
 // the slate in DOM order) so the running leg count, multiplier and payout stay in
 // view while the fan scrolls the slate.
@@ -36,14 +49,33 @@ import {
   cancelParlayTicket,
   enterContest,
   points,
+  formatLine,
   formatMultiplier,
   parlayLadderLabel,
+  parlayLegLabel,
   ContestDetail,
   ParlayBoardRead,
+  ParlayMarket,
+  ParlayPick,
   ParlaySlateGame,
   ParlayTicket,
   ParlayLeg,
 } from '../../api';
+
+// A leg in the draft: the game, the market, the side. Deliberately NOT the line —
+// the server snapshots the current line at creation, so the client never names a
+// number it could have read stale. Mirrors BuildParlayTicketInput['legs'][number].
+interface DraftLeg {
+  eventId: string;
+  market: ParlayMarket;
+  pick: ParlayPick;
+}
+
+// Two draft legs are "the same chip" when market AND side agree. Used to tell a
+// re-tap (remove) from a swap.
+function sameSelection(a: DraftLeg, market: ParlayMarket, pick: ParlayPick): boolean {
+  return a.market === market && a.pick === pick;
+}
 
 // Poll cadence while the board is LIVE — legs grade and tickets settle courtside,
 // so a gentle refresh keeps the ticket book honest without a socket. Open boards
@@ -93,20 +125,43 @@ function payoutFor(stake: number, multiplier: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// THE BUILDER — one slate row: the matchup, its kickoff, and the two team chips
+// THE BUILDER — one slate row: the matchup, its kickoff, and up to four chips
 // ---------------------------------------------------------------------------
 
-function TeamChip({
-  teamId,
-  name,
+// The underdog of a lined spread: whichever of the game's two teams isn't the
+// favorite. Derivable client-side here (unlike on a placed leg, where the read
+// supplies it) because the slate carries both team ids and both names.
+function underdogOf(game: ParlaySlateGame): { id: string | null; name: string | null } {
+  if (!game.spreadFavorite) return { id: null, name: null };
+  return game.spreadFavorite.id === game.homeTeamId
+    ? { id: game.awayTeamId, name: game.awayTeam }
+    : { id: game.homeTeamId, name: game.homeTeam };
+}
+
+// A short team label for a chip. Chips are thumb-sized on a phone, so a full club
+// name would wrap into two lines — the LAST word carries the identity for almost
+// every team ("Milwaukee Brewers" → "Brewers", "Boston Red Sox" → "Sox" would be
+// wrong, so keep the last TWO words when the name is long enough to need it).
+function chipTeamName(name: string | null): string {
+  if (!name) return 'TBD';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 2) return name;
+  // "Boston Red Sox" → "Red Sox"; "Kansas City Royals" → "Royals".
+  const tail2 = parts.slice(-2).join(' ');
+  return tail2.length <= 12 ? tail2 : parts[parts.length - 1];
+}
+
+function MarketChip({
+  label,
+  sub,
   picked,
   disabled,
   onTap,
 }: {
-  // Null when the game's side isn't linked to a team row — nothing to leg, so the
-  // chip is inert (the same guard survivor's TeamButton makes).
-  teamId: string | null;
-  name: string | null;
+  label: string;
+  // The number under the side ("16.5", "-1.5"). Split from the label so the two
+  // can be styled independently and the chip reads at a glance.
+  sub: string;
   picked: boolean;
   disabled: boolean;
   onTap: () => void;
@@ -116,10 +171,11 @@ function TeamChip({
       type="button"
       className={`parlay-chip${picked ? ' parlay-chip--on' : ''}`}
       aria-pressed={picked}
-      disabled={disabled || teamId == null}
+      disabled={disabled}
       onClick={onTap}
     >
-      <span className="parlay-chip__name">{name ?? 'TBD'}</span>
+      <span className="parlay-chip__name">{label}</span>
+      <span className="parlay-chip__line">{sub}</span>
       {picked && (
         <span className="parlay-chip__mark" aria-hidden="true">
           ✓
@@ -129,22 +185,48 @@ function TeamChip({
   );
 }
 
+// An inert stand-in for a market this game doesn't have a line for. Rendered rather
+// than omitted so every row keeps the same shape and the fan can see that the
+// missing thing is a LINE, not a bug.
+function NoLineChips({ label }: { label: string }) {
+  return (
+    <div className="parlay-game__market parlay-game__market--none" aria-hidden="true">
+      <span className="parlay-chip parlay-chip--inert">No line yet</span>
+      <span className="sr-only">{label}: no line yet</span>
+    </div>
+  );
+}
+
 function SlateRow({
   game,
-  pickedTeamId,
+  selection,
   disabled,
   onTap,
 }: {
   game: ParlaySlateGame;
-  pickedTeamId: string | null;
+  // The draft leg on THIS game, if any — at most one (one leg per game).
+  selection: DraftLeg | null;
   disabled: boolean;
-  onTap: (teamId: string) => void;
+  onTap: (market: ParlayMarket, pick: ParlayPick) => void;
 }) {
   const started = gameStarted(game);
   const hasScore = game.homeScore !== null && game.awayScore !== null;
+  const inert = disabled || started;
+
+  const hasTotal = game.totalLine !== null;
+  // A spread needs both halves; the backend folds them into one object precisely so
+  // this is a single test.
+  const hasSpread = game.spreadLine !== null && game.spreadFavorite !== null;
+  const dog = underdogOf(game);
+  const isPicked = (market: ParlayMarket, pick: ParlayPick) =>
+    selection != null && sameSelection(selection, market, pick);
+
   return (
     <li className={`parlay-game${started ? ' parlay-game--locked' : ''}`}>
       <div className="parlay-game__head">
+        <span className="parlay-game__matchup">
+          {game.awayTeam ?? 'TBD'} @ {game.homeTeam ?? 'TBD'}
+        </span>
         <span className="parlay-game__when">
           {game.status === 'final'
             ? 'Final'
@@ -160,22 +242,52 @@ function SlateRow({
         </span>
         {started && <span className="parlay-game__status">Started</span>}
       </div>
-      <div className="parlay-game__sides">
-        <TeamChip
-          teamId={game.awayTeamId}
-          name={game.awayTeam}
-          picked={pickedTeamId != null && pickedTeamId === game.awayTeamId}
-          disabled={disabled || started}
-          onTap={() => game.awayTeamId && onTap(game.awayTeamId)}
-        />
-        <span className="parlay-game__at">@</span>
-        <TeamChip
-          teamId={game.homeTeamId}
-          name={game.homeTeam}
-          picked={pickedTeamId != null && pickedTeamId === game.homeTeamId}
-          disabled={disabled || started}
-          onTap={() => game.homeTeamId && onTap(game.homeTeamId)}
-        />
+
+      <div className="parlay-game__markets">
+        {/* ---- TOTAL: over / under the game's number ---- */}
+        {hasTotal ? (
+          <div className="parlay-game__market">
+            <MarketChip
+              label="OVER"
+              sub={formatLine(game.totalLine!)}
+              picked={isPicked('total', 'over')}
+              disabled={inert}
+              onTap={() => onTap('total', 'over')}
+            />
+            <MarketChip
+              label="UNDER"
+              sub={formatLine(game.totalLine!)}
+              picked={isPicked('total', 'under')}
+              disabled={inert}
+              onTap={() => onTap('total', 'under')}
+            />
+          </div>
+        ) : (
+          <NoLineChips label="Over/under" />
+        )}
+
+        {/* ---- SPREAD: the favorite gives, the underdog gets. Each chip names
+                ITS OWN team with ITS OWN sign, so a chip never reads backwards. ---- */}
+        {hasSpread ? (
+          <div className="parlay-game__market">
+            <MarketChip
+              label={chipTeamName(game.spreadFavorite!.name)}
+              sub={`-${formatLine(game.spreadLine!)}`}
+              picked={isPicked('spread', 'favorite')}
+              disabled={inert}
+              onTap={() => onTap('spread', 'favorite')}
+            />
+            <MarketChip
+              label={chipTeamName(dog.name)}
+              sub={`+${formatLine(game.spreadLine!)}`}
+              picked={isPicked('spread', 'underdog')}
+              disabled={inert}
+              onTap={() => onTap('spread', 'underdog')}
+            />
+          </div>
+        ) : (
+          <NoLineChips label="Spread" />
+        )}
       </div>
     </li>
   );
@@ -187,17 +299,36 @@ function SlateRow({
 
 // A leg's graded mark. Pending legs get a quiet dot rather than nothing, so the
 // column reads as a column.
-function legMark(result: ParlayLeg['result']): { glyph: string; cls: string; label: string } {
+//
+// A voided leg on a FINAL game is a PUSH — the total or the margin landed exactly on
+// the line — as opposed to a void from a canceled/postponed game. Both drop the leg
+// and reprice the ticket identically, but a fan deserves to know which happened,
+// because a push means their read was right to the point and the number ate it.
+function legMark(
+  result: ParlayLeg['result'],
+  isPush: boolean,
+): { glyph: string; cls: string; label: string } {
   switch (result) {
     case 'won':
       return { glyph: '✓', cls: 'parlay-leg__mark--ok', label: 'Won' };
     case 'lost':
       return { glyph: '✗', cls: 'parlay-leg__mark--no', label: 'Lost' };
     case 'void':
-      return { glyph: '∅', cls: 'parlay-leg__mark--void', label: 'Void' };
+      return {
+        glyph: '∅',
+        cls: 'parlay-leg__mark--void',
+        label: isPush ? 'Push' : 'Void',
+      };
     default:
       return { glyph: '·', cls: 'parlay-leg__mark--pending', label: 'Pending' };
   }
+}
+
+// Did this voided leg void because it PUSHED, or because its game didn't happen?
+// The game reaching 'final' is what distinguishes them: a canceled/postponed game
+// never gets there, and only a completed game can land exactly on a number.
+function isPushLeg(leg: ParlayLeg): boolean {
+  return leg.result === 'void' && leg.eventStatus === 'final';
 }
 
 function TicketCard({
@@ -222,8 +353,12 @@ function TicketCard({
   const settled = ticket.status !== 'pending';
   // Voided legs stay ON the ticket and drop out of the effective count, which is
   // what REPRICES it — legCount/multiplier are rewritten at settlement, so the
-  // numbers below are already the recalculated ones. Say so when a void is why.
-  const voidedLegs = ticket.legs.filter((l) => l.result === 'void').length;
+  // numbers below are already the recalculated ones. Say so when a void is why, and
+  // distinguish the two reasons a leg voids: a PUSH (landed exactly on the number)
+  // vs a game that didn't happen. Same mechanical outcome, very different story.
+  const voidedLegList = ticket.legs.filter((l) => l.result === 'void');
+  const voidedLegs = voidedLegList.length;
+  const pushedLegs = voidedLegList.filter(isPushLeg).length;
   const statusFace =
     ticket.status === 'won'
       ? { label: 'Paid', cls: 'parlay-ticket__pill--won' }
@@ -256,7 +391,8 @@ function TicketCard({
 
       <ul className="parlay-ticket__legs-list">
         {ticket.legs.map((leg) => {
-          const mark = legMark(leg.result);
+          const push = isPushLeg(leg);
+          const mark = legMark(leg.result, push);
           const hasScore = leg.homeScore !== null && leg.awayScore !== null;
           return (
             <li key={leg.legId} className={`parlay-leg parlay-leg--${leg.result}`}>
@@ -265,7 +401,9 @@ function TicketCard({
                 <span className="sr-only">{mark.label}</span>
               </span>
               <span className="parlay-leg__body">
-                <span className="parlay-leg__team">{leg.pickedTeam ?? 'Your pick'}</span>
+                {/* The leg's OWN frozen snapshot — "OVER 16.5", "MIL -1.5" — not the
+                    game's current line, which may have moved since it was placed. */}
+                <span className="parlay-leg__team">{parlayLegLabel(leg)}</span>
                 <span className="parlay-leg__matchup">{leg.matchup ?? '—'}</span>
               </span>
               <span className="parlay-leg__when">
@@ -288,8 +426,20 @@ function TicketCard({
 
       {voidedLegs > 0 && (
         <p className="parlay-ticket__void-note">
-          {voidedLegs === 1 ? '1 leg voided' : `${voidedLegs} legs voided`} — repriced to{' '}
-          {ticket.legCount} legs ×{formatMultiplier(ticket.multiplier)}.
+          {/* Lead with PUSH when that's what happened — it's the more informative
+              word, and the one a fan will otherwise ask about. */}
+          {pushedLegs === voidedLegs
+            ? pushedLegs === 1
+              ? 'PUSH — leg dropped'
+              : `${pushedLegs} PUSHES — legs dropped`
+            : pushedLegs > 0
+            ? `${pushedLegs} push, ${voidedLegs - pushedLegs} voided — ${
+                voidedLegs === 1 ? 'leg' : 'legs'
+              } dropped`
+            : voidedLegs === 1
+            ? '1 leg voided'
+            : `${voidedLegs} legs voided`}
+          , repriced ×{formatMultiplier(ticket.multiplier)} ({ticket.legCount} legs).
         </p>
       )}
 
@@ -360,8 +510,9 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
 
   // THE TICKET IN PROGRESS. Legs in TAP ORDER (a slip reads in the order it was
   // built), one per game — the swap/remove rules below keep that invariant, which
-  // is also what the backend's distinct-games check demands.
-  const [draft, setDraft] = useState<Array<{ eventId: string; teamId: string }>>([]);
+  // is also what the backend's distinct-games check demands (one leg per game even
+  // across markets). No line is held here: the server snapshots it at placement.
+  const [draft, setDraft] = useState<DraftLeg[]>([]);
   // The stake is held as a STRING while typing (so a half-typed "" or "2" doesn't
   // snap back under the fan) and clamped to the board's bounds on blur/place.
   const [stakeText, setStakeText] = useState('');
@@ -436,10 +587,10 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
     [],
   );
 
-  // eventId -> the team currently legged on that game, for O(1) chip state.
+  // eventId -> the draft leg on that game (at most one), for O(1) chip state.
   const pickedByEvent = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const l of draft) m.set(l.eventId, l.teamId);
+    const m = new Map<string, DraftLeg>();
+    for (const l of draft) m.set(l.eventId, l);
     return m;
   }, [draft]);
 
@@ -471,20 +622,27 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
   }, [rules, stakeText]);
 
   // THE TAP: add / swap / remove, the three moves the builder has.
-  const onTapTeam = useCallback(
-    (eventId: string, teamId: string) => {
+  //
+  // SWAP NOW SPANS MARKETS. Tapping ANY chip on an already-legged game replaces
+  // that game's leg in place — over → under, but equally over → the favorite. That
+  // is not a shortcut, it is the rule: the backend allows one leg per game across
+  // markets (a total and a spread on one game are correlated), so "add a second
+  // market on this game" is not a move the builder can offer. Replacing is the only
+  // sensible reading of the tap, and keeping the slip SLOT means the ticket doesn't
+  // reshuffle under the fan's thumb.
+  const onTapChip = useCallback(
+    (eventId: string, market: ParlayMarket, pick: ParlayPick) => {
       if (!rules) return;
       setPlaceError(null);
       const current = pickedByEvent.get(eventId);
-      if (current === teamId) {
-        // Tapping a picked team takes that leg off the ticket.
+      if (current && sameSelection(current, market, pick)) {
+        // Re-tapping the picked chip takes that leg off the ticket.
         setDraft((d) => d.filter((l) => l.eventId !== eventId));
         return;
       }
       if (current) {
-        // Tapping the other side of an already-legged game SWAPS it in place —
-        // the leg keeps its slot on the slip rather than jumping to the end.
-        setDraft((d) => d.map((l) => (l.eventId === eventId ? { eventId, teamId } : l)));
+        // Any other chip on this game swaps in place, keeping the slip slot.
+        setDraft((d) => d.map((l) => (l.eventId === eventId ? { eventId, market, pick } : l)));
         return;
       }
       if (draft.length >= rules.maxLegs) {
@@ -495,7 +653,7 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
         );
         return;
       }
-      setDraft((d) => [...d, { eventId, teamId }]);
+      setDraft((d) => [...d, { eventId, market, pick }]);
     },
     [rules, pickedByEvent, draft.length, flash],
   );
@@ -688,8 +846,8 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
           <div className="parlay-builder__head">
             <h2 className="game-articles__head">Build a ticket</h2>
             <span className="parlay-builder__hint muted">
-              Tap a team to add a leg · tap the other side to swap · tap it again to
-              remove.
+              Tap a line to add a leg · tap another on the same game to swap · tap it
+              again to remove. One leg per game.
             </span>
           </div>
 
@@ -705,9 +863,9 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
               <SlateRow
                 key={g.eventId}
                 game={g}
-                pickedTeamId={pickedByEvent.get(g.eventId) ?? null}
+                selection={pickedByEvent.get(g.eventId) ?? null}
                 disabled={placing || capReached}
-                onTap={(teamId) => onTapTeam(g.eventId, teamId)}
+                onTap={(market, pick) => onTapChip(g.eventId, market, pick)}
               />
             ))}
           </ul>
@@ -731,24 +889,40 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
 
             {legCount === 0 ? (
               <p className="parlay-stub__empty">
-                Tap {rules.minLegs} or more teams above to start a ticket.
+                Tap {rules.minLegs} or more lines above to start a ticket.
               </p>
             ) : (
               <ul className="parlay-stub__legs">
+                {/* Slip style, matching what a placed ticket will read: the market
+                    pick first ("OVER 16.5", "COL +1.5"), the matchup under it. Built
+                    from the SLATE's current lines, because the draft holds no line of
+                    its own — the quote can still move until the ticket is placed,
+                    which is exactly what this should reflect. */}
                 {draft.map((l) => {
                   const g = board.slate.find((s) => s.eventId === l.eventId);
-                  const team =
-                    g && (l.teamId === g.homeTeamId ? g.homeTeam : g.awayTeam);
+                  const dog = g ? underdogOf(g) : { id: null, name: null };
+                  const line =
+                    l.market === 'total' ? g?.totalLine ?? null : g?.spreadLine ?? null;
+                  const label =
+                    line === null
+                      ? 'Line pending'
+                      : parlayLegLabel({
+                          market: l.market,
+                          pick: l.pick,
+                          line,
+                          favoriteTeam: g?.spreadFavorite?.name ?? null,
+                          underdogTeam: dog.name,
+                        });
                   return (
                     <li key={l.eventId} className="parlay-stub__leg">
-                      <span className="parlay-stub__team">{team ?? 'Your pick'}</span>
+                      <span className="parlay-stub__team">{label}</span>
                       <span className="parlay-stub__matchup">
                         {g ? `${g.awayTeam ?? 'TBD'} @ ${g.homeTeam ?? 'TBD'}` : ''}
                       </span>
                       <button
                         type="button"
                         className="parlay-stub__remove"
-                        aria-label={`Remove ${team ?? 'this leg'}`}
+                        aria-label={`Remove ${label}`}
                         disabled={placing}
                         onClick={() => setDraft((d) => d.filter((x) => x.eventId !== l.eventId))}
                       >

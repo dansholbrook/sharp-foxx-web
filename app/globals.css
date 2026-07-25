@@ -11316,17 +11316,45 @@ a.follow-sugcard__name:hover {
   font-size: 0.64rem;
   font-weight: 600;
 }
-.parlay-game__sides {
+/* The matchup moved into the row HEAD when the body became four market chips:
+   the chips name sides and numbers, so the row still has to say which game. */
+.parlay-game__matchup {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.82rem;
+  margin-right: auto;
+}
+/* The two markets stack: TOTAL over SPREAD, each a pair of chips. On a phone that
+   is two rows of two thumb targets; the media query at the foot widens it. */
+.parlay-game__markets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.parlay-game__market {
   display: flex;
   align-items: stretch;
   gap: 10px;
 }
-.parlay-game__at {
-  align-self: center;
-  color: var(--muted);
-  font-size: 0.8rem;
+/* A market with no line yet still occupies its row, so the slate keeps one shape
+   and a missing line reads as missing DATA rather than a broken layout. */
+.parlay-game__market--none {
+  display: flex;
 }
-/* The tappable team chips: thumb targets, modeled on .survivor-team. */
+.parlay-chip--inert {
+  flex: 1;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  cursor: default;
+}
+/* The tappable market chips: thumb targets, modeled on .survivor-team. */
 .parlay-chip {
   flex: 1;
   min-height: 58px;
@@ -11367,6 +11395,17 @@ a.follow-sugcard__name:hover {
   font-weight: 600;
   text-align: center;
   line-height: 1.2;
+}
+/* The NUMBER under the side ("16.5", "-1.5"). Tabular so a column of chips lines
+   up its decimals, and slightly dimmer so the side reads first. */
+.parlay-chip__line {
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.parlay-chip--on .parlay-chip__line {
+  color: var(--accent);
 }
 .parlay-chip__mark {
   font-size: 0.7rem;
@@ -11888,11 +11927,26 @@ a.follow-sugcard__name:hover {
   .parlay-stub__legs {
     max-height: 26vh;
   }
+  /* Four chips per game instead of two, so each one gets shorter — two rows of
+     two still has to fit a slate on a phone screen without endless scrolling.
+     Still comfortably above the 44px thumb-target floor. */
   .parlay-chip {
-    min-height: 54px;
+    min-height: 46px;
   }
   .parlay-chip__name {
-    font-size: 0.88rem;
+    font-size: 0.82rem;
+  }
+  .parlay-chip__line {
+    font-size: 0.76rem;
+  }
+  /* The matchup owns its own line on a phone; the kickoff sits under it. */
+  .parlay-game__matchup {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 2px;
+  }
+  .parlay-game__head {
+    flex-wrap: wrap;
   }
   .parlay-ladder__rungs {
     font-size: 0.98rem;
