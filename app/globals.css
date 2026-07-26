@@ -16424,3 +16424,637 @@ a.arena-tile:active {
     transition: none;
   }
 }
+
+/* =================================================================
+   THE CORRESPONDENT'S CALL — STAFF TOOLS
+   /arena/call/desk, /arena/call/compose/:id, /arena/call/grade/:id,
+   plus the tile that sits on a game's workspace.
+
+   Built entirely on the existing palette tokens and the existing
+   .call-* / .console-* primitives: the fan sheet's 56px option rows
+   ARE the grade sheet's verdict buttons, so a correspondent who has
+   played the game already knows how to grade one. No new colors.
+
+   PHONE FIRST, both tools. The desk is the only one of the three a
+   person might open on a laptop; compose happens on a sofa on a
+   Thursday and grading happens standing up in a car park, so every
+   target here clears the 44px floor and most of them clear 56.
+   ================================================================= */
+
+.callstaff-page {
+  padding-bottom: 40px;
+}
+
+.callstaff-inline-link {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* The small print under a form field: what the backend will refuse and
+   why, said before the tap rather than after it. */
+.callstaff-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+/* ---- Desk: the upcoming/past scope row --------------------------- */
+
+.callstaff-scope {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.callstaff-scope__note {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Compose: one slot ------------------------------------------ */
+
+/* Rides on .call-q (the fan sheet's question block) and only adds what
+   an editable slot needs. */
+.compose-slot {
+  position: relative;
+}
+
+.compose-slot .call-q__head {
+  align-items: flex-start;
+}
+
+/* The chosen template's id, humanised, sits where the fan sheet puts
+   the prompt — the prompt itself moves down into the preview, because
+   until it is saved it is this client's guess at the server's text. */
+.compose-slot .call-q__prompt {
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+
+.compose-slot__change {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.compose-slot__hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.compose-slot__problem {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.82rem;
+}
+
+/* The picker: every template this sport allows, as chips. Wraps rather
+   than scrolls — a hidden template is a template nobody picks. */
+.compose-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.compose-picker .console-chip {
+  min-height: 44px;
+}
+
+/* The push marker on a chip. Deliberately tiny: it matters at grading
+   time, not at composing time. */
+.compose-push-flag {
+  margin-left: 6px;
+  color: var(--accent-dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.console-chip--on .compose-push-flag {
+  color: var(--accent-text);
+}
+
+/* ---- Compose: the parameters ------------------------------------- */
+
+.compose-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  margin-top: 14px;
+}
+
+.compose-param {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.compose-param__label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.compose-param__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Wide enough for three digits and a thumb, and no wider — two of these
+   sit side by side for a bucket. */
+.compose-param__row input {
+  width: 92px;
+  min-height: 48px;
+  margin: 0;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.compose-param__unit {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* ---- Compose: what the fan will read ----------------------------- */
+
+/* The mirror while typing, and the SERVER'S OWN TEXT once saved. The
+   label is what distinguishes them, so it carries the weight. */
+.compose-preview {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.compose-preview__label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.compose-preview__prompt {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  line-height: 1.45;
+}
+
+.compose-preview__opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.compose-preview__opt {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-raised);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* ---- Compose: the tiebreaker chips ------------------------------- */
+
+.compose-tb__chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+/* Full-width chips here, unlike everywhere else: these are sentences,
+   not words, and a wrapped row of them reads as noise. */
+.compose-tb__chips .console-chip {
+  width: 100%;
+  min-height: 48px;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-size: 0.86rem;
+}
+
+/* ---- Compose: the checklist + actions ---------------------------- */
+
+.compose-checklist {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--warn-border);
+  border-radius: 12px;
+  background: var(--warn-bg);
+}
+
+.compose-checklist__list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--warn);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+.compose-actions,
+.grade-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.compose-actions__count {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.compose-actions__why {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.compose-done__note,
+.compose-readonly__note {
+  margin: 8px 0 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.compose-done__links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.compose-readonly {
+  margin-bottom: 20px;
+}
+
+/* The handoff line: a draft's id is not readable by the correspondent
+   through any route they can call, so this URL is their way in. Quiet,
+   but selectable. */
+.compose-handoff {
+  display: block;
+  margin-top: 26px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.compose-handoff__url {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 0.82rem;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ---- Grade: the sheet -------------------------------------------- */
+
+.grade-qs {
+  margin-bottom: 22px;
+}
+
+/* A called question dims its own chrome so the eye finds the ones still
+   open — the five-tap flow is "clear the undimmed rows". */
+.grade-q--done .call-q__slot {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.14);
+  color: var(--accent);
+}
+
+/* The two exceptions, under the options and quieter than them. */
+.grade-alts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.grade-alt {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.grade-alt:hover:not(:disabled) {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.grade-alt--on {
+  border-style: solid;
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.1);
+  color: var(--accent);
+}
+
+/* "Couldn't call it" is not a failure and must not read as one — it is
+   the honest verdict on a question the coverage could not settle. Same
+   quiet treatment as its sibling; only the on-state differs, in the
+   warn family, because it is the one that pays nobody. */
+.grade-alt--void.grade-alt--on {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.grade-actions__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.grade-actions__count {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.grade-regrade {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.grade-regrade p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+/* The dry run. Dashed, like every other "this is a preview" surface on
+   the site, so it cannot be mistaken for a receipt. */
+.grade-dry {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--accent-dim);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.grade-dry__line {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+/* ---- Grade: the receipt ------------------------------------------ */
+
+.grade-receipt__headline {
+  margin: 6px 0 0;
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-size: 2.1rem;
+  line-height: 1.1;
+}
+
+.grade-receipt__sub {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.grade-receipt__degenerate,
+.grade-receipt__over,
+.grade-receipt__warn {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.grade-receipt__warn {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.grade-bands {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.grade-bands__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.grade-bands__rank {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.grade-bands__score {
+  flex: 1 1 auto;
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.grade-bands__pts {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Grade: the wash --------------------------------------------- */
+
+/* Below everything, and never beside the grade button. It pays every
+   entrant, scores nothing and ends the week, so the only thing on
+   screen is a sentence — the consequences live in the panel it opens. */
+.grade-wash {
+  margin-top: 34px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.grade-wash__open {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+}
+
+.grade-wash__open:hover {
+  color: var(--warn);
+}
+
+/* The one destructive confirm on the surface, in the warn family rather
+   than gold: gold is what every other action here uses, and this is not
+   like every other action. */
+.grade-void__confirm {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.grade-void__confirm:hover:not(:disabled) {
+  border-color: var(--warn);
+  background: var(--warn-border);
+  color: var(--text);
+}
+
+/* ---- The workspace tile ------------------------------------------ */
+
+/* The correspondent's door, on the game they just covered. Quiet in
+   every state but one: a locked, ungraded card is the only thing on
+   this page with a 24-hour fuse on it. */
+.calltile {
+  border-color: var(--border-strong);
+}
+
+.calltile--due {
+  border-color: var(--accent-dim);
+  background: linear-gradient(
+    180deg,
+    rgba(201, 163, 78, 0.06),
+    transparent 60%
+  );
+}
+
+.calltile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.calltile__note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.calltile__cta {
+  display: inline-block;
+  margin-top: 14px;
+  min-height: 44px;
+  padding: 11px 18px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.calltile--due .calltile__cta {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.calltile__cta:hover {
+  border-color: var(--accent-hover);
+}
+
+.calltile--due .calltile__cta:hover {
+  background: var(--accent-hover);
+}
+
+/* ---- Wider than a phone ------------------------------------------ */
+
+@media (min-width: 560px) {
+  /* The grade sheet's exceptions sit inline beside each other once
+     there is room; on a phone they stack full-width under the options,
+     which is where a thumb expects them. */
+  .grade-alt {
+    flex: 0 1 auto;
+  }
+
+  .compose-actions,
+  .grade-actions {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  /* .call-file is width:100% for the fan sheet, where it is the only thing
+     in its column. Here it shares a row, so the width is released and a
+     minimum keeps it the biggest target on screen. */
+  .compose-actions .call-file,
+  .grade-actions .call-file {
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 260px;
+  }
+
+  .grade-actions__meta {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grade-alt {
+    transition: none;
+  }
+}

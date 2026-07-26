@@ -4987,3 +4987,533 @@ export function callPhase(call: CallCard): CallPhase {
   if (call.status === 'graded') return 'graded';
   return call.locked ? 'locked' : 'open';
 }
+
+// ============================================================================
+// CORRESPONDENT'S CALL — THE STAFF SIDE. Compose, publish, grade, void.
+//
+// Mirrors call.controller.ts, call.service.ts and call-grading.service.ts. Three
+// surfaces sit on it: the editorial desk (/arena/call/desk), the compose tool
+// (/arena/call/compose/:callId) and the grade tool (/arena/call/grade/:callId).
+//
+// ----------------------------------------------------------------------------
+// `:id` IS THE CALL ID, NOT THE EVENT ID — the single most expensive thing to
+// get wrong on this surface. Every route below reads `events/:id`, and every
+// handler behind it resolves `WHERE call_events.id = $1` (call.service.ts
+// loadCall, call-grading.service.ts loadCall). The path segment is named for
+// what a Call is ABOUT, not for what it is keyed by. An event id here is a 404.
+//
+// Which matters because the two ids are both UUIDs and both in scope on every
+// screen that uses this: the workspace holds an eventId, the desk holds a
+// callId, and nothing but the parameter name distinguishes them. Hence
+// `callId` as the parameter name on every wrapper here, never `id`.
+// ----------------------------------------------------------------------------
+//
+// THE ROLE SPLIT IS THREE-WAY, and only two thirds of it are expressible as a
+// role:
+//
+//   CREATE  (POST events, GET events)     admin + regional_manager. Editorial
+//                                         designates the week's game and names
+//                                         the correspondent. A rep cannot.
+//   COMPOSE (questions/preview/publish/   + field_rep. The COARSE gate only —
+//            grade/void)                  assertCanCompose is the real rule.
+//
+// assertCanCompose (call.service.ts:1258) is a fact about two ROWS: is this rep
+// the named correspondent, and are they still assigned to the game. A @Roles
+// decorator can only see the token, so it cannot live in the guard — which means
+// ANY field rep can reach a compose/grade route for someone ELSE's Call and take
+// a 403 from the service. That is the house pattern (coarse gate + fine-grained
+// ownership, same as /national-admin's assertMayAdminister), and the pages must
+// render that 403 as a state rather than as an error box. See isCallForbidden.
+// ============================================================================
+
+// The twelve template ids, mirroring CallTemplateId in call-templates.ts and the
+// template_id CHECK in drizzle/arena_call.sql. Stated here so a composed slot is
+// type-checked; the PICKER's contents are NOT built from this list — they come
+// from the server's `availableTemplates`, which is already filtered to the
+// event's sport. See app/arena/call/templates.ts for the param shapes.
+export type CallTemplateId =
+  | 'who_wins'
+  | 'margin_bucket'
+  | 'combined_points'
+  | 'first_to_n'
+  | 'overtime'
+  | 'team_points_bucket'
+  | 'longest_play'
+  | 'half_scoring'
+  | 'turnovers_bucket'
+  | 'halftime_lead'
+  | 'first_scorer_jersey'
+  | 'threes_bucket';
+
+// One entry in the compose picker, as `templatesForSport` hands it over: already
+// narrowed to THIS GAME'S SPORT by the server, which is the authority (a
+// three-pointers question never reaches a football card). The client renders
+// this list verbatim rather than filtering a local catalog, so a template
+// retired on the backend disappears from the picker without a deploy here.
+export interface CallTemplateChoice {
+  id: CallTemplateId;
+  // Staff-facing copy ("T3 - Combined points, more or fewer than N"). Fans never
+  // see it — they see the rendered prompt.
+  label: string;
+  // Whether this template can land EXACTLY on its number. Three can, and this is
+  // the flag the GRADE screen wants — but the grade sheet does not carry it (see
+  // getCallGradeSheet), so the grade tool sources it from here via preview.
+  pushPossible: boolean;
+}
+
+// The event as the staff reads see it: CallEventInfo plus `source`, echoed so an
+// editor can see WHY a game was accepted. NULL is the covered-game marker, and
+// a non-null source is exactly what create refuses.
+export interface CallStaffEvent extends CallEventInfo {
+  source: string | null;
+}
+
+// repView. The fan card's `correspondent` is the same row minus userId.
+export interface CallCorrespondent {
+  repId: string;
+  userId: string;
+  displayName: string | null;
+}
+
+// THE COMPOSER'S PROJECTION (questionView) — what a SAVE and a PUBLISH echo
+// back, params included, so a correspondent can see their own parameters landed.
+//
+// `params` IS THE FIELD THAT DECIDES WHETHER A CARD IS EDITABLE. It arrives here
+// and on publish, and NOWHERE ELSE: preview runs through fanQuestionView, which
+// omits it. A compose session that did not itself write a slot therefore cannot
+// re-send that slot's params — and because the questions PUT is a whole-card
+// REPLACE, it cannot send the OTHER slots either without rewriting this one.
+// That is why the compose tool tracks which slots it holds params for. See
+// docs/call-staff-backend-spec.md P3.
+export interface CallComposedQuestion {
+  id: string;
+  index: number;
+  templateId: CallTemplateId;
+  params: Record<string, unknown>;
+  prompt: string;
+  options: CallOption[];
+  resolution: CallResolution;
+  correctKey: string | null;
+}
+
+// THE PREVIEW'S PROJECTION (fanQuestionView) — byte-identical to what
+// GET /arena/call/current hands a fan, which is the whole point of the preview:
+// a correspondent proofreading the card must not be shown something fans will
+// not receive, and must not be handed the answer key on a graded one.
+export interface CallPreviewQuestion {
+  id: string;
+  index: number;
+  templateId: CallTemplateId;
+  prompt: string;
+  options: CallOption[];
+}
+
+// The publish checklist. `problems` is already human-readable copy written by
+// the backend ("Needs exactly 5 questions (currently 3)", "The game has already
+// started") — RENDER IT VERBATIM. Rewriting it here would mean maintaining a
+// second copy of a list whose whole job is to name whatever the server will
+// refuse on, and the two would drift on the first new rule.
+export interface CallPublishable {
+  ready: boolean;
+  problems: string[];
+}
+
+// callView — the fields every staff response spreads. Identical to the fan
+// CallCard's own head, kept separate because the staff shapes carry different
+// question projections and none of them carry `myEntry`.
+export interface CallStaffCardBase {
+  id: string;
+  weekStart: string;
+  status: CallStatus;
+  tiebreakerPrompt: string | null;
+  publishesAt: string | null;
+  // Kickoff. Null on a draft — publish is what sets it.
+  locksAt: string | null;
+  // Derived in SQL against the DATABASE clock, never recomputed here.
+  locked: boolean;
+  createdAt: string;
+}
+
+// POST /arena/call/events body. BOTH IDS ARE REQUIRED, and correspondentRepId is
+// a field_reps id (NOT a user id): editorial NAMES the correspondent rather than
+// having it inferred from the caller, because the caller is an editor and the
+// correspondent is whoever is going to be in that gym.
+export interface CreateCallInput {
+  eventId: string;
+  correspondentRepId: string;
+}
+
+// POST /arena/call/events response. Carries `availableTemplates` so the compose
+// tool opens with a full picker and NO second read — create hands over
+// everything the first slot needs. `questions` is always empty here.
+export interface CallCreated extends CallStaffCardBase {
+  event: CallStaffEvent;
+  correspondent: CallCorrespondent;
+  questions: CallComposedQuestion[];
+  availableTemplates: CallTemplateChoice[];
+}
+
+// One slot on the way out. templateId + params ONLY — the client never sends
+// `prompt`, `options`, or an option key, because the server generates all three
+// from the template and freezes them at insert. `index` is 0-based (0..4).
+export interface CallQuestionInput {
+  index: number;
+  templateId: CallTemplateId;
+  params: Record<string, unknown>;
+}
+
+// PUT /arena/call/events/:callId/questions body.
+//
+// REPLACE, NOT PATCH, AND THE MOST DANGEROUS SHAPE ON THIS SURFACE. The backend
+// DELETEs every question on the Call and re-inserts exactly what this array
+// holds. Sending one edited slot DELETES THE OTHER FOUR. Every caller must send
+// the whole card it intends to exist.
+//
+// Fewer than five is legal while drafting (publish is where five is required),
+// so a three-question array is a three-question card, not a partial update.
+//
+// tiebreakerPrompt: undefined leaves it alone, null clears it, a string sets it.
+export interface SaveCallQuestionsInput {
+  questions: CallQuestionInput[];
+  tiebreakerPrompt?: string | null;
+}
+
+// PUT response. Note what it carries and what it does NOT: the rendered card
+// (params included) and the publish checklist, but no `availableTemplates` and
+// no pot — the compose tool keeps the templates it was handed at create/preview.
+//
+// THE SAVE RESPONSE *IS* THE PREVIEW, which is why the compose tool has no
+// separate preview round trip: `questions` here holds the server-rendered
+// prompts and generated options, and `publishable` holds everything still
+// blocking Thursday. GET preview exists for a session that arrives cold.
+export interface CallSaveResult extends CallStaffCardBase {
+  event: CallStaffEvent;
+  questions: CallComposedQuestion[];
+  publishable: CallPublishable;
+}
+
+// GET /arena/call/events/:callId/preview — the Thursday-night proofread, and the
+// cold-start read for both staff tools. Fan-exact questions (no params, no
+// answer key), the pot the card will play for, and the publish checklist.
+export interface CallPreview extends CallStaffCardBase {
+  event: CallStaffEvent;
+  // Null only if the correspondent's rep row vanished under the Call.
+  correspondent: CallCorrespondent | null;
+  questions: CallPreviewQuestion[];
+  tiebreaker: { prompt: string } | null;
+  // Before publish these are the DEFAULTS the snapshot will take
+  // (snapshotted: false), not numbers anyone has been promised yet.
+  pot: CallPot;
+  availableTemplates: CallTemplateChoice[];
+  publishable: CallPublishable;
+}
+
+// POST /arena/call/events/:callId/publish response. The card as published, with
+// the pot as SNAPSHOTTED — from here on those numbers are what fans were
+// promised, and no later edit to the code-side defaults may move them.
+export interface CallPublished extends CallStaffCardBase {
+  event: CallStaffEvent;
+  questions: CallComposedQuestion[];
+  pot: CallPot;
+}
+
+// One row of the editorial schedule (GET /arena/call/events).
+export interface CallListItem {
+  // THE CALL ID — what every compose/grade route wants. `event.id` is the other
+  // one, and it is the workspace's key, not this surface's.
+  id: string;
+  weekStart: string;
+  status: CallStatus;
+  // "Away at Home", already assembled.
+  matchup: string;
+  correspondent: { repId: string; displayName: string | null };
+  event: {
+    id: string;
+    sport: string;
+    status: string;
+    scheduledAt: string;
+  };
+  // 0..5 — the drafting progress bar, straight off a count.
+  questionCount: number;
+  entryCount: number;
+  publishesAt: string | null;
+  locksAt: string | null;
+  pot: CallPot;
+}
+
+// GET /arena/call/events response. Split on the CURRENT ET WEEK, not on status:
+// 'upcoming' is this week and later in whatever state, 'past' is everything
+// before it. So a Saturday game graded on Sunday is still 'upcoming' until
+// Monday, which is correct — it is still the live object.
+export interface CallList {
+  scope: 'upcoming' | 'past';
+  // This ET Monday, as the backend computes it. The client does NOT re-derive
+  // it: a browser in another timezone would disagree about which week it is.
+  thisWeek: string;
+  items: CallListItem[];
+}
+
+// ----------------------------------------------------------------------------
+// GRADING
+// ----------------------------------------------------------------------------
+
+// What a correspondent may record. 'pending' is the column's default and is not
+// a thing anyone can SEND — the union excludes it so a screen cannot offer it.
+export type CallGradeResolution = Exclude<CallResolution, 'pending'>;
+
+// One question on the grade sheet. NOTE WHAT IS MISSING: `templateId`. The
+// backend's gradeSheet projection is hand-written rather than questionView, so
+// this client cannot tell from here whether a question CAN push — which is
+// exactly the affordance the grade screen needs. It joins `preview` on question
+// id to recover it, and degrades to offering Push everywhere if that read fails
+// (the server accepts a push on any question; only the game decides whether it
+// was one). See docs/call-staff-backend-spec.md.
+export interface CallGradeSheetQuestion {
+  id: string;
+  index: number;
+  prompt: string;
+  // The FROZEN options — what fans actually answered, not a re-render. The
+  // correct key must be one of these.
+  options: CallOption[];
+  // 'pending' on a first grade; the previous verdict on a regrade.
+  resolution: CallResolution;
+  correctKey: string | null;
+}
+
+// GET /arena/call/events/:callId/grade — everything the parking lot needs, in
+// one read.
+export interface CallGradeSheet {
+  callId: string;
+  weekStart: string;
+  status: CallStatus;
+  locksAt: string | null;
+  // THE ONLY THING THAT DECIDES WHETHER GRADING IS OPEN, derived in SQL against
+  // the database clock. A card cannot be graded before kickoff (409), and this
+  // is the flag that says so — never a Date comparison here.
+  locked: boolean;
+  gradedAt: string | null;
+  tiebreaker: {
+    prompt: string | null;
+    // Non-null on a regrade: what was recorded last time.
+    actual: number | null;
+  };
+  questions: CallGradeSheetQuestion[];
+  entries: number;
+  // The purse as it will be computed: base + perEntrant x entries. A plain
+  // number here, not the CallPot shape the fan surfaces render.
+  pot: number;
+}
+
+// One graded slot. correctKey is required iff resolution is 'answered', and
+// FORBIDDEN otherwise — a push or a void has no right answer by constraint
+// (call_questions_resolution_agreement_check), and sending one is a 400 naming
+// the slot rather than a 500 with a constraint string in it.
+export interface CallGradeAnswer {
+  questionId: string;
+  resolution: CallGradeResolution;
+  correctKey?: string | null;
+}
+
+// POST body. THE WHOLE CARD IN ONE REQUEST — all five answers plus the
+// tiebreaker actual, or it 400s. That is a product requirement rather than an
+// optimisation: a two-step flow gets abandoned in a parking lot, and an
+// abandoned grade is a card that never settles and a pot that never pays.
+export interface CallGradeInput {
+  answers: CallGradeAnswer[];
+  tiebreakerActual: number;
+}
+
+// One band of the settlement, as the GRADER reports it.
+//
+// `share` IS THIS SHAPE'S POINTS FIELD, and it is NOT the fan read's `points`
+// (CallSettlementBand). Same table, two names, because they come from different
+// services — do not spread one into the other.
+export interface CallGradeBand {
+  band: number;
+  score: number;
+  members: number;
+  pct: number;
+  share: number;
+}
+
+// POST response, and the receipt the grade screen renders.
+export interface CallGradeResult {
+  callId: string;
+  // 'dry_run' when ?dryRun=true — the settlement computed, nothing written.
+  status: 'graded' | 'regraded' | 'dry_run';
+  entries: number;
+  pot: number;
+  potPaid: number;
+  // Points fans are holding ABOVE what the corrected settlement says they are
+  // owed, because a downward regrade LEAVES THEM THE OVERPAYMENT. The grader
+  // never claws back. 0 on a first grade and on an identical re-POST.
+  potOverpaid: number;
+  pointsPaid: number;
+  whistles: number;
+  bands: CallGradeBand[];
+  // Operational warnings (the >2000-entry single-transaction ceiling). Rendered,
+  // not swallowed: it is the only place that ceiling becomes visible.
+  warnings: string[];
+}
+
+// POST /arena/call/events/:callId/void response. 'already_terminal' is NOT an
+// error — the card was already graded or already voided, and the backend refuses
+// to fail a human's request over a state it is happy with.
+export interface CallVoidResult {
+  callId: string;
+  status: 'voided' | 'already_terminal';
+  entries: number;
+  pointsPaid: number;
+}
+
+// ----------------------------------------------------------------------------
+// The wrappers. Every one takes `callId` by name — see the section header.
+// ----------------------------------------------------------------------------
+
+// Designate the week's game and name its correspondent. Admin + RM.
+//
+// 409s worth surfacing verbatim, because each names a different fix: a feed
+// game, a game that is not scheduled or has already started, a CORRESPONDENT WHO
+// IS NOT ASSIGNED TO THE GAME (assign them first), a week that already has a
+// live Call, or a game that already has one.
+export const createCall = (token: string, input: CreateCallInput) =>
+  authPost<CallCreated>('/arena/call/events', token, input);
+
+// The editorial schedule. Admin sees every Call; a regional_manager sees only
+// their own roster's, and an RM with no manager rep profile gets a 403.
+//
+// NO 'mine' SCOPE YET — a field_rep correspondent cannot list their own Calls
+// (see docs/call-staff-backend-spec.md P1), which is why the desk's create flow
+// hands over a compose link and why the workspace tile can only find PUBLISHED
+// cards.
+export const getCallEvents = (token: string, scope: 'upcoming' | 'past' = 'upcoming') =>
+  authGet<CallList>(`/arena/call/events?scope=${scope}`, token);
+
+// Write the card. WHOLE-CARD REPLACE — see SaveCallQuestionsInput. Draft-only:
+// a published Call is a 409, because fans are answering those exact question ids.
+export const saveCallQuestions = (
+  token: string,
+  callId: string,
+  input: SaveCallQuestionsInput,
+) => authPut<CallSaveResult>(`/arena/call/events/${callId}/questions`, token, input);
+
+// The card as fans will see it, plus the publish checklist. Also the grade
+// tool's source for `templateId` (and thus pushPossible), which its own sheet
+// does not carry.
+export const getCallPreview = (token: string, callId: string) =>
+  authGet<CallPreview>(`/arena/call/events/${callId}/preview`, token);
+
+// Take it live. Requires exactly five questions and a tiebreaker prompt,
+// counted INSIDE the publishing transaction — so a stale `publishable.ready`
+// cannot talk this into succeeding.
+export const publishCall = (token: string, callId: string) =>
+  authPost<CallPublished>(`/arena/call/events/${callId}/publish`, token, {});
+
+// The grade sheet: five questions with their frozen options and any previous
+// verdict, the tiebreaker, the entrant count, and the pot.
+export const getCallGradeSheet = (token: string, callId: string) =>
+  authGet<CallGradeSheet>(`/arena/call/events/${callId}/grade`, token);
+
+// Grade — and REGRADE, which is the same route and the same button. An identical
+// re-POST is free (every delta comes out 0) and a correction can only ever pay a
+// fan more.
+//
+// dryRun computes the entire settlement and writes NOTHING. It is deliberately
+// OFF the default path on the grade screen: it costs a round trip the 2-minute
+// budget does not have, so it is a valve a correspondent can reach, never a step
+// they must take.
+//
+// 409 before kickoff ("that game has not started yet"), 409 on a draft or a
+// voided card, 400 naming the SLOT (1-based) on a bad or missing verdict.
+export const gradeCall = (
+  token: string,
+  callId: string,
+  input: CallGradeInput,
+  dryRun = false,
+) =>
+  authPost<CallGradeResult>(
+    `/arena/call/events/${callId}/grade${dryRun ? '?dryRun=true' : ''}`,
+    token,
+    input,
+  );
+
+// Wash the card: every entrant keeps their participation points and nothing is
+// scored. NOT gated on the clock — games get called off in the morning — but it
+// does require a PUBLISHED card (a draft 409s: there is nothing to wash) and it
+// refuses a GRADED one, because undoing a settled card would need a clawback
+// this game does not do. Regrade instead.
+export const voidCall = (token: string, callId: string) =>
+  authPost<CallVoidResult>(`/arena/call/events/${callId}/void`, token, {});
+
+// ----------------------------------------------------------------------------
+// Staff-side helpers
+// ----------------------------------------------------------------------------
+
+// WHETHER THE COMPOSE 400s COUNT SLOTS FROM ZERO. They do, today:
+// saveQuestions interpolates the DTO's `index` (0..4) straight into its message,
+// while the fan-entry and grading paths both interpolate `question_index + 1`.
+// One flag rather than a fork, so when the backend evens this up (see
+// docs/call-staff-backend-spec.md P2) this becomes `false` and the branch below
+// disappears with it.
+const COMPOSE_SLOTS_ARE_ZERO_BASED = true;
+
+// Which slot a COMPOSE error was about, as a zero-based slot, or null.
+//
+// A SEPARATE FUNCTION FROM callErrorSlot ON PURPOSE, and not a parameter on it:
+// the two paths genuinely disagree about what "Question 3" means, and a shared
+// parser with a mode flag is exactly the kind of thing that gets called with the
+// wrong mode. The messages this reads:
+//   "Question 0: invalid params for template 'combined_points'"
+//   "Question 2: template 'threes_bucket' does not apply to football"
+//
+// Both are near-unreachable from the compose tool — the picker is built from the
+// server's own sport-filtered list, and params are validated client-side against
+// the same bounds before the PUT — so this is a backstop that flags the slot
+// rather than a routine path.
+export function callComposeErrorSlot(message: string): number | null {
+  const hit = /\bQuestion (\d+)\b/.exec(message);
+  if (!hit) return null;
+  const n = Number(hit[1]);
+  if (!Number.isFinite(n)) return null;
+  return COMPOSE_SLOTS_ARE_ZERO_BASED ? n : n - 1;
+}
+
+// A 403 from assertCanCompose — "this isn't your Call" — as distinct from every
+// other failure. The compose and grade pages render it as a STATE (a rep opened
+// a colleague's Call, or was unassigned from the game since it was created)
+// rather than as a red error box, because it is not a fault and there is nothing
+// to retry.
+//
+// Matches on the status prefix the shared client puts on every Error, the same
+// way the answer sheet matches 409/404 to decide whether to re-read.
+export function isCallForbidden(message: string): boolean {
+  return message.startsWith('403');
+}
+
+// A Call's lifecycle as a staff-facing word. Deliberately NOT callPhase(): that
+// one collapses status + locked into what a FAN's card is doing, and drops the
+// distinction between a draft and a published card — which is the entire
+// difference between the compose tool and the grade tool.
+export function callStatusLabel(status: CallStatus): string {
+  switch (status) {
+    case 'draft':
+      return 'Draft';
+    case 'published':
+      return 'Published';
+    case 'locked':
+      return 'Locked';
+    case 'graded':
+      return 'Graded';
+    case 'voided':
+      return 'Voided';
+  }
+}
+
+// Which tool a Call belongs in. Drafts are written; everything else is graded
+// (or read). Used by the desk to route a row, so the correspondent lands on the
+// screen the card is actually waiting on.
+export function callStaffRoute(call: { id: string; status: CallStatus }): string {
+  return call.status === 'draft'
+    ? `/arena/call/compose/${call.id}`
+    : `/arena/call/grade/${call.id}`;
+}

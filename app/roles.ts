@@ -113,6 +113,22 @@ const NAV_ITEMS: NavItem[] = [
   // exactly what a national question isn't. Sits last among the staff queues,
   // next to Reports: like Reports, it's a house-wide surface, not territory work.
   { href: '/national-admin', label: 'National', roles: ['admin', 'regional_manager'] },
+  // The Correspondent's Call editorial desk: designate the week's game, name the
+  // correspondent, and follow the card from draft to graded. admin +
+  // regional_manager, mirroring the backend's CALL_CREATE_ROLES / CALL_READ_ROLES
+  // -- a field_rep composes and grades, but does not CREATE, and cannot list.
+  //
+  // A NAV ITEM RATHER THAN A TILE ON /arena. The Arena hub is a fan surface --
+  // three game cards and a streak strip -- and hanging a staff console off it
+  // would put an editorial workflow inside the thing fans open out of habit.
+  // Same call /national-admin made for the same reason, so it sits next to it:
+  // both are house-wide editorial surfaces rather than territory work.
+  //
+  // THERE IS DELIBERATELY NO NAV ITEM FOR THE CORRESPONDENT. A field rep holds a
+  // Call perhaps a few weeks a year; a permanent link that is a dead end most of
+  // the time is worse than none. Their door is the tile on the game's own
+  // workspace, which appears only when that game HAS a Call.
+  { href: '/arena/call/desk', label: 'Call desk', roles: ['admin', 'regional_manager'] },
   // The engagement economy console: what each passive action pays, and the
   // scheduled multiplier windows. admin + regional_manager, matching the
   // backend's ECONOMY_READ_ROLES — but an RM sees it READ-ONLY, because every
@@ -288,6 +304,31 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p === '/contests' || p.startsWith('/contests/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // ---- THE CALL'S STAFF TOOLS. THESE MUST STAY ABOVE THE /arena RULE BELOW. ----
+  //
+  // canAccess takes the FIRST matching rule, and the next entry is a
+  // startsWith('/arena/') open to every role -- so a staff path under /arena
+  // listed after it would inherit the fan gate and every viewer and athlete
+  // would walk straight onto the editorial desk. Ordering is the gate here.
+  //
+  // The desk is CALL_CREATE_ROLES / CALL_READ_ROLES: editorial designates the
+  // week's game and reads the schedule.
+  { match: (p) => p === '/arena/call/desk', roles: ['admin', 'regional_manager'] },
+  // Compose and grade are CALL_COMPOSE_ROLES, which adds field_rep and stops
+  // there -- no viewer, no athlete.
+  //
+  // THIS GATE IS COARSE ON PURPOSE, and it is the same shape /national-admin
+  // describes: "is this rep the named correspondent, and are they still assigned
+  // to the game" is a fact about two ROWS, so the backend enforces it per-request
+  // in CallService.assertCanCompose rather than in a route guard. Any field rep
+  // can therefore open a colleague's Call here and take a 403 from the service.
+  // That is not a hole to plug in this file -- duplicating a row-level rule in
+  // the client would only give it a second place to be wrong. Both pages render
+  // that 403 as a "this isn't your Call" state instead of an error box.
+  {
+    match: (p) => p.startsWith('/arena/call/compose/') || p.startsWith('/arena/call/grade/'),
+    roles: ['admin', 'regional_manager', 'field_rep'],
+  },
   // The Arena — the hub and every game under it (/arena/oracle, /arena/trail,
   // and whatever mounts next). Open to EVERY authenticated role, matching the
   // all-roles nav link and the backend's deliberately ungated fan routes (every
@@ -295,6 +336,11 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   // @Roles at all). ONE prefix rule rather than a line per game: the Arena's
   // gate is a property of the Arena, and a new game that had to remember to add
   // itself here would ship as a 403 for everyone.
+  //
+  // The three rules directly above are the exception and prove the rule: they
+  // are STAFF TOOLS that happen to live at an Arena address, so each one is
+  // listed by name and each one must stay ABOVE this line. A fan address under
+  // /arena still needs no entry at all.
   {
     match: (p) => p === '/arena' || p.startsWith('/arena/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],

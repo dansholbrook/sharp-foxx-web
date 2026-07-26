@@ -37,7 +37,11 @@ import {
   lockPrediction,
   resolvePrediction,
   voidPrediction,
+  getCallCurrent,
+  callWeekLabel,
+  callPhase,
   points,
+  CallCard,
   Prediction,
   PredictionKind,
   MyAssignment,
@@ -1279,6 +1283,105 @@ function PhotosSection({
 // mid-upload) keeps its state. Persists nothing: `defaultOpen` re-derives from
 // the game's status on each load (each shape keys its sections by status, so a
 // go-live / end-game transition remounts them with fresh defaults).
+// ---------------------------------------------------------------------------
+// THE CORRESPONDENT'S DOOR INTO THE CALL.
+//
+// A correspondent grades from a parking lot, and the way in has to be somewhere
+// they already are — which is this page, on the game they just covered. So the
+// workspace carries a TILE and the tool itself lives at /arena/call/grade/:callId.
+// Not a section on this page: grading is five taps and a payment, and it should
+// not share a scroll with an article draft and a photo uploader.
+//
+// ----------------------------------------------------------------------------
+// HOW THIS FINDS THE CALL ID, AND WHY IT ONLY FINDS PUBLISHED ONES.
+//
+// The grade route is keyed by CALL id; this page holds an EVENT id, and there is
+// no event->call lookup. GET /arena/call/current is the one route a field rep
+// can call that returns a call id at all — it is ungated, and it hands back the
+// week's card with its event attached, so matching `call.event.id` against this
+// page's eventId is the whole derivation.
+//
+// It excludes DRAFTS by design (a fan must not see next week's half-written
+// card), so a correspondent still composing has no tile here — they reach the
+// compose tool through the link editorial sends them. That gap closes the moment
+// GET /arena/call/events grows a `mine` scope; see
+// docs/call-staff-backend-spec.md P1, and this component is where it lands.
+//
+// ONE READ, BEST-EFFORT, SELF-HIDING. Most games are not the week's Call, so the
+// common outcome is "no tile" and a failure must look exactly like it: nothing
+// on screen and nothing in the error box. The workspace has a dozen other jobs
+// and none of them should break because the Arena is down.
+// ----------------------------------------------------------------------------
+function CallTile({ token, eventId }: { token: string; eventId: string }) {
+  const [call, setCall] = useState<CallCard | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const current = await getCallCurrent(token);
+        if (cancelled) return;
+        // The current card is for SOME game; it is this game's tile only if it
+        // is for THIS one.
+        if (current.call && current.call.event.id === eventId) setCall(current.call);
+      } catch {
+        /* no tile — this game almost certainly isn't the week's Call */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, eventId]);
+
+  if (!call) return null;
+
+  const phase = callPhase(call);
+  const entrants = call.pot.entrants;
+  const filed = `${entrants} card${entrants === 1 ? '' : 's'} filed`;
+
+  // What the correspondent is being asked for, per phase. Only the locked one is
+  // urgent — that is the parking lot, and it is the only tile that leads.
+  const copy: Record<typeof phase, { note: string; cta: string }> = {
+    open: {
+      note: `Published — fans can still answer until kickoff. ${filed} so far.`,
+      cta: 'Open the card',
+    },
+    locked: {
+      note: `Answers are locked and ${filed}. Grade it tonight — an ungraded card is washed 24 hours after kickoff and the pot pays nobody.`,
+      cta: 'Grade the card',
+    },
+    graded: {
+      note: `Graded. ${filed}. If a question was called wrong, regrading pays the difference — nothing is ever taken back.`,
+      cta: 'Review the grade',
+    },
+    voided: {
+      note: `Voided — nothing was scored, and every one of the ${entrants} entrant${
+        entrants === 1 ? '' : 's'
+      } kept their participation points.`,
+      cta: 'View the card',
+    },
+  };
+
+  return (
+    <section
+      className={`card game ws-section calltile${
+        phase === 'locked' ? ' calltile--due' : ''
+      }`}
+    >
+      <div className="calltile__head">
+        <span className="game-kicker">
+          The Correspondent&apos;s Call · {callWeekLabel(call.weekStart)}
+        </span>
+        {phase === 'locked' && <span className="pill pill--review">Needs grading</span>}
+      </div>
+      <p className="calltile__note">{copy[phase].note}</p>
+      <Link href={`/arena/call/grade/${call.id}`} className="calltile__cta">
+        {copy[phase].cta} →
+      </Link>
+    </section>
+  );
+}
+
 function Section({
   kicker,
   title,
@@ -2145,6 +2248,12 @@ function GameWorkspace({
           </Link>
         </div>
       </header>
+
+      {/* ---- The Call, if this game is the week's. Directly under the header in
+           every lifecycle shape: the tile is only urgent post-game, but a
+           correspondent checking on their published card pre-game should not
+           have to hunt for it either. Self-hides on every other game. ---- */}
+      <CallTile token={token} eventId={eventId} />
 
       {/* ---- SCHEDULED (pre-game): Go-Live is the job. Notes + Sponsor open
            for prep; Article + Photos collapsed (mostly post-game work). ---- */}
