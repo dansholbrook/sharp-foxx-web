@@ -16699,7 +16699,7 @@ a.arena-tile:active {
 }
 
 .compose-done__note,
-.compose-readonly__note {
+.compose-filed__note {
   margin: 8px 0 16px;
   color: var(--muted);
   font-size: 0.88rem;
@@ -16712,10 +16712,6 @@ a.arena-tile:active {
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 16px;
-}
-
-.compose-readonly {
-  margin-bottom: 20px;
 }
 
 /* The handoff line: a draft's id is not readable by the correspondent

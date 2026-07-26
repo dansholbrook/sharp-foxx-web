@@ -31,22 +31,23 @@
 // arrives cold.
 //
 // ----------------------------------------------------------------------------
-// THE ONE THING THIS SCREEN CANNOT DO, stated plainly because it shapes the
-// whole component: A CARD IT DID NOT WRITE THIS SESSION IS NOT EDITABLE.
+// A CARD LOADED COLD IS EDITABLE, and the slots REHYDRATE to make it so.
 //
-// preview() runs its questions through fanQuestionView, which omits `params` —
-// only a save (or a publish) echoes params back. So a correspondent who saved
-// three questions last night and reopens the tool has the rendered prompts but
-// not the numbers behind them, and cannot re-send those slots. Against a
-// whole-card replace that is not a partial-edit problem, it is a data-loss one:
-// editing slot 4 would mean sending slots 1-3 with GUESSED params and silently
-// rewriting three questions that were already right.
+// preview() runs its questions through fanQuestionView PLUS `params` — what the
+// correspondent actually typed. So a session that reopens a half-written card
+// puts the real numbers back in the form rather than reading the prose and
+// guessing at them, and slot 4 can be fixed without slots 1-3 being touched.
 //
-// So a card loaded cold renders READ-ONLY — the real prompts, the checklist, and
-// Publish, all of which work — and the only way back into editing is "Rewrite
-// the card", which resets all five, because a whole-card replace is what the
-// write actually is. Adding `params` to the preview projection removes this
-// entire branch; see docs/call-staff-backend-spec.md P3.
+// THAT IS WHAT MAKES A WHOLE-CARD REPLACE SAFE HERE, and it is the only thing
+// that does. The write DELETES every question and re-inserts what is sent, so
+// the invariant this screen must hold is: every slot on screen holds what the
+// server holds, until a human changes one. Rehydration establishes it at load;
+// re-sending an untouched slot is then a no-op rather than a silent rewrite of
+// a question that was already right.
+//
+// This is why there is no read-only branch and no "rewrite the card" reset. Both
+// existed only because params did not come down, and both cost a correspondent
+// the four questions they had already written.
 // ----------------------------------------------------------------------------
 // ============================================================================
 
@@ -148,8 +149,13 @@ function SlotEditor({
 }) {
   // The picker is open while nothing is chosen, and reopens on "Change".
   const [picking, setPicking] = useState(slot.templateId === null);
+  // TRACKS THE SLOT IN BOTH DIRECTIONS, which matters now that a template can
+  // arrive without anyone tapping this picker: a rehydrated slot is one whose
+  // template came from the server, and nothing local would otherwise close the
+  // picker sitting over its filled-in form. "Change" is unaffected — it opens
+  // the picker without touching templateId, so this does not fire and stomp it.
   useEffect(() => {
-    if (slot.templateId === null) setPicking(true);
+    setPicking(slot.templateId === null);
   }, [slot.templateId]);
 
   const form = slot.templateId ? CALL_TEMPLATE_FORMS[slot.templateId] : null;
@@ -361,12 +367,13 @@ export default function CallComposePage() {
 
   const [slots, setSlots] = useState<Slot[]>(EMPTY_SLOTS);
   const [tiebreaker, setTiebreaker] = useState('');
-  // Slots the server has stored, keyed by index. Populated only by a save or a
-  // publish — preview cannot fill it (no params), which is what "editable" turns
-  // on. See the header.
+  // Slots the server has stored, keyed by index — filled at LOAD from the
+  // preview and refilled by every save. A slot present here and unchanged since
+  // renders the server's own text rather than this client's mirror of it.
   const [savedSlots, setSavedSlots] = useState<Record<number, SavedSlot>>({});
-  // A card that arrived already written, which this session cannot edit.
-  const [readOnly, setReadOnly] = useState(false);
+  // How many questions the card arrived holding. Zero is a fresh card; anything
+  // else is one being picked back up, and the difference is worth a sentence.
+  const [filedCount, setFiledCount] = useState(0);
 
   const [publishable, setPublishable] = useState<CallPublishable | null>(null);
   const [busy, setBusy] = useState(false);
@@ -397,8 +404,39 @@ export default function CallComposePage() {
       setCard(preview);
       setPublishable(preview.publishable);
       setTiebreaker(preview.tiebreaker?.prompt ?? '');
-      // Questions already on the card, whose params this session does not hold.
-      setReadOnly(preview.questions.length > 0);
+
+      // REHYDRATE. Every stored question goes back into ITS OWN slot — placed by
+      // q.index rather than by array order, so a card written into slots 1, 2
+      // and 4 comes back with the gap exactly where the correspondent left it
+      // and a save re-sends those same indexes.
+      //
+      // Built fresh rather than mapped off EMPTY_SLOTS: that const is shared
+      // module state and the slots below are held by reference.
+      const rehydrated: Slot[] = Array.from({ length: SLOTS }, () => ({
+        templateId: null,
+        params: {},
+      }));
+      const filed: Record<number, SavedSlot> = {};
+      for (const q of preview.questions) {
+        // A card holding more questions than this form has slots is not a thing
+        // the backend can produce (publish demands exactly five and save is
+        // index-bounded). Skipped rather than written past the end of the array,
+        // because the failure if it ever happens should be a missing slot and
+        // not a corrupted one.
+        if (q.index < 0 || q.index >= SLOTS) continue;
+        rehydrated[q.index] = { templateId: q.templateId, params: q.params };
+        // The server's own rendering of that slot, which is what makes it read
+        // "Filed ✓" instead of showing this client's guess at the same text.
+        filed[q.index] = {
+          templateId: q.templateId,
+          params: q.params,
+          prompt: q.prompt,
+          options: q.options,
+        };
+      }
+      setSlots(rehydrated);
+      setSavedSlots(filed);
+      setFiledCount(preview.questions.length);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to open the card';
       if (isCallForbidden(message)) setForbidden(message.replace(/^403\s*/, ''));
@@ -535,6 +573,11 @@ export default function CallComposePage() {
   // avoids: publish counts questions in its own transaction, so a composer who
   // filled the fifth slot and tapped Publish without saving would get "needs
   // exactly 5 questions (currently 4)" about a card they are looking at.
+  //
+  // A REHYDRATED CARD PUBLISHED UNTOUCHED still saves first, and that is fine
+  // rather than wasteful: the replace re-inserts questions identical to the ones
+  // it deleted. New row ids, same card — and nothing references a draft's
+  // question ids, because no fan has answered one.
   async function saveAndPublish() {
     const ok = await save();
     if (!ok) return;
@@ -559,23 +602,6 @@ export default function CallComposePage() {
           : prev,
       );
       setNotice(null);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to publish');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Publish a card this session did not write (the read-only branch). No save
-  // first — there is nothing local to save, and the stored card is what publish
-  // will count.
-  async function publishOnly() {
-    if (!token || busy) return;
-    setBusy(true);
-    setSaveError(null);
-    try {
-      await publishCall(token, callId);
-      setPublished(true);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to publish');
     } finally {
@@ -669,71 +695,22 @@ export default function CallComposePage() {
                     render. Set both teams on the game, then come back.
                   </p>
                 </div>
-              ) : readOnly ? (
-                // ---- The cold-start card: real prompts, publish works,
-                //      editing means rewriting. See the header. ----
-                <section className="card game">
-                  <span className="game-kicker">Filed</span>
-                  <h2>The card as it stands</h2>
-                  <p className="compose-readonly__note">
-                    {card.questions.length} of {SLOTS} questions are saved. You can
-                    publish this card as it is — but the numbers behind each
-                    question (lines, buckets) don&apos;t come back down with a
-                    saved card, so editing one means writing all five again.
-                  </p>
-                  <ol className="call-qs compose-readonly">
-                    {card.questions.map((q) => (
-                      <li key={q.id} className="call-q">
-                        <div className="call-q__head">
-                          <span className="call-q__slot">{q.index + 1}</span>
-                          <p className="call-q__prompt">{q.prompt}</p>
-                        </div>
-                        <div className="compose-preview__opts">
-                          {q.options.map((o) => (
-                            <span key={o.key} className="compose-preview__opt">
-                              {o.label}
-                            </span>
-                          ))}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                  <div className="call-tb">
-                    <span className="call-tb__label">Tiebreaker</span>
-                    <p className="call-tb__prompt">
-                      {card.tiebreaker?.prompt ?? (
-                        <span className="muted">Not written yet.</span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="compose-actions">
-                    <button
-                      type="button"
-                      className="call-file"
-                      disabled={busy || !publishable?.ready}
-                      onClick={publishOnly}
-                    >
-                      {busy ? 'Publishing…' : 'Publish the card'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-inline btn-ghost"
-                      disabled={busy}
-                      onClick={() => {
-                        setReadOnly(false);
-                        setSlots(EMPTY_SLOTS);
-                        setSavedSlots({});
-                        setNotice(
-                          'Writing a fresh card. Saving replaces all five questions.',
-                        );
-                      }}
-                    >
-                      Rewrite the card
-                    </button>
-                  </div>
-                </section>
               ) : (
                 <>
+                  {/* ---- Picked back up, not started fresh. The slots below
+                       already hold what the server holds — say so, because the
+                       button underneath them rewrites the whole card and a
+                       correspondent needs to know the four they didn't touch
+                       are going back exactly as they were. ---- */}
+                  {filedCount > 0 && (
+                    <p className="compose-filed__note">
+                      {filedCount} of {SLOTS} questions are already filed, and
+                      they are loaded below with the numbers behind them. Edit any
+                      slot you like — saving writes all five at once, so the ones
+                      you leave alone go back unchanged.
+                    </p>
+                  )}
+
                   <ol className="call-qs">
                     {slots.map((slot, i) => (
                       <SlotEditor
@@ -827,7 +804,16 @@ export default function CallComposePage() {
                     </button>
                     <span className="compose-actions__count">
                       {filled.length}/{SLOTS} written
-                      {card.pot.points ? ` · pot ${points(card.pot.points)}` : ''}
+                      {/* THE FLOOR, NOT THE PURSE. Preview's pot is terms-only
+                          and carries no entrant count — correctly, because this
+                          branch is a DRAFT and a draft has no entrants. So
+                          basePoints IS the whole figure today, and it grows by
+                          perEntrantPoints for every card filed once this
+                          publishes. Said that way rather than as a total that
+                          would be wrong by Saturday. */}
+                      {` · pot from ${points(card.pot.basePoints)} · +${points(
+                        card.pot.perEntrantPoints,
+                      )} a card`}
                     </span>
                   </div>
 

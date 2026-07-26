@@ -4649,9 +4649,19 @@ export type CallResolution = 'pending' | 'answered' | 'push' | 'void';
 // fan the right one.
 export type CallResult = 'correct' | 'push' | 'wrong';
 
-// The weekly purse. `snapshotted` is false before publish, where the numbers are
-// the defaults the snapshot WILL take rather than the ones it took.
-export interface CallPot {
+// THE POT'S TERMS — the four fields the backend's `potView()` projects, and
+// ALL that the staff reads carry. The schedule list, the compose preview and the
+// publish response send exactly this and nothing more.
+//
+// NOTE WHAT IS NOT HERE: `points`, `projectedPoints`, `entrants`. They are added
+// by GET /arena/call/current alone (CallPot, below) — the terms are what the
+// house is offering, the counts are what a live card has taken, and only the fan
+// read has both. A staff surface that wants a purse figure DERIVES it with
+// callPurse().
+//
+// `snapshotted` is false before publish, where the numbers are the defaults the
+// snapshot WILL take rather than the ones it took.
+export interface CallPotTerms {
   snapshotted: boolean;
   basePoints: number;
   perEntrantPoints: number;
@@ -4665,6 +4675,12 @@ export interface CallPot {
   // are the promise being made; they are not rendered beside a settled one. See
   // CallSettlementBand.
   bands: Array<{ band: number; pct: number }>;
+}
+
+// The weekly purse AS THE FAN READ SENDS IT — the terms plus the live counts.
+// GET /arena/call/current is the ONLY endpoint that returns this shape; every
+// other pot on this surface is CallPotTerms or a plain number.
+export interface CallPot extends CallPotTerms {
   entrants: number;
   // Which kind of card this pot is on. Sent so no client has to infer "is this
   // final?" from the status string.
@@ -4685,6 +4701,19 @@ export interface CallPot {
   // fall out of step with it.
   projectedPoints?: number;
 }
+
+// THE PURSE, DERIVED — base + perEntrant × entrants, for the staff surfaces
+// whose pot is terms-only. This is the same arithmetic the backend does in
+// CallGradingService.potFor and ships as `points` on the fan read and as `pot`
+// on the grade sheet; the schedule list ships neither, so the desk works it out
+// from the terms and the entry count sitting beside them.
+//
+// DERIVED, NOT PROMISED. On an unsnapshotted pot (`snapshotted: false`, i.e. a
+// draft) the terms are today's house defaults, so this is what the card WOULD
+// play for and not what anybody has been told — check the flag before presenting
+// it as the latter. Once snapshotted it is exact.
+export const callPurse = (pot: CallPotTerms, entrants: number) =>
+  pot.basePoints + pot.perEntrantPoints * entrants;
 
 // One band of the settled table: a distinct score, the fans tied at it, and what
 // that band took.
@@ -5096,16 +5125,25 @@ export interface CallComposedQuestion {
   correctKey: string | null;
 }
 
-// THE PREVIEW'S PROJECTION (fanQuestionView) — byte-identical to what
-// GET /arena/call/current hands a fan, which is the whole point of the preview:
-// a correspondent proofreading the card must not be shown something fans will
-// not receive, and must not be handed the answer key on a graded one.
+// THE PREVIEW'S PROJECTION — fanQuestionView PLUS `params`. The fan half is the
+// whole point of the preview: a correspondent proofreading the card must not be
+// shown something fans will not receive, and must not be handed the answer key
+// on a graded one (no `resolution`, no `correctKey` — those are the composer's
+// projection, CallComposedQuestion).
+//
+// `params` IS ON THE WIRE and this client does not read it yet. It is what the
+// correspondent typed, sent so a whole-card re-save can round-trip the slots
+// that were not edited — which is precisely the thing the compose tool's
+// cold-start branch says it cannot do and renders read-only over. Typed here so
+// the option is visible; changing that branch is a product decision, not a type
+// fix.
 export interface CallPreviewQuestion {
   id: string;
   index: number;
   templateId: CallTemplateId;
   prompt: string;
   options: CallOption[];
+  params: Record<string, unknown>;
 }
 
 // The publish checklist. `problems` is already human-readable copy written by
@@ -5201,9 +5239,14 @@ export interface CallPreview extends CallStaffCardBase {
   correspondent: CallCorrespondent | null;
   questions: CallPreviewQuestion[];
   tiebreaker: { prompt: string } | null;
-  // Before publish these are the DEFAULTS the snapshot will take
-  // (snapshotted: false), not numbers anyone has been promised yet.
-  pot: CallPot;
+  // TERMS ONLY, and before publish they are the DEFAULTS the snapshot will take
+  // (snapshotted: false) rather than numbers anyone has been promised yet.
+  //
+  // There is no entrant count anywhere on this read, so there is no purse to
+  // derive either — which is right: preview's card is a draft, and a draft has
+  // no entrants by construction. basePoints IS the whole figure until it
+  // publishes.
+  pot: CallPotTerms;
   availableTemplates: CallTemplateChoice[];
   publishable: CallPublishable;
 }
@@ -5214,7 +5257,10 @@ export interface CallPreview extends CallStaffCardBase {
 export interface CallPublished extends CallStaffCardBase {
   event: CallStaffEvent;
   questions: CallComposedQuestion[];
-  pot: CallPot;
+  // TERMS ONLY — the snapshot's numbers, not a purse. A card one millisecond old
+  // has no entrants to count, so the backend sends no `points` here and this
+  // client must not invent one.
+  pot: CallPotTerms;
 }
 
 // One row of the editorial schedule (GET /arena/call/events).
@@ -5238,7 +5284,11 @@ export interface CallListItem {
   entryCount: number;
   publishesAt: string | null;
   locksAt: string | null;
-  pot: CallPot;
+  // TERMS ONLY — no `points`, no `entrants`, no `projectedPoints`. The list is
+  // a `potView()` projection and carries nothing the fan read adds; a purse
+  // figure here is callPurse(pot, entryCount), and entryCount above is the
+  // entrant count it wants.
+  pot: CallPotTerms;
 }
 
 // GET /arena/call/events response. Split on the CURRENT ET WEEK, not on status:
@@ -5250,6 +5300,10 @@ export interface CallList {
   // This ET Monday, as the backend computes it. The client does NOT re-derive
   // it: a browser in another timezone would disagree about which week it is.
   thisWeek: string;
+  // True when the list was NARROWED TO THE CALLER'S OWN CARDS. Role-derived on
+  // the backend, and sent so a list can title itself honestly without inferring
+  // the narrowing from the `scope` it asked for (which is a when, not a whose).
+  mine: boolean;
   items: CallListItem[];
 }
 

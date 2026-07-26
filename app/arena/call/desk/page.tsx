@@ -37,6 +37,7 @@ import {
   getCallEvents,
   getEvents,
   getFieldReps,
+  callPurse,
   callStaffRoute,
   callStatusLabel,
   callWeekLabel,
@@ -320,10 +321,32 @@ export default function CallDeskPage() {
     },
     { key: 'entries', header: 'Cards', align: 'right', cell: (c) => points(c.entryCount) },
     {
+      // DERIVED HERE, NOT SENT. The list's pot is a terms-only projection —
+      // base, per-entrant and the band split, with no `points` and no
+      // `entrants` (those two belong to the fan read). So the purse is the same
+      // arithmetic the backend does, run over the entry count in the row beside
+      // it: callPurse(pot, entryCount).
+      //
+      // A DRAFT'S FIGURE IS NOT A PROMISE — nothing is snapshotted until
+      // publish, so the terms are today's house defaults and the number is what
+      // the card WOULD play for. Marked muted and said out loud on hover rather
+      // than printed as if it were settled.
       key: 'pot',
       header: 'Pot',
       align: 'right',
-      cell: (c) => points(c.pot.points),
+      cell: (c) => {
+        const purse = callPurse(c.pot, c.entryCount);
+        return c.pot.snapshotted ? (
+          points(purse)
+        ) : (
+          <span
+            className="muted"
+            title="Not snapshotted yet — the pot takes these numbers when the card publishes."
+          >
+            {points(purse)}
+          </span>
+        );
+      },
     },
   ];
 
