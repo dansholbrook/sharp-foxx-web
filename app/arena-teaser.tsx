@@ -219,21 +219,55 @@ function trailTeaser(today: TrailToday | null, now: number): Teaser | null {
 // THE CALL. Three differences from the two above, all of them consequences of
 // it being weekly and human-graded:
 //
-//   * IT NEVER PRODUCES A SETTLED LINE. GET /arena/call/current carries no
-//     grading block at all — no score, no payout, no answer key — so there is
-//     nothing true to say about a graded card beyond "it was graded", which is
-//     not a reason to take the Arena's one slot in the rail. It sits it out.
+//   * IT ONLY PRODUCES A SETTLED LINE WHEN THERE WAS MONEY IN IT — a share of
+//     the pot or the Golden Whistle. Out of the money it sits the rail out, and
+//     here the Call genuinely diverges from the Oracle rather than copying it:
+//     the Oracle's consolation line survives as a last-resort fallback because
+//     there is another pick TOMORROW for it to hand the fan toward. The next
+//     Call is Thursday. A consolation line with no adjacent action is the rail's
+//     one slot spent on a feeling.
 //   * ITS OPEN STATE CAN BE 'urgent'. See CALL_URGENT_MS.
 //   * "Free · once a WEEK", and the filed state advertises that the card is
 //     still editable — the one thing about this game that isn't true of the
 //     other two, and the reason to tap a card the fan has already played.
+//
+// THE FAN'S OWN NUMBER, NEVER THE POT'S TOTAL. The card keeps the receipt and
+// the purse five rows apart so they cannot be subtracted; there is no room to do
+// that in a one-line teaser, so only one of the two is ever allowed in it.
 function callTeaser(current: CallCurrent | null, now: number): Teaser | null {
   const call = current?.call ?? null;
   if (!call) return null;
   const phase = callPhase(call);
-  // Graded and voided both sit it out — see above. A void has no reproach in it
-  // either way, but it also has no news.
-  if (phase === 'graded' || phase === 'voided') return null;
+
+  // A void has no reproach in it and no news either: nothing was scored, and the
+  // participation the wash paid is a line for the card, not for the rail.
+  if (phase === 'voided') return null;
+
+  if (phase === 'graded') {
+    const mine = current?.myEntry ?? null;
+    if (!mine || mine.outcome !== 'graded') return null;
+    // Gold is for beating the room. Filing always pays, so "was I paid" would
+    // put every graded week in the rail.
+    if (mine.whistle !== true && mine.band == null) return null;
+    const paid = mine.pointsAwarded ?? 0;
+    return {
+      kicker: "The Correspondent's Call",
+      mark: '📻',
+      tone: 'win',
+      note: 'Graded from the stands',
+      lead: mine.whistle ? (
+        <>
+          The Golden Whistle — <strong>+{points(paid)}</strong> pts
+        </>
+      ) : (
+        <>
+          Your card took a share of the pot — <strong>+{points(paid)}</strong>{' '}
+          pts
+        </>
+      ),
+      tail: null,
+    };
+  }
 
   const filed = current?.myEntry != null;
 
@@ -277,7 +311,7 @@ function callTeaser(current: CallCurrent | null, now: number): Teaser | null {
       <>
         {call.questions.length} questions on{' '}
         <strong>{call.event.matchup}</strong> ·{' '}
-        {points(call.pot.projectedPoints)} pts in the pot
+        {points(call.pot.points)} pts in the pot
       </>
     ),
     tail: call.locksAt ? arenaLockCountdown(call.locksAt, now) : null,
@@ -329,6 +363,10 @@ export function ArenaTeaser({ token }: { token: string }) {
     (oracleCard?.tone === 'open' ? oracleCard : null) ??
     (trailCard?.tone === 'open' ? trailCard : null) ??
     (callCard?.tone === 'open' ? callCard : null) ??
+    // A weekly pot share is the rarest and largest thing the Arena pays, so it
+    // leads the settled half — but it still ranks BELOW every open state, which
+    // is the rail's whole principle: what expires first, then what happened.
+    (callCard?.tone === 'win' ? callCard : null) ??
     (oracleCard?.tone === 'win' ? oracleCard : null) ??
     (trailCard?.tone === 'win' ? trailCard : null) ??
     oracleCard ??

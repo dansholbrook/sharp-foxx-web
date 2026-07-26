@@ -33,6 +33,7 @@ import {
   points,
   trailSideTeam,
   CallCurrent,
+  CallEntry,
   OracleToday,
   TrailToday,
 } from '../api';
@@ -473,7 +474,7 @@ export function CallGameCard({
       )}
 
       {!loading && !failed && call && (
-        <CallState call={call} hasEntry={current?.myEntry != null} />
+        <CallState call={call} entry={current?.myEntry ?? null} />
       )}
     </GameTile>
   );
@@ -481,32 +482,69 @@ export function CallGameCard({
 
 function CallState({
   call,
-  hasEntry,
+  entry,
 }: {
   call: NonNullable<CallCurrent['call']>;
-  hasEntry: boolean;
+  entry: CallEntry | null;
 }) {
   // One collapsed phase rather than a status plus a nullable — same refusal the
   // two cards above make with myPick.outcome. Note it never tests
   // `status === 'locked'`: nothing writes that status.
   const phase = callPhase(call);
+  const hasEntry = entry !== null;
 
-  // SETTLED. Thin on purpose: no per-fan outcome exists in this payload, so
-  // there is no "+120 · you called it" line to write yet. Saying nothing beats
-  // saying a zero.
+  // ---- SETTLED. A per-fan outcome exists now, so these two states say what
+  // happened to the fan rather than what happened to the card.
   if (phase === 'voided') {
+    // A wash pays participation and scores nothing, and points_awarded is the
+    // one grading column a voided entry carries. The tile says so — a fan whose
+    // balance moved should not have to open the card to find out why.
+    const paid =
+      entry?.outcome === 'void' ? entry.pointsAwarded ?? null : null;
     return (
       <p className="arena-tile__state arena-tile__state--quiet">
-        Washed — nothing counted against you.
+        {paid !== null && paid > 0 ? (
+          <>
+            Washed · you keep <strong>+{points(paid)}</strong> for filing
+          </>
+        ) : (
+          'Washed — nothing counted against you.'
+        )}
       </p>
     );
   }
   if (phase === 'graded') {
+    const mine = entry?.outcome === 'graded' ? entry : null;
+    if (!mine) {
+      return (
+        <p className="arena-tile__state arena-tile__state--quiet">
+          Graded — you sat this one out.
+        </p>
+      );
+    }
+    // GOLD IS FOR BEATING THE ROOM, NOT FOR BEING PAID. Filing always pays, so
+    // a tone keyed off pointsAwarded would make every graded tile a win tile.
+    // A band or the Whistle is the real thing.
+    const won = mine.whistle === true || mine.band != null;
+    const paid = mine.pointsAwarded ?? null;
     return (
-      <p className="arena-tile__state arena-tile__state--quiet">
-        {hasEntry
-          ? 'Graded — the correspondent has filed.'
-          : 'Graded — you sat this one out.'}
+      <p
+        className={`arena-tile__state arena-tile__state--${won ? 'win' : 'quiet'}`}
+      >
+        {paid !== null && paid > 0 && (
+          <>
+            <strong>+{points(paid)}</strong> pts ·{' '}
+          </>
+        )}
+        {/* ONE LINE, SO ONE NUMBER: correctCount. Pushes never surface here —
+            the distinction needs a sentence, and a tile that says "3 correct, 1
+            push" with no room to explain it is a puzzle rather than a summary.
+            The zero card gets the SAME shape rather than a special quiet
+            phrasing, because inventing one would make the ordinary line read as
+            a boast. */}
+        {mine.whistle
+          ? 'Golden Whistle'
+          : `${mine.correctCount ?? 0} of ${call.questions.length} called`}
       </p>
     );
   }
@@ -535,7 +573,7 @@ function CallState({
   if (hasEntry) {
     return (
       <p className="arena-tile__state arena-tile__state--ride">
-        Card filed · <strong>{points(call.pot.projectedPoints)}</strong> pts in
+        Card filed · <strong>{points(call.pot.points)}</strong> pts in
         the pot
         {call.locksAt && (
           <span className="arena-tile__when">
@@ -552,7 +590,7 @@ function CallState({
   // the matchup are the terms of that proposition rather than the offer itself.
   return (
     <p className="arena-tile__state arena-tile__state--open">
-      <strong>{points(call.pot.projectedPoints)}</strong> pts in the pot ·{' '}
+      <strong>{points(call.pot.points)}</strong> pts in the pot ·{' '}
       {call.questions.length} questions on <strong>{call.event.matchup}</strong>
       {call.locksAt && (
         <span className="arena-tile__when">

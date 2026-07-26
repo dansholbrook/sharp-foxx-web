@@ -16035,7 +16035,8 @@ a.arena-tile:active {
   grid-template-columns: 22px 1fr;
   grid-template-areas:
     'slot prompt'
-    '.    answer';
+    '.    answer'
+    '.    note';
   gap: 2px 8px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
@@ -16066,6 +16067,265 @@ a.arena-tile:active {
 .call-filed__answer--none {
   font-weight: 400;
   color: var(--muted);
+}
+
+/* ---- The graded row: the mark, and the sentence under it -----------------
+   THREE MARKS AND NO FOURTH. Correct is the only one that gets the accent —
+   gold is the "this is your money" colour and only one of these three states
+   pays. A push is PLAIN TEXT, deliberately nearer to correct than to wrong.
+   Wrong is the QUIETEST of the three, and it is NOT --warn: that token means
+   something has gone wrong with the app, and a missed answer on a free weekly
+   card has not. Painting it red would also drag the neutral push down into
+   reading as the consolation tier of a loss. */
+.call-filed__mark {
+  display: inline-block;
+  width: 1.1em;
+  margin-right: 4px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.call-filed__mark--correct {
+  color: var(--accent);
+}
+
+.call-filed__mark--push {
+  color: var(--text);
+}
+
+.call-filed__mark--wrong {
+  color: var(--muted);
+}
+
+/* The explanation: what the game did, or what the correspondent couldn't see,
+   or what the answer was. Muted and small — the mark is the verdict, this is
+   the reason, and it must not compete with the fan's own answer above it. */
+.call-filed__note {
+  grid-area: note;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* ---- The verdict: the receipt, then the score ----------------------------
+   The Oracle's reveal treatment, and for its reason: on a settled card the
+   result is the only thing the fan came for. The one difference is that this
+   figure is ALWAYS present — filing pays whatever else happened — which is what
+   stops the 0-for-5 card reading as a punishment. */
+.call-verdict {
+  margin: 0 0 18px;
+  padding: 18px 16px 16px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(201, 163, 78, 0.14), transparent);
+}
+
+.call-verdict__points {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 9vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 26px rgba(201, 163, 78, 0.35);
+}
+
+.call-verdict__headline {
+  margin: 10px 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.2rem, 4.5vw, 1.6rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.call-verdict__counts {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.call-verdict__sub {
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* The one sentence that turns the push rule into money. Given its own weight —
+   a fan reading "perfect card" beside a card that is visibly not five-for-five
+   needs this line to land, not to be skimmed past in the paragraph above. */
+.call-verdict__whistle {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-strong);
+  font-size: 0.84rem;
+  color: var(--text);
+}
+
+/* ---- The settlement: what the room did ----------------------------------
+   LAST ON THE CARD, five question rows and a tiebreaker below the receipt, so
+   the purse and the payment can never sit adjacent. That distance is the whole
+   reason this block is down here. */
+.call-settle {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+
+.call-settle__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.call-settle__label {
+  flex: 1 1 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.call-settle__value {
+  font-family: var(--font-serif);
+  font-size: clamp(1.4rem, 5vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.call-settle__unit {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent-dim);
+}
+
+.call-settle__sub {
+  margin: 6px 0 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.call-settle__bands {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+/* ONE BAND IS A BLOCK, NOT A TABLE ROW. At 390px a rank, a membership and a
+   points figure across one line leaves the middle about ninety pixels and wraps
+   "4 fans" mid-row, so the rank and the points take the first line and the who
+   goes underneath — the same two-line grid the filed rows use. The number is in
+   an auto column and never wraps; the label wraps instead. */
+.call-settle__band {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'rank points'
+    'who  who';
+  gap: 2px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* The fan's own band, MARKED AND NEVER PRICED — their share is not on this
+   block at any width. pointsAwarded upstairs is the receipt; a per-fan figure
+   inside a row carrying the band total and the member count is an invitation to
+   divide, and the division does not always come out where the payment did. */
+.call-settle__band--mine {
+  border-color: var(--accent-dim);
+  background: rgba(201, 163, 78, 0.07);
+}
+
+.call-settle__rank {
+  grid-area: rank;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.call-settle__points {
+  grid-area: points;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.call-settle__who {
+  grid-area: who;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.call-settle__mine {
+  color: var(--accent-dim);
+  font-weight: 600;
+}
+
+.call-settle__note {
+  margin: 10px 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* THE DEGENERATE CARD: a sentence instead of a table, and NO PURSE FIGURE. A
+   large gold number whose only verb is "paid nothing" is a quantity of something
+   that did not happen. The eyebrow stays so the block is still findable. */
+.call-settle--none {
+  border-style: dashed;
+}
+
+/* No head row to sit in, so the eyebrow takes its own line. */
+.call-settle--none .call-settle__label {
+  display: block;
+}
+
+.call-settle__nonesub {
+  margin: 8px 0 0;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* The wash's participation line. QUIET BY CONSTRUCTION — a voided card has no
+   verdict to celebrate, but a fan whose balance moved is owed the sentence that
+   says why, so this is body text with one strong number in it rather than the
+   hero figure a graded card gets. */
+.call-frozen__paid {
+  margin: -8px 0 16px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.call-frozen__paid strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The tiebreaker's actual, beside the fan's own number and with NOTHING said
+   about the gap: breaksTies is false on the wire, so no "closest wins" and no
+   distance anywhere near it. */
+.call-filed__tbactual {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The tiebreaker as filed. Its own row rather than a sixth question, because it

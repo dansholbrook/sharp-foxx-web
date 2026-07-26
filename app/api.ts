@@ -4607,28 +4607,114 @@ export interface CallOption {
 // One of the five slots. The prompt and the options are SERVER-RENDERED from a
 // template; the composer only ever sent { templateId, params }. Two or three
 // options depending on the template (the four *_bucket templates are three).
+//
+// THE TWO GRADED FIELDS ARE ABSENT, NOT NULL, UNTIL THE CARD IS GRADED. The read
+// attaches them inside its `status === 'graded'` gate rather than inside
+// fanQuestionView, which is left byte-identical because compose's preview shares
+// it — so a correspondent proofreading the fan view cannot be handed the answer
+// key. Optional here for exactly that reason: a component that wants them has to
+// admit they might not be there.
 export interface CallQuestion {
   id: string;
   index: number;
   templateId: string;
   prompt: string;
   options: CallOption[];
+  resolution?: CallResolution;
+  // The answer key. NULL on push and void by constraint
+  // (call_questions_resolution_agreement_check) — there is no right answer to a
+  // question the game or the coverage refused to settle.
+  correctKey?: string | null;
 }
+
+// WHAT THE CORRESPONDENT DID WITH A QUESTION. Three distinct sentences, never
+// collapsed to a boolean and never merged into one value:
+//
+//   'answered' — it was called, and correctKey holds the answer.
+//   'push'     — the game landed exactly on the number. A fact about THE GAME.
+//   'void'     — the correspondent couldn't see it. A fact about THE COVERAGE.
+//
+// 'pending' is the column's default and cannot arrive on a graded card; it stays
+// in the union because the column can hold it, not because a screen renders it.
+export type CallResolution = 'pending' | 'answered' | 'push' | 'void';
+
+// The fan's own result on one question, as scored.
+//
+// A VOID SCORES AS A PUSH — this map has no 'void' member, and that is the
+// backend's deliberate join: a question the correspondent couldn't see must not
+// cost the fan a point, and the score only ever distinguishes right from
+// not-right. So a row's MARK comes from here and its EXPLANATION comes from the
+// question's `resolution`. "It landed exactly on the number" and "we couldn't
+// see it" are different sentences behind the same mark, and the screen owes the
+// fan the right one.
+export type CallResult = 'correct' | 'push' | 'wrong';
 
 // The weekly purse. `snapshotted` is false before publish, where the numbers are
 // the defaults the snapshot WILL take rather than the ones it took.
-//
-// projectedPoints = basePoints + perEntrantPoints * entrants. It MOVES until
-// lock, which is why the card labels it as a projection rather than a payout.
 export interface CallPot {
   snapshotted: boolean;
   basePoints: number;
   perEntrantPoints: number;
-  // Band 1 is everyone tied at the top score, band 2 the next distinct score
-  // down, band 3 the one after. The percentages total 100.
+  // THE ADVERTISED SPLIT, AND THE CONFIGURED PERCENTAGES. Band 1 is everyone
+  // tied at the top score, band 2 the next distinct score down, band 3 the one
+  // after, and these total 100.
+  //
+  // THEY ARE NOT WHAT A SETTLED CARD PAID. The settlement renormalizes across
+  // only the OCCUPIED bands, so a week with two distinct scores splits 62.5/37.5
+  // off a snapshot that reads 50/30. These belong on the OPEN card, where they
+  // are the promise being made; they are not rendered beside a settled one. See
+  // CallSettlementBand.
   bands: Array<{ band: number; pct: number }>;
   entrants: number;
-  projectedPoints: number;
+  // Which kind of card this pot is on. Sent so no client has to infer "is this
+  // final?" from the status string.
+  settled: boolean;
+  // THE PURSE — basePoints + perEntrantPoints × entrants — present in every
+  // state, and THE ONLY PURSE FIGURE THIS CLIENT RENDERS. The backend keeps it
+  // apart from projectedPoints because the two answer different questions and
+  // this one tracks the grader; on the fan read they are the same arithmetic.
+  points: number;
+  // WHAT THE BANDS ACTUALLY TOOK. Settled cards only. Equal to `points` on an
+  // ordinary graded card, and 0 on the two cards this field exists for: a voided
+  // one, and a DEGENERATE one where nobody scored above zero, where a purse that
+  // was advertised all week pays out nothing at all.
+  paidPoints?: number;
+  // Live cards only — OMITTED once settled, because nothing is projected about a
+  // card that has already paid. THIS CLIENT NEVER READS OR WRITES IT: it renders
+  // `points` in both states, so there is one purse figure and no second one to
+  // fall out of step with it.
+  projectedPoints?: number;
+}
+
+// One band of the settled table: a distinct score, the fans tied at it, and what
+// that band took.
+//
+// `pct` IS ON THE WIRE AND IS DELIBERATELY NOT RENDERED. It is the CONFIGURED
+// percentage, not the renormalized one — printing it beside `points` would put
+// percentages that don't sum to 100 next to points that do, and hand the fan an
+// arithmetic check that comes out wrong. Points and members only.
+export interface CallSettlementBand {
+  band: number;
+  // Correct answers, which IS the score — the grader stores score = correct.
+  score: number;
+  // How many fans tied at that score. They split `points` evenly between them.
+  members: number;
+  pct: number;
+  points: number;
+}
+
+// The settled band table. Present on BOTH terminal states so a client switches
+// on `voided` rather than on the absence of a key, and null while the card is
+// live. A voided settlement carries no bands: nothing was scored.
+//
+// AN EMPTY `bands` ON A NON-VOID SETTLEMENT IS THE DEGENERATE CARD — the grader
+// refuses to split the purse when the top score is 0, because paying it would
+// hand the largest payout in the game to a room that demonstrated nothing. Two
+// different cards reach it (every fan wrong, or every question pushed/voided),
+// it is not an error and not a loading state, and the screen owes it a sentence.
+export interface CallSettlement {
+  voided: boolean;
+  bands: CallSettlementBand[];
 }
 
 // The game the card is written on. A covered Sharp Foxx broadcast, always —
@@ -4664,17 +4750,27 @@ export interface CallCard {
   questions: CallQuestion[];
   // Nullable in the payload. publish() refuses a card without one, so it is
   // unreachable on a published Call — the guard stays anyway.
-  tiebreaker: { prompt: string } | null;
+  tiebreaker: {
+    prompt: string;
+    // What it actually was, released only on a graded card.
+    actual: number | null;
+    yourAnswer: number | null;
+    // SENT AS AN EXPLICIT FALSE so a client cannot infer a role from the mere
+    // presence of the block, AND THE COPY MUST RESPECT IT. Under distinct-score
+    // bands the tiebreaker settles nothing about the money: everyone tied at a
+    // score is in the same band and paid the same, and the order within a band
+    // is submission time. So: no "closest wins", no "you were 3 off" beside the
+    // pot, and the band table is never sorted by distance from the actual.
+    breaksTies: boolean;
+  } | null;
   pot: CallPot;
 }
 
-// The caller's own card. `editable` is the SERVER's read of whether the fan may
-// still revise (it is `!locked`); read it rather than re-deriving it.
-//
-// NO GRADING FIELDS. results / correctCount / pushCount / wrongCount / score /
-// pointsAwarded all exist as columns and none of them are selected by the fan
-// read — see the note on CallCurrent.
-export interface CallEntry {
+// The caller's own card, FAN-SAFE COLUMNS ONLY — the shape POST /entry hands
+// back, and the base of the settled one below. `editable` is the SERVER's read
+// of whether the fan may still revise (it is `!locked`); read it rather than
+// re-deriving it.
+export interface CallEntryBase {
   id: string;
   // questionId -> optionKey. Every one of the five, always: a partial entry is
   // not a representable row.
@@ -4683,6 +4779,62 @@ export interface CallEntry {
   submittedAt: string;
   updatedAt: string;
   editable: boolean;
+}
+
+// WHAT HAPPENED TO THE CARD, and THE ONE FIELD THE UI SWITCHES ON — the Oracle's
+// and the Trail's ladder verbatim, for their stated reason: a client must never
+// be made to derive the state of a card from three nullable columns.
+//
+//   'void'    — the Call was washed. Nothing was scored; participation paid.
+//   'pending' — entered, not yet graded (open, or past kickoff and waiting).
+//   'graded'  — settled. Not 'win'/'loss': a five-question card has no single
+//               binary outcome, and the per-question map is where the truth is.
+export type CallOutcome = 'pending' | 'graded' | 'void';
+
+// The caller's own card on the fan read, with the grading half attached.
+//
+// EVERY GRADED FIELD IS OPTIONAL BECAUSE IT IS ABSENT, NOT NULLED, on a live
+// card — the backend omits the keys entirely rather than sending a shape. Switch
+// on `outcome` and the optionality stops being a nuisance: it is the type system
+// refusing to let a component read a score off an open card.
+export interface CallEntry extends CallEntryBase {
+  outcome: CallOutcome;
+  // questionId -> correct | push | wrong. NULL on a voided card — the honest
+  // record of "nothing was scored".
+  results?: Record<string, CallResult> | null;
+  correctCount?: number | null;
+  // COUNTED SEPARATELY, NEVER FOLDED INTO wrongCount, AND IT INCLUDES THE VOIDS
+  // — a void scores as a push, so this is "questions that couldn't cost you a
+  // point" and there is no separate void counter to render. The distinction
+  // between the two lives in the per-question copy, not in these numbers.
+  pushCount?: number | null;
+  wrongCount?: number | null;
+  // Correct answers. This is what the bands are cut on.
+  score?: number | null;
+  // THE RECEIPT — one payment, folding participation, the per-correct, the
+  // Whistle and any share of the pot, priced at GRADING TIME.
+  //
+  // IT IS NOT ITEMISED ON SCREEN AND MUST NOT BE. The reward values are
+  // admin-tunable and can move between the grade and the fan opening the card,
+  // so any breakdown this client computed from `payouts` would be arithmetic
+  // about prices that no longer apply, presented beside a number that is real.
+  // On a VOIDED card this is the participation the wash paid.
+  pointsAwarded?: number | null;
+  // SENT, NEVER DERIVED. The rule is wrong === 0 && correct >= 1, and both
+  // halves are load-bearing: the obvious client-side `wrongCount === 0` would
+  // award a Whistle to an all-push card, which has nothing right about it.
+  whistle?: boolean;
+  // DERIVED TRUTH ABOUT THE POT, NOT A RECEIPT — and THIS CLIENT RENDERS IT
+  // NOWHERE. It is recomputed from the stored scores, while pointsAwarded is
+  // payment history, and after a downward regrade they legitimately disagree
+  // (the grader never claws back, so the fan keeps the difference). Putting both
+  // on one screen invites a subtraction whose answer is "the house owes you",
+  // which is false. pointsAwarded is the receipt; the band table explains the
+  // pot.
+  potPoints?: number;
+  // Which band they landed in, or null: below the last paying band, or the
+  // degenerate card where no band paid at all.
+  band?: number | null;
 }
 
 // What each outcome pays, at the current admin-tuned reward values. Pre-computed
@@ -4702,24 +4854,37 @@ export interface CallPayouts {
 // season.
 //
 // ----------------------------------------------------------------------------
-// THERE IS NO RESULTS BLOCK ON THIS READ, AND THAT IS A KNOWN GAP, not something
-// this client can work around. The backend's own TODO names it
-// (call.service.ts, `current`): the projection excludes every grading column on
-// purpose, so a fan opening a GRADED card gets their five answers back and NO
-// OUTCOME AT ALL — no correct/push/wrong, no score, no payout, no answer key,
-// no tiebreaker actual.
+// THE RESULTS BLOCK ARRIVES BEHIND ONE GATE — status === 'graded', computed once
+// on the backend, with every graded field hanging off that single boolean. Three
+// keys carry it: the per-question `resolution`/`correctKey`, the per-entry
+// grading half on `myEntry`, and `settlement` here. On a live card all three are
+// ABSENT rather than nulled.
 //
-// What a real results view needs added, gated on status === 'graded': per
-// question the `resolution` and `correctKey`; per entry the three-valued
-// `results` map, the three counters, `score`, `pointsAwarded` and the `whistle`
-// flag; the tiebreaker's actual value; and the pot settlement (which band the
-// fan landed in and what it paid). Until that lands, the graded branch of the
-// card shows the fan's answers AS FILED and says the correspondent has graded
-// it — no invented outcomes, no zeroed counters, no placeholder payout.
+// WHAT THIS CLIENT DOES WITH IT, decided once so no surface re-litigates it:
+//
+//   THE RECEIPT LEADS AND IT IS NOT ITEMISED. pointsAwarded is the big figure on
+//   a graded card, with the correct count as the headline beneath it. The score
+//   is countable off the answer key; the payment is not derivable anywhere, and
+//   any breakdown computed here would price it off reward values that may have
+//   moved since the grade.
+//
+//   THE PURSE AND THE RECEIPT ARE NEVER ADJACENT. The settlement renders BELOW
+//   the answer key, five rows and a tiebreaker away from pointsAwarded, so the
+//   two numbers can never invite a subtraction. That is structural, not a
+//   wording rule — nothing prevents arithmetic like distance.
+//
+//   NO PERCENTAGES IN THE SETTLEMENT. See CallSettlementBand.
+//
+//   POTPOINTS IS NEVER RENDERED. See CallEntry.
+//
+//   A PUSH IS NEVER A LOSS AND NEVER A NEAR-MISS, and a void is never the fan's
+//   fault. The mark comes from `results`, the sentence from `resolution`.
 // ----------------------------------------------------------------------------
 export interface CallCurrent {
   weekStart: string;
   call: CallCard | null;
+  // The settled band table on both terminal states, null while the card is live.
+  settlement: CallSettlement | null;
   myEntry: CallEntry | null;
   payouts: CallPayouts;
   // Always null — see the section header. Typed as the literal so a component
@@ -4736,12 +4901,17 @@ export interface CallEntryInput {
 // POST /arena/call/entry response. `replaced` is false on the first card of the
 // week and true when the fan changed their mind — the write is an upsert, so
 // replacing is the normal path rather than a collision.
+//
+// `myEntry` HERE IS THE BASE SHAPE, NOT THE FAN-READ ONE: the write path returns
+// entryView, which carries no `outcome` and no grading half — it cannot, because
+// a submission only succeeds on an open card. The page folds it into `current`
+// as outcome: 'pending', which is the only value it could have.
 export interface CallEntryResult {
   callId: string;
   weekStart: string;
   replaced: boolean;
   locksAt: string;
-  myEntry: CallEntry;
+  myEntry: CallEntryBase;
 }
 
 export const getCallCurrent = (token: string) =>

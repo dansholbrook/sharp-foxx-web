@@ -155,11 +155,19 @@ export default function CallPage() {
       // authoritative entry, and it is the only thing about the read that
       // changed. The pot's entrant count moved too if this was a FIRST card, so
       // nudge it locally rather than re-reading the whole surface for +5.
+      //
+      // TWO FIELDS MOVE, AND `projectedPoints` IS NOT ONE OF THEM. The write
+      // path returns the FAN-SAFE entry shape (no outcome, no grading half), and
+      // a submission can only land on an open card, so 'pending' is the only
+      // outcome it could have. The purse this client renders is `points`, so
+      // that is the one bumped; projectedPoints is a field this surface never
+      // reads and therefore must not write, or the two would drift apart here
+      // and nowhere else.
       setCurrent((prev) =>
         prev
           ? {
               ...prev,
-              myEntry: result.myEntry,
+              myEntry: { ...result.myEntry, outcome: 'pending' },
               call:
                 prev.call && !result.replaced
                   ? {
@@ -167,9 +175,8 @@ export default function CallPage() {
                       pot: {
                         ...prev.call.pot,
                         entrants: prev.call.pot.entrants + 1,
-                        projectedPoints:
-                          prev.call.pot.projectedPoints +
-                          prev.call.pot.perEntrantPoints,
+                        points:
+                          prev.call.pot.points + prev.call.pot.perEntrantPoints,
                       },
                     }
                   : prev.call,
@@ -241,6 +248,7 @@ export default function CallPage() {
             weekStart={current.weekStart}
             call={current.call}
             myEntry={current.myEntry}
+            settlement={current.settlement}
             payouts={current.payouts}
             now={now}
             onSubmit={onSubmit}

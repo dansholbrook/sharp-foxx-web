@@ -19,26 +19,33 @@
 //              Renders the same whether or not an entry already exists; an
 //              existing card hydrates the draft and the slip changes verb.
 //   LOCKED   — kickoff passed. The card freezes as filed; nothing actionable.
-//   GRADED   — a DELIBERATELY THIN holding state. See the note below.
+//   GRADED   — the results view: the receipt, the answer key, the settlement.
 //   VOIDED   — the 24h sweep fired: nobody graded it, and it was washed.
 //
 // ----------------------------------------------------------------------------
-// THE GRADED BRANCH IS THIN ON PURPOSE, AND IT IS THE ONE THING ON THIS SURFACE
-// THAT IS WAITING ON THE BACKEND.
+// THE GRADED READING, TOP TO BOTTOM, AND WHY IT IS IN THAT ORDER.
 //
-//   GET /arena/call/current selects no grading columns at all — not the answer
-//   key, not the per-question resolution, not the fan's own results map, score
-//   or payout, not the tiebreaker's actual value. So a graded card here can
-//   honestly show the fan WHAT THEY FILED and say the correspondent has graded
-//   it, and nothing more. It does not show a score of 0, an empty results row,
-//   or a payout of "—", because every one of those is a claim the payload
-//   cannot back and three of them would read as a loss.
+//   THE RECEIPT LEADS. pointsAwarded is the big serif figure, with the correct
+//   count as the headline beneath it — the Oracle's reveal exactly. The argument
+//   is that the score is the one number on this screen a fan can COUNT off the
+//   list below it, and the payment is the one they cannot get anywhere: it folds
+//   participation, the per-correct, the Whistle and any pot share at prices that
+//   can move after the grade. Leading with the derivable number and burying the
+//   underivable one is backwards. And it is what the open card promised — that
+//   card led with a purse, not with a quiz score.
 //
-//   Falling through to the LOCKED reading instead was the alternative and it is
-//   worse: it would tell a fan their graded card is still awaiting a grade.
+//   ONE ADJUSTMENT TO THE ORACLE'S PATTERN: it renders points only on a win,
+//   because a lost pick paid nothing. EVERY filed Call card pays — participation
+//   is unconditional — so the figure is always there, including on the 0-for-5
+//   card, which is what stops that card reading as a punishment.
 //
-//   See the CallCurrent header in api.ts for exactly what the results view needs
-//   added before it can be built.
+//   THEN THE ANSWER KEY, then the tiebreaker, THEN THE POT. The pot moves BELOW
+//   the key on this state alone, and that is structural rather than cosmetic:
+//   the settled purse and the fan's receipt must never sit adjacent, because two
+//   money figures next to each other invite a subtraction whose answer is
+//   "they owe me the rest". Five question rows and a tiebreaker is the distance.
+//   It also happens to read in the right order — what I did, what it paid, what
+//   was true, what the room did — with the fan's outcome ahead of the room's.
 // ----------------------------------------------------------------------------
 //
 // ----------------------------------------------------------------------------
@@ -74,6 +81,8 @@ import {
   CallEntryResult,
   CallPayouts,
   CallQuestion,
+  CallResult,
+  CallSettlement,
 } from '../../api';
 
 // The tiebreaker, parsed. Held as a STRING in state and converted only here,
@@ -195,19 +204,107 @@ function QuestionBlock({
 // A fan with NO entry still sees the prompts. They cannot act on them, but
 // seeing what was asked is the whole of what they missed, and hiding it would
 // make the locked card an empty box.
-// ---------------------------------------------------------------------------
+//
+// ----------------------------------------------------------------------------
+// TWO INDEPENDENT LAYERS ON TOP OF THAT, AND THEY ARE NOT THE SAME SWITCH:
+//
+//   THE MARK comes from `results` and is drawn only when the caller passes one.
+//   Absent on locked and on VOIDED, where no mark exists — a greyed result
+//   column over a card that was never graded is a claim the payload can't back,
+//   which is exactly the test the old thin graded branch passed. That is the
+//   unmarked mode, and it is the absence of a prop rather than a flag.
+//
+//   THE NOTE comes from the QUESTION's resolution, which is present for every
+//   reader of a graded card — including one who never entered. So a non-entrant
+//   gets the answer key with no personal marks on it, which is the honest shape
+//   of "here is what was true, and you weren't in it".
+//
+// A PUSH IS NOT A LOSS AND NOT A NEAR-MISS. It gets the neutral '=' rather than
+// a struck-through anything, it gets a WORD (a bare '=' is a puzzle), and none
+// of the near-miss vocabulary — "so close", "just missed", "agonising" — appears
+// anywhere near it. A void gets the same mark, because a void SCORES as a push,
+// and a different sentence, because it is a different fact: the game landed on
+// the number vs. the correspondent couldn't see it. The second one is our
+// failure and the copy puts it on us.
+// ----------------------------------------------------------------------------
+// WHAT A PUSH MEANS DEPENDS ON THE QUESTION, so the sentence is keyed to the
+// template rather than written once. "It landed exactly on the number" is true
+// of every template with a line or a bucket edge in it, and it is NOT true of
+// half_scoring, where a push is two halves that scored the same and no number
+// was involved at all.
+//
+// AN ALLOWLIST, AND SILENCE IS THE DEFAULT. who_wins and overtime cannot push;
+// halftime_lead and first_scorer_jersey have no push in them either. If a
+// resolution ever says otherwise — the backend will not produce one in real play,
+// but hand-set data can — the row draws its mark and says NOTHING, because a
+// sentence invented for a state that shouldn't exist is worse than no sentence.
+// This is not validation and does not try to be: it is a refusal to print a
+// claim we can't stand behind.
+const CALL_PUSH_NOTE: Record<string, string> = {
+  combined_points: 'Push — it landed exactly on the number.',
+  longest_play: 'Push — it landed exactly on the number.',
+  first_to_n: 'Push — it landed exactly on the number.',
+  margin_bucket: 'Push — it landed exactly on the number.',
+  team_points_bucket: 'Push — it landed exactly on the number.',
+  turnovers_bucket: 'Push — it landed exactly on the number.',
+  threes_bucket: 'Push — it landed exactly on the number.',
+  half_scoring: 'Push — the halves scored the same.',
+};
+
 function FiledList({
   questions,
   entry,
+  results,
+  pushesExplainedAbove,
 }: {
   questions: CallQuestion[];
   entry: CallEntry | null;
+  // null = the unmarked mode. Not a boolean: the map IS the permission.
+  results: Record<string, CallResult> | null;
+  // THE VERDICT ABOVE HAS ALREADY ACCOUNTED FOR EVERY PUSH ON THIS CARD — true
+  // only on an all-push card read by the fan who filed it, where the headline
+  // says "All five landed on the number" and five identical row sentences
+  // underneath it are pure noise. The MARKS still draw; only the explanation
+  // goes. On a mixed card the row is the thing doing the explaining, and on a
+  // non-entrant's read there is no headline to have said it, so both keep it.
+  pushesExplainedAbove: boolean;
 }) {
   return (
     <ol className="call-filed">
       {questions.map((q, i) => {
         const key = entry?.answers[q.id] ?? null;
         const label = q.options.find((o) => o.key === key)?.label ?? null;
+        const result = results?.[q.id] ?? null;
+        // The key, in the fan's words. Falls back to the raw key for the same
+        // reason the answer does: a card re-saved after grading can name an
+        // option this payload no longer carries.
+        const correctLabel =
+          q.correctKey === null || q.correctKey === undefined
+            ? null
+            : q.options.find((o) => o.key === q.correctKey)?.label ??
+              q.correctKey;
+        const note =
+          q.resolution === 'push'
+            ? pushesExplainedAbove
+              ? null
+              : CALL_PUSH_NOTE[q.templateId] ?? null
+            : q.resolution === 'void'
+              ? // The failure is the coverage's, and the sentence says so. A fan
+                // who answered this question did nothing wrong and is told so.
+                //
+                // KEPT EVEN WHEN THE PUSH SENTENCES ARE SUPPRESSED: a void is not
+                // what the headline said. "All five landed on the number" is the
+                // all-push wording, and on a card carrying voids these rows are
+                // the only place the fan learns that some of it was never seen.
+                'Not covered — the correspondent could not call this one.'
+              : // The key, and only where it tells the fan something they don't
+                // already have: a row they got right does not need to be told
+                // what the right answer was.
+                q.resolution === 'answered' &&
+                  result !== 'correct' &&
+                  correctLabel
+                ? `Answer: ${correctLabel}`
+                : null;
         return (
           <li key={q.id} className="call-filed__row">
             <span className="call-filed__slot">{i + 1}</span>
@@ -217,12 +314,14 @@ function FiledList({
                 label ? '' : ' call-filed__answer--none'
               }`}
             >
+              {result && <ResultMark result={result} />}
               {/* A key with no matching option means the card was re-saved after
                   this entry was filed. Show the raw key rather than an em-dash:
                   "they answered something we can no longer name" is true, and
                   "they didn't answer" is not. */}
               {label ?? (key ? key : '—')}
             </span>
+            {note && <span className="call-filed__note">{note}</span>}
           </li>
         );
       })}
@@ -230,24 +329,318 @@ function FiledList({
   );
 }
 
+// THE THREE MARKS. Gold for correct, plain text for a push, MUTED for wrong —
+// and note that wrong is the QUIETEST of the three rather than the loudest, and
+// is never --warn. That token is the something-has-gone-wrong colour (the Oracle
+// says so in its own CSS), and a missed answer on a free weekly card is not
+// that. Painting wrong red would also, by contrast, drag the neutral push toward
+// reading as the consolation tier of a loss, which is the one thing it must not.
+function ResultMark({ result }: { result: CallResult }) {
+  return (
+    <span
+      className={`call-filed__mark call-filed__mark--${result}`}
+      aria-label={
+        result === 'correct' ? 'Correct' : result === 'push' ? 'Push' : 'Wrong'
+      }
+    >
+      {result === 'correct' ? '✓' : result === 'push' ? '=' : '✗'}
+    </span>
+  );
+}
+
 // The tiebreaker as filed. Its own row rather than a sixth question, because it
 // is not scored — it is recorded on the Call and plays no part in the band
 // split, and rendering it in the list would imply it broke something.
+//
+// THE ACTUAL SITS BESIDE IT ON A GRADED CARD AND NOTHING IS SAID ABOUT THE GAP.
+// breaksTies is an explicit false on the wire: everyone tied at a score is in
+// the same band and paid the same, so the tiebreaker settled nothing about the
+// money. Two numbers, no verdict, no distance, and it stays down here beside the
+// fan's own card rather than anywhere near the settlement.
 function FiledTiebreaker({
   prompt,
   answer,
+  actual,
 }: {
   prompt: string | null;
   answer: number | null;
+  actual?: number | null;
 }) {
   if (!prompt) return null;
   return (
     <div className="call-filed__tb">
       <span className="call-filed__tblabel">Tiebreaker</span>
       <span className="call-filed__tbprompt">{prompt}</span>
+      {actual !== null && actual !== undefined && (
+        <span className="call-filed__tbactual">
+          Actually {points(actual)} ·{' '}
+        </span>
+      )}
       <span className="call-filed__tbanswer">
         {answer === null ? '—' : points(answer)}
       </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HOW A CARD FAILED TO BE SCOREABLE, when it did — or null when at least one
+// question was actually answered.
+//
+// PUSH AND VOID ARE NOT INTERCHANGEABLE HERE AND THE COPY MUST NOT MERGE THEM.
+// The schema keeps them as separate resolutions and the backend's proof asserts
+// they are never collapsed, for the reason its own comment gives: "the game
+// landed exactly on 55" and "your correspondent couldn't see it" are different
+// sentences. A card that was half pushed and half unseen is neither, and saying
+// "all five landed on the number" over it tells the fan the game did something
+// it didn't AND hides a coverage failure behind a game fact.
+//
+// Reused at two altitudes with the same three answers: over the whole card (the
+// pot line, where every entrant is in the same boat) and over just the questions
+// one fan's results mark as a push (their verdict headline).
+// ---------------------------------------------------------------------------
+type CallUnscored = 'push' | 'void' | 'mixed';
+
+function unscoredKind(questions: CallQuestion[]): CallUnscored | null {
+  if (questions.length === 0) return null;
+  let pushes = 0;
+  let voids = 0;
+  for (const q of questions) {
+    if (q.resolution === 'push') pushes += 1;
+    else if (q.resolution === 'void') voids += 1;
+    // Anything answered means the card was scoreable, whatever the fans did
+    // with it — that is not this function's case at all.
+    else return null;
+  }
+  return voids === 0 ? 'push' : pushes === 0 ? 'void' : 'mixed';
+}
+
+// Small numbers as words, because the verdict headline is prose in a serif face
+// and "3 of 5 called" reads like a scoreboard in it. Falls back to digits above
+// the card's size, which nothing produces today.
+const COUNT_WORDS = ['None', 'One', 'Two', 'Three', 'Four', 'Five'];
+function countWord(n: number): string {
+  return COUNT_WORDS[n] ?? String(n);
+}
+
+// ---------------------------------------------------------------------------
+// THE VERDICT — the receipt, then the score, then one sentence.
+//
+// SIX HEADLINES, because the zero-score ones are DIFFERENT CARDS rather than one
+// phrasing with a hedge in it:
+//
+//   NOTHING SCOREABLE (pushCount === total) — every question either landed
+//   exactly on the number or went unseen. NOBODY WAS WRONG. "No correct answers
+//   on this card" is a rebuke here, and a rebuke for something no fan could have
+//   avoided: resolutions are a property of the CARD, so if this fan pushed all
+//   five then so did every other entrant. It gets its own sentence — and THREE
+//   of them, because pushes and voids are not the same event and a card holding
+//   both is neither. See unscoredKind.
+//
+//   ZERO WITH WRONGS — genuinely missed. Says so plainly, once, and moves on to
+//   what they were paid.
+//
+// THE WHISTLE SENTENCE. Whenever `whistle` is true on a card containing a push,
+// the block owes an extra line, because this is the single moment the push rule
+// turns into money: the fan is being paid for a perfect card that is visibly not
+// five-for-five, and without the sentence that reads as a bug. The rule itself
+// (wrong === 0 && correct >= 1) lives on the backend and is never re-derived
+// here — the obvious `wrongCount === 0` would hand a Whistle to an all-push card.
+// ---------------------------------------------------------------------------
+function VerdictBlock({
+  entry,
+  questions,
+}: {
+  entry: CallEntry;
+  questions: CallQuestion[];
+}) {
+  const total = questions.length;
+  const correct = entry.correctCount ?? 0;
+  const push = entry.pushCount ?? 0;
+  const wrong = entry.wrongCount ?? 0;
+  const paid = entry.pointsAwarded ?? null;
+  const whistle = entry.whistle === true;
+  const allPush = total > 0 && push === total;
+  // WHICH OF THE THREE. Counted over the questions THIS FAN'S results mark as a
+  // push — pushCount folds the voids in and cannot tell them apart, so the
+  // resolutions are the only place the difference survives.
+  const kind = allPush
+    ? unscoredKind(questions.filter((q) => entry.results?.[q.id] === 'push'))
+    : null;
+  const many = countWord(total).toLowerCase();
+
+  const headline = whistle
+    ? 'The Golden Whistle.'
+    : correct > 0
+      ? `${countWord(correct)} of ${countWord(total)} called.`
+      : kind === 'push'
+        ? `All ${many} landed on the number.`
+        : kind === 'void'
+          ? `None of the ${many} could be called.`
+          : // MIXED — claims neither exclusively, because neither is true of the
+            // whole card. Which question was which is on the rows beneath, where
+            // the void sentences survive precisely for this.
+            kind === 'mixed'
+            ? 'Nothing on this card could be scored.'
+            : 'No correct answers on this card.';
+
+  const sub = whistle
+    ? 'A perfect card — every question the correspondent could grade, you called.'
+    : correct > 0
+      ? entry.band !== null && entry.band !== undefined
+        ? 'Your card took a share of the pot.'
+        : 'Short of the pot this week — you keep what your card paid.'
+      : kind === 'push'
+        ? 'Every question landed exactly on the number, so there was nothing there to call — for you or for anyone else who filed.'
+        : kind === 'void'
+          ? // THE FAILURE IS OURS AND THE SENTENCE SAYS SO. Nothing here is
+            // phrased as something the fan got wrong, because nothing was.
+            'Not one question could be graded from the stands. That is our coverage falling short rather than your card — and you keep what filing pays.'
+          : kind === 'mixed'
+            ? "Some questions landed exactly on the number and the rest went uncovered, so no card could score this week — yours or anyone else's."
+            : 'You keep what filing pays. There is a new card on Thursday.';
+
+  return (
+    <div className="call-verdict">
+      {/* Only when there is something to show. Participation makes this positive
+          on every filed card in practice, but a house that priced it at zero
+          must not be made to render "+0". */}
+      {paid !== null && paid > 0 && (
+        <span className="call-verdict__points">+{points(paid)}</span>
+      )}
+      <p className="call-verdict__headline">{headline}</p>
+      {/* STRAIGHT OFF THE PAYLOAD, no arithmetic and no denominator folded in.
+          The push count INCLUDES the voids and is not split apart here — the
+          difference between them is a per-question sentence, not a counter. */}
+      <p className="call-verdict__counts">
+        {points(correct)} correct · {points(push)} push · {points(wrong)} wrong
+      </p>
+      <p className="call-verdict__sub">{sub}</p>
+      {whistle && push > 0 && (
+        <p className="call-verdict__whistle">
+          A push doesn&apos;t break a perfect card.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// "Top score", "2nd score", "3rd score" — shared by the advertised pills and the
+// settled table so the two namings cannot drift apart between the open card and
+// the graded one.
+function bandRank(band: number): string {
+  return band === 1
+    ? 'Top score'
+    : band === 2
+      ? '2nd score'
+      : `${band}rd score`;
+}
+
+// ---------------------------------------------------------------------------
+// THE SETTLEMENT — what the room did, and the last thing on the card.
+//
+// POINTS AND MEMBERS, NEVER PERCENTAGES. `pct` is on the wire and is the
+// CONFIGURED number: with two occupied bands the split renormalizes 50/30 into
+// 62.5/37.5, so rendering the snapshot's percentages beside the actual points
+// would show percentages that don't total 100 next to points that do.
+//
+// BANDS ARE BLOCKS, NOT A TABLE. At 390px a rank, a membership and a points
+// figure across one row leaves the middle column about ninety pixels, which
+// wraps "4 fans" mid-row. So each band stacks: rank and points on the first
+// line, who and what they did underneath — the same grid the filed rows use.
+//
+// THE FAN'S OWN BAND IS MARKED AND NEVER PRICED. Their share is not on this
+// block at any width: pointsAwarded upstairs is the receipt, this is the
+// explanation, and a per-fan figure inside a row that also carries the band
+// total and the member count is an invitation to divide.
+//
+// THE DEGENERATE CARD gets a sentence instead of a table AND LOSES THE PURSE
+// FIGURE. A large gold number whose only verb is "paid nothing" is a quantity of
+// something that did not happen; the eyebrow stays so the block is still
+// findable, and the line says which of the two degenerate cards this was.
+// ---------------------------------------------------------------------------
+function SettlementBlock({
+  settlement,
+  pot,
+  myBand,
+  unscored,
+}: {
+  settlement: CallSettlement;
+  pot: CallCard['pot'];
+  myBand: number | null;
+  // How the card failed to be scoreable, or null if it didn't — the card was
+  // ungradeable rather than badly played, and the sentence must not blame the
+  // room for it. Three values rather than a flag for the same reason the verdict
+  // has three headlines: a void is not a push. See unscoredKind.
+  unscored: CallUnscored | null;
+}) {
+  const bands = settlement.bands;
+
+  if (bands.length === 0) {
+    return (
+      <div className="call-settle call-settle--none">
+        <span className="call-settle__label">The pot</span>
+        <p className="call-settle__nonesub">
+          {/* FIVE WAYS TO REACH AN EMPTY BAND TABLE, and they are five different
+              sentences. An empty room is not a room that played badly; a card
+              nobody could score is not a card everybody got wrong; and a card
+              the correspondent couldn't see is not a card the game refused to
+              settle. The last two are OUR failure and the game's respectively,
+              and only the final line is about the fans at all. */}
+          {pot.entrants === 0
+            ? 'Nobody filed a card this week, so the purse paid out nothing.'
+            : unscored === 'push'
+              ? 'Every question landed on the number, so no card scored above zero. The purse paid out nothing this week.'
+              : unscored === 'void'
+                ? 'Not one question could be graded from the stands, so no card scored above zero. The purse paid out nothing this week.'
+                : unscored === 'mixed'
+                  ? 'Nothing on this card could be scored — some questions landed on the number and the rest went uncovered — so the purse paid out nothing this week.'
+                  : 'Nobody scored above zero, so no band filled and the purse paid out nothing this week.'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="call-settle">
+      <div className="call-settle__head">
+        <span className="call-settle__label">The pot</span>
+        <span className="call-settle__value">{points(pot.points)}</span>
+        <span className="call-settle__unit">pts</span>
+      </div>
+      <p className="call-settle__sub">
+        Paid out by score across {points(pot.entrants)}{' '}
+        {pot.entrants === 1 ? 'card' : 'cards'} filed.
+      </p>
+      <ul className="call-settle__bands">
+        {bands.map((b) => (
+          <li
+            key={b.band}
+            className={`call-settle__band${
+              b.band === myBand ? ' call-settle__band--mine' : ''
+            }`}
+          >
+            <span className="call-settle__rank">{bandRank(b.band)}</span>
+            <span className="call-settle__points">{points(b.points)} pts</span>
+            <span className="call-settle__who">
+              {points(b.members)} {b.members === 1 ? 'fan' : 'fans'} at{' '}
+              {points(b.score)} correct
+              {b.members > 1 && ', split evenly'}
+              {b.band === myBand && (
+                <span className="call-settle__mine"> · your band</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {/* Stated as a RULE and never as arithmetic. A fan who read three pills on
+          the open card and is looking at two rows here is owed the reason, and
+          the reason is not a sum they should be checking. */}
+      {bands.length < pot.bands.length && (
+        <p className="call-settle__note">
+          Bands nobody reached fold back into the ones above.
+        </p>
+      )}
     </div>
   );
 }
@@ -284,6 +677,15 @@ function PayoutStrip({ payouts }: { payouts: CallPayouts }) {
 // LABELLED AS A PROJECTION, ALWAYS, while the card is open: it is
 // base + perEntrant × entrants and it grows with every entry until kickoff, so
 // stating it as a payout would be promising a number that moves.
+//
+// ONE PURSE FIGURE, AND IT IS `points`. The payload also carries
+// projectedPoints on a live card and omits it once settled; this client reads
+// neither state's copy of it, so there is no second figure anywhere that could
+// fall out of step with this one, and no branch that has to choose between them.
+//
+// THIS BLOCK IS NOT RENDERED ON A GRADED CARD. The settled purse belongs BELOW
+// the answer key, where it cannot sit adjacent to the fan's receipt — see
+// SettlementBlock and the file header.
 // ---------------------------------------------------------------------------
 function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean }) {
   return (
@@ -292,7 +694,7 @@ function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean }) {
         <span className="call-pot__label">
           {open ? 'Pot so far' : 'The pot'}
         </span>
-        <span className="call-pot__value">{points(pot.projectedPoints)}</span>
+        <span className="call-pot__value">{points(pot.points)}</span>
         <span className="call-pot__unit">pts</span>
       </div>
       <p className="call-pot__sub">
@@ -307,13 +709,11 @@ function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean }) {
       <ul className="call-pot__bands">
         {pot.bands.map((b) => (
           <li key={b.band} className="call-pot__band">
-            <span className="call-pot__bandrank">
-              {b.band === 1
-                ? 'Top score'
-                : b.band === 2
-                  ? '2nd score'
-                  : `${b.band}rd score`}
-            </span>
+            <span className="call-pot__bandrank">{bandRank(b.band)}</span>
+            {/* THE ONE PLACE A PERCENTAGE BELONGS. Here it is the advertised
+                promise, made before anyone has played. It does not follow the
+                card into the settlement, where the occupied bands renormalize
+                and these numbers stop describing what was paid. */}
             <span className="call-pot__bandpct">{b.pct}%</span>
           </li>
         ))}
@@ -433,6 +833,7 @@ export function CallSheet({
   weekStart,
   call,
   myEntry,
+  settlement,
   payouts,
   now,
   onSubmit,
@@ -444,6 +845,10 @@ export function CallSheet({
   weekStart: string;
   call: CallCard | null;
   myEntry: CallEntry | null;
+  // Non-null on both terminal states, null while the card is live. The graded
+  // branch reads it; the voided branch deliberately does not — a wash has an
+  // empty band list because nothing was scored, not because nobody won.
+  settlement: CallSettlement | null;
   payouts: CallPayouts;
   // Ticked by the page at 1s while the card is open, so there is ONE timer on
   // this surface rather than one here and one there. The page also owns the
@@ -515,6 +920,30 @@ export function CallSheet({
 
   const phase = call ? callPhase(call) : null;
   const editable = phase === 'open';
+
+  // WAS THIS CARD UNGRADEABLE RATHER THAN BADLY PLAYED, AND WHICH KIND? A
+  // property of the CARD and not of any one fan — the resolutions are shared by
+  // every entrant, so if nothing here could be scored then nobody in the
+  // building was wrong and nobody could have won. That is a different sentence
+  // from "nobody got any right", and it is three different sentences depending
+  // on whether the game refused to settle, we failed to watch, or both.
+  const unscored = unscoredKind(questions);
+
+  // Does the verdict headline already say what every push row would say? Two
+  // conditions, and both matter:
+  //
+  //   THE FAN'S OWN pushCount, not the card's resolutions — a non-entrant gets
+  //   no verdict block, so on the same card their rows keep the sentences that
+  //   are the only explanation they have.
+  //
+  //   ONLY ON A PURE-PUSH CARD. The mixed headline deliberately claims neither
+  //   event, so it has NOT said what the push rows say and they go back to being
+  //   the thing doing the explaining.
+  const pushesExplainedAbove =
+    myEntry?.outcome === 'graded' &&
+    questions.length > 0 &&
+    (myEntry.pushCount ?? 0) === questions.length &&
+    unscored === 'push';
 
   // ---- THE BACKSTOP, AND ITS HONEST LIMIT.
   //
@@ -606,9 +1035,12 @@ export function CallSheet({
         <p className="call-head__when">{kickoffLabel(call.event.scheduledAt)}</p>
       </header>
 
-      {/* The pot, on every state EXCEPT a void — a washed card paid nothing, and
-          a purse figure over "this one was washed" reads as something owed. */}
-      {phase !== 'voided' && (
+      {/* THE POT, UP HERE, ON THE TWO LIVE-ISH STATES ONLY.
+          Not on a VOID: a washed card paid nothing, and a purse figure over
+          "this one was washed" reads as something owed.
+          Not on a GRADE either — there it moves below the answer key so the
+          settled purse can never sit beside the fan's receipt. */}
+      {(phase === 'open' || phase === 'locked') && (
         <PotBlock pot={call.pot} open={phase === 'open'} />
       )}
 
@@ -733,7 +1165,12 @@ export function CallSheet({
               </p>
             </>
           )}
-          <FiledList questions={questions} entry={myEntry} />
+          <FiledList
+            questions={questions}
+            entry={myEntry}
+            results={null}
+            pushesExplainedAbove={false}
+          />
           <FiledTiebreaker
             prompt={tiebreakerPrompt}
             answer={myEntry?.tiebreakerAnswer ?? null}
@@ -741,24 +1178,45 @@ export function CallSheet({
         </div>
       )}
 
-      {/* ================= GRADED — the thin holding state ================= */}
+      {/* ================= GRADED — the results view ================= */}
       {phase === 'graded' && (
         <div className="call-frozen call-frozen--graded">
-          <p className="call-frozen__headline">
-            The correspondent has filed their grade.
-          </p>
-          <p className="call-frozen__sub">
-            {myEntry
-              ? 'This is the card you locked in. Your score and what it paid land in your points statement.'
-              : 'You sat this one out. Here is what was asked.'}
-          </p>
-          <FiledList questions={questions} entry={myEntry} />
+          {/* SWITCHED ON `outcome`, not on the presence of the entry: a card
+              that came back without its grading half is a payload this branch
+              cannot narrate, and it falls to the sat-it-out reading rather than
+              rendering a verdict full of zeroes. */}
+          {myEntry && myEntry.outcome === 'graded' ? (
+            <VerdictBlock entry={myEntry} questions={questions} />
+          ) : (
+            <>
+              <p className="call-frozen__headline">This one is settled.</p>
+              <p className="call-frozen__sub">
+                {myEntry
+                  ? 'The correspondent has filed their grade.'
+                  : 'You sat this one out. Here is what was asked, and what the correspondent called.'}
+              </p>
+            </>
+          )}
+          <FiledList
+            questions={questions}
+            entry={myEntry}
+            results={myEntry?.results ?? null}
+            pushesExplainedAbove={pushesExplainedAbove}
+          />
           <FiledTiebreaker
             prompt={tiebreakerPrompt}
             answer={myEntry?.tiebreakerAnswer ?? null}
+            actual={call.tiebreaker?.actual ?? null}
           />
-          {/* NO SCORE, NO ANSWER KEY, NO PAYOUT — none of the three is in this
-              payload, and a zero would read as a loss. See the file header. */}
+          {/* THE ROOM'S HALF, LAST — and a long way from the receipt. */}
+          {settlement && !settlement.voided && (
+            <SettlementBlock
+              settlement={settlement}
+              pot={call.pot}
+              myBand={myEntry?.band ?? null}
+              unscored={unscored}
+            />
+          )}
         </div>
       )}
 
@@ -770,9 +1228,32 @@ export function CallSheet({
             The card went ungraded and the week was voided — nothing counted
             against you. There is a new game on Thursday.
           </p>
+          {/* THE WASH PAID SOMETHING, AND THE FAN IS TOLD SO — QUIETLY.
+              points_awarded is the one grading column a voided entry carries:
+              the sweep pays participation and scores nothing. It does not lead
+              (there is no verdict to celebrate) and it is not the hero figure a
+              graded card gets, but a fan whose balance moved is owed the
+              sentence that explains why. */}
+          {myEntry?.outcome === 'void' &&
+            myEntry.pointsAwarded !== null &&
+            myEntry.pointsAwarded !== undefined &&
+            myEntry.pointsAwarded > 0 && (
+              <p className="call-frozen__paid">
+                You keep <strong>+{points(myEntry.pointsAwarded)}</strong> for
+                filing a card.
+              </p>
+            )}
           {myEntry && (
             <>
-              <FiledList questions={questions} entry={myEntry} />
+              {/* UNMARKED, ALWAYS. A washed card was never graded, so there are
+                  no marks to draw and no resolutions to explain — these answers
+                  weren't wrong, they were unread. */}
+              <FiledList
+                questions={questions}
+                entry={myEntry}
+                results={null}
+                pushesExplainedAbove={false}
+              />
               <FiledTiebreaker
                 prompt={tiebreakerPrompt}
                 answer={myEntry.tiebreakerAnswer}
