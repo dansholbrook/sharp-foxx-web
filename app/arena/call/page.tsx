@@ -47,6 +47,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
+import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { CallSheet } from './answer-sheet';
@@ -62,6 +63,7 @@ export default function CallPage() {
   const router = useRouter();
   const pathname = usePathname();
   const { token, user } = useAuth();
+  const { runGated } = useAgeGate();
   const allowed = canAccess(user?.roles ?? [], pathname);
 
   const [current, setCurrent] = useState<CallCurrent | null>(null);
@@ -149,7 +151,9 @@ export default function CallPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await submitCallEntry(token, input);
+      // Through the 18+ gate — see age-gate.tsx. An un-attested fan is prompted
+      // and, on affirming, the whole card is filed for them on the retry.
+      const result = await runGated(() => submitCallEntry(token, input));
       setSaved(result);
       // Fold the filed card in without a round trip — the response carries the
       // authoritative entry, and it is the only thing about the read that

@@ -15,6 +15,11 @@ export interface LoginResponse {
   // before proceeding. Absent on the legacy dev (userId) login path -- callers
   // treat absent as false.
   mustChangePassword?: boolean;
+  // True when the account predates the 18+ gate and has never attested. UNLIKE
+  // mustChangePassword this NEVER forces a redirect -- it is only a hint that
+  // lets the gate prompt open before a doomed call rather than after its 403.
+  // The 403 is the authority; absent reads as false (see age-gate.tsx).
+  mustAttestAge?: boolean;
 }
 
 export interface CommissionsReport {
@@ -601,18 +606,70 @@ export interface CreateSponsorshipInput {
   adOrderId: string;
 }
 
+// Flatten a Nest error body's `message` (string or string[]) to one line.
+function messageFrom(body: unknown, fallback: string): string {
+  const m = (body as { message?: unknown } | null)?.message;
+  if (Array.isArray(m)) return m.join(', ');
+  if (typeof m === 'string' && m) return m;
+  return fallback;
+}
+
 // Pull a useful message out of a Nest error body ({ message, statusCode }).
 async function toError(res: Response): Promise<Error> {
   let detail = res.statusText;
   try {
-    const body = await res.json();
-    if (body?.message) {
-      detail = Array.isArray(body.message) ? body.message.join(', ') : body.message;
-    }
+    detail = messageFrom(await res.json(), res.statusText);
   } catch {
     /* non-JSON body -- fall back to statusText */
   }
   return new Error(`${res.status} ${detail}`);
+}
+
+// ---- The 18+ eligibility gate ----
+//
+// Mirrors AGE_GATE_TERMS in sharp-foxx-api/src/common/age-gate.ts. The backend
+// ships this object inside the 403 it refuses a gated call with, and again in
+// the attest-age response, precisely so the sentence the fan affirms is never
+// duplicated on this side. RENDER `text` FROM THE PAYLOAD, NEVER A LITERAL.
+export interface AgeAttestationTerms {
+  minAge: number;
+  version: string;
+  text: string;
+}
+
+// The one exception to "never a literal", and it is deliberately confined here.
+//
+// /join is PUBLIC and pre-auth, and both of the backend's copies of the sentence
+// sit behind a Bearer token, so the signup checkbox has nothing to render until
+// GET /auth/age-gate (asked for, not yet shipped) exists. This is the INITIAL
+// VALUE only: getAgeGateTerms() overwrites it the moment the endpoint answers,
+// so /join renders instantly today and self-corrects the day it lands.
+//
+// SOURCE OF TRUTH IS sharp-foxx-api/src/common/age-gate.ts. If AGE_GATE_TEXT or
+// AGE_GATE_VERSION changes there, this must change in the same breath or the
+// version key stored against a signup is a lie. Delete this constant outright
+// once the endpoint is live -- it is scaffolding, not a contract.
+export const AGE_GATE_FALLBACK_TERMS: AgeAttestationTerms = {
+  minAge: 18,
+  version: 'age-gate-v1',
+  text: 'I am 18 years of age or older.',
+};
+
+// The refusal code on the gate's 403. We route on THIS, never on the message --
+// a role failure and an un-attested fan are both 403s and must not be confused.
+const AGE_GATE_ERROR_CODE = 'AGE_ATTESTATION_REQUIRED';
+
+// Thrown by toAuthError when a gated endpoint refuses for want of an
+// attestation, so all eight of them surface one `instanceof`-detectable type
+// instead of a message string every caller would have to regex. Carries the
+// server's wording so the prompt renders from it.
+export class AgeAttestationRequiredError extends Error {
+  attestation: AgeAttestationTerms;
+  constructor(attestation: AgeAttestationTerms, message: string) {
+    super(message);
+    this.name = 'AgeAttestationRequiredError';
+    this.attestation = attestation;
+  }
 }
 
 // ---- Central 401 handling ----
@@ -636,8 +693,53 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
 // current password, not an expired session, and must not sign the user out.
 async function toAuthError(res: Response): Promise<Error> {
   if (res.status === 401) onUnauthorized?.();
+  // The 18+ gate is the ONE 403 that isn't a dead end -- it names a thing the
+  // fan can resolve in place. Read the body here (once -- a Response body can
+  // only be consumed one time, so this branch can't delegate to toError) and
+  // hand back the typed error every gated call site routes on.
+  if (res.status === 403) {
+    const body = await res.json().catch(() => null);
+    const detail = messageFrom(body, res.statusText);
+    if ((body as { code?: string } | null)?.code === AGE_GATE_ERROR_CODE) {
+      const terms = (body as { attestation?: AgeAttestationTerms }).attestation;
+      return new AgeAttestationRequiredError(terms ?? AGE_GATE_FALLBACK_TERMS, detail);
+    }
+    // Any other 403 keeps the exact "<status> <message>" string it had before.
+    return new Error(`403 ${detail}`);
+  }
   return toError(res);
 }
+
+// The affirmation sentence for a page with no token to spend -- i.e. /join.
+// PUBLIC, no Bearer header. Returns the same frozen constant the 403 carries.
+//
+// Best-effort by construction: the caller seeds its state with
+// AGE_GATE_FALLBACK_TERMS and lets this overwrite it, so a 404 (the endpoint
+// hasn't shipped) or a network failure leaves the signup checkbox readable
+// rather than blank.
+export async function getAgeGateTerms(): Promise<AgeAttestationTerms> {
+  const res = await fetch(`${BASE}/auth/age-gate`);
+  if (!res.ok) throw await toError(res);
+  return res.json();
+}
+
+// POST /auth/attest-age -- the 18+ affirmation for an account that predates the
+// gate. Returns the SAME envelope as login (token + user + both must-flags),
+// plus the record and the terms, so the caller swaps the session with a plain
+// setSession(res) and nothing else.
+//
+// IDEMPOTENT server-side, and the first attestation is the one kept, so a retry
+// after a flaky response is safe. The new token carries att:true; the backend's
+// AgeGateGuard also falls back to reading the record, so even a lost response
+// leaves the fan playable on their OLD token -- the swap is an optimization,
+// not a correctness requirement.
+export interface AttestAgeResponse extends LoginResponse {
+  attestedAt: string | null;
+  attestation: AgeAttestationTerms;
+}
+
+export const attestAge = (token: string) =>
+  authPost<AttestAgeResponse>('/auth/attest-age', token, { ageAttestation: true });
 
 // Real sign-in: email + password. The backend returns the usual token/user
 // payload plus mustChangePassword (true when the account is still on a temp
@@ -705,6 +807,11 @@ export interface SignupInput {
   password: string;
   displayName: string;
   referralCode?: string;
+  // The 18+ gate at the door. REQUIRED and literally `true` -- the backend's
+  // zod field refuses false and refuses absent alike, with
+  // fieldErrors.ageAttestation. Typed as the literal rather than boolean so a
+  // caller can't pass a maybe-false variable and find out at runtime.
+  ageAttestation: true;
 }
 
 // The zod flatten() shape the signup route returns on a 400, same contract as

@@ -42,6 +42,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../auth-context';
+import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
 import {
   getParlayBoard,
@@ -497,6 +498,7 @@ function TicketCard({
 
 export function ParlayBoard({ contest }: { contest: ContestDetail }) {
   const { token } = useAuth();
+  const { runGated } = useAgeGate();
   const { balance, applyBalance } = usePoints();
 
   const [board, setBoard] = useState<ParlayBoardRead | null>(null);
@@ -684,27 +686,33 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
     };
 
     try {
-      await ensureEntered();
-      let res;
-      try {
-        res = await buildParlayTicket(token, contest.id, {
-          stake: finalStake,
-          legs: draft,
-        });
-      } catch (e) {
-        // Belt-and-braces: if the build 403s for a missing entry (our flag was
-        // wrong), enter and retry once so a first ticket never dead-ends.
-        if (/enter the contest/i.test(e instanceof Error ? e.message : '')) {
-          await enterContest(token, contest.id).catch(() => {});
-          setEntered(true);
-          res = await buildParlayTicket(token, contest.id, {
+      // THE WHOLE LADDER goes through the 18+ gate, not just the build: the
+      // first gated call here is the transparent enterContest inside
+      // ensureEntered, so wrapping buildParlayTicket alone would let the 403
+      // escape as a generic error. Re-running the ladder after an attestation
+      // is safe — ensureEntered tolerates an "already entered" 409, and the
+      // draft slip is untouched while the prompt is open.
+      const res = await runGated(async () => {
+        await ensureEntered();
+        try {
+          return await buildParlayTicket(token, contest.id, {
             stake: finalStake,
             legs: draft,
           });
-        } else {
+        } catch (e) {
+          // Belt-and-braces: if the build 403s for a missing entry (our flag was
+          // wrong), enter and retry once so a first ticket never dead-ends.
+          if (/enter the contest/i.test(e instanceof Error ? e.message : '')) {
+            await enterContest(token, contest.id).catch(() => {});
+            setEntered(true);
+            return await buildParlayTicket(token, contest.id, {
+              stake: finalStake,
+              legs: draft,
+            });
+          }
           throw e;
         }
-      }
+      });
       // The response carries the built ticket and the new balance, so the book
       // appends the AUTHORITATIVE row (no guessed shape) and the ⚡ chip moves
       // without a wallet re-read.
@@ -741,6 +749,7 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
     draft,
     applyBalance,
     flash,
+    runGated,
   ]);
 
   const onCancelTicket = useCallback(

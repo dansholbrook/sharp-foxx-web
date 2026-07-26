@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
+import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { FanCard } from '../../fan-card';
@@ -103,6 +104,7 @@ function EnterHero({
   onEntered: () => void;
 }) {
   const { token } = useAuth();
+  const { runGated } = useAgeGate();
   const { balance, applyBalance } = usePoints();
   const [entering, setEntering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +122,9 @@ function EnterHero({
     setEntering(true);
     setError(null);
     try {
-      await enterContest(token, contest.id);
+      // Through the 18+ gate — see age-gate.tsx. Entering is itself gated, so
+      // this is where an un-attested fan meets the prompt on most contests.
+      await runGated(() => enterContest(token, contest.id));
       // Enter returns the entry row, not a balance — refresh the shared wallet
       // from its canonical read so the ⚡ chip reflects the spend. Best-effort:
       // the entry already succeeded, so a failed refresh just leaves a stale
@@ -324,6 +328,7 @@ function PickSheetView({
   onWithdrew: () => void;
 }) {
   const { token } = useAuth();
+  const { runGated } = useAgeGate();
   const { applyBalance } = usePoints();
   const ou = contest.type === 'overunder';
   const [sheet, setSheet] = useState<PickSheet | null>(null);
@@ -404,9 +409,11 @@ function PickSheetView({
       try {
         // The PUT returns the rebuilt sheet — reconcile from it rather than
         // trusting the optimistic paint (keeps summary/pointsPerCorrect honest).
-        const next = await submitPicks(token, contest.id, {
-          picks: [{ eventId, pick: side }],
-        });
+        // Through the 18+ gate — see age-gate.tsx. The optimistic paint stays
+        // up while the prompt is open, and stands if the retry lands.
+        const next = await runGated(() =>
+          submitPicks(token, contest.id, { picks: [{ eventId, pick: side }] }),
+        );
         setSheet(next);
         setSavingId(null);
         setSavedId(eventId);
@@ -432,7 +439,7 @@ function PickSheetView({
         });
       }
     },
-    [token, sheet, savingId, contest.id],
+    [token, sheet, savingId, contest.id, runGated],
   );
 
   async function onWithdraw() {

@@ -11,10 +11,16 @@
 // a hand-typed code still attributes. Attribution is best-effort server-side -- a
 // bad code never blocks the signup.
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { signup, SignupValidationError, SignupInput } from '../api';
+import {
+  signup,
+  getAgeGateTerms,
+  SignupValidationError,
+  SignupInput,
+  AGE_GATE_FALLBACK_TERMS,
+} from '../api';
 import { useAuth } from '../auth-context';
 
 // Client mirror of signupSchema so a fan gets instant feedback before the round
@@ -26,6 +32,7 @@ function validate(v: {
   email: string;
   password: string;
   confirm: string;
+  ageAttestation: boolean;
 }): Record<string, string> {
   const errors: Record<string, string> = {};
   const name = v.displayName.trim();
@@ -36,6 +43,11 @@ function validate(v: {
   }
   if (v.password.length < 8) errors.password = 'Use at least 8 characters.';
   if (v.confirm !== v.password) errors.confirm = 'Passwords don’t match.';
+  // The 18+ gate. Keyed and worded to MATCH the server's own zod message, so
+  // the client pre-check and a server 400 read identically in the same slot.
+  if (!v.ageAttestation) {
+    errors.ageAttestation = 'You must confirm you are 18 or older';
+  }
   return errors;
 }
 
@@ -65,6 +77,27 @@ function JoinForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [ageAttestation, setAgeAttestation] = useState(false);
+
+  // THE AFFIRMATION SENTENCE, from the server. Seeded with the documented
+  // fallback so the checkbox is readable on first paint (and stays readable if
+  // the fetch fails or GET /auth/age-gate hasn't shipped yet), then overwritten
+  // by the server's copy. That is what keeps a legal reword a backend-only
+  // change: bump the version there, and this page follows without an edit.
+  const [terms, setTerms] = useState(AGE_GATE_FALLBACK_TERMS);
+  useEffect(() => {
+    let cancelled = false;
+    getAgeGateTerms()
+      .then((t) => {
+        if (!cancelled) setTerms(t);
+      })
+      .catch(() => {
+        /* fallback stands -- a signup must never be blocked on this read */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Manual code entry, only offered when the URL carried no ref. Collapsed by
   // default so the form stays a clean three-field funnel.
@@ -84,7 +117,7 @@ function JoinForm() {
     setGeneralError(null);
     setIsDuplicate(false);
 
-    const errors = validate({ displayName, email, password, confirm });
+    const errors = validate({ displayName, email, password, confirm, ageAttestation });
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -92,6 +125,9 @@ function JoinForm() {
       email: email.trim(),
       password,
       displayName: displayName.trim(),
+      // Only reachable with the box checked (validate() gates it above), so the
+      // literal `true` the backend demands is the honest value here.
+      ageAttestation: true,
     };
     if (effectiveCode) input.referralCode = effectiveCode;
 
@@ -206,6 +242,23 @@ function JoinForm() {
             />
             {fieldErrors.confirm && (
               <span className="apply-field-error">{fieldErrors.confirm}</span>
+            )}
+          </div>
+
+          {/* The 18+ gate at the door. The sentence is the SERVER'S — rendered
+              from `terms.text`, never typed here — so a legal reword plus a
+              version bump on the backend reaches this page with no edit. */}
+          <div className="field field--wide join-age">
+            <label className="checkbox-label join-age__label">
+              <input
+                type="checkbox"
+                checked={ageAttestation}
+                onChange={(e) => setAgeAttestation(e.target.checked)}
+              />
+              {terms.text}
+            </label>
+            {fieldErrors.ageAttestation && (
+              <span className="apply-field-error">{fieldErrors.ageAttestation}</span>
             )}
           </div>
 

@@ -29,6 +29,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../auth-context';
+import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
 import {
   getSquaresGrid,
@@ -150,6 +151,7 @@ function PrizeRow({ row, meId }: { row: SquaresPrizeRow; meId: string | undefine
 
 export function SquaresBoard({ contest }: { contest: ContestDetail }) {
   const { token, user } = useAuth();
+  const { runGated } = useAgeGate();
   const { applyBalance } = usePoints();
 
   const [grid, setGrid] = useState<SquaresGrid | null>(null);
@@ -342,24 +344,30 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
       };
 
       try {
-        await ensureEntered();
-        let res;
-        try {
-          res = await claimSquare(token, contest.id, { row, col });
-        } catch (e) {
-          // Belt-and-braces: if the claim 403s for a missing entry (our flag was
-          // wrong), enter and retry once so a first tap never dead-ends.
-          if (/enter the contest/i.test(e instanceof Error ? e.message : '')) {
-            await enterContest(token, contest.id).catch(() => {});
-            setEntered(true);
-            res = await claimSquare(token, contest.id, { row, col });
-          } else {
+        // THE WHOLE LADDER goes through the 18+ gate, not just the claim: the
+        // first gated call here is the transparent enterContest inside
+        // ensureEntered, so wrapping claimSquare alone would let the 403 escape
+        // as a generic error. Re-running the ladder after an attestation is
+        // safe — ensureEntered tolerates an "already entered" 409. The
+        // optimistic square stays painted while the prompt is open.
+        const res = await runGated(async () => {
+          await ensureEntered();
+          try {
+            return await claimSquare(token, contest.id, { row, col });
+          } catch (e) {
+            // Belt-and-braces: if the claim 403s for a missing entry (our flag was
+            // wrong), enter and retry once so a first tap never dead-ends.
+            if (/enter the contest/i.test(e instanceof Error ? e.message : '')) {
+              await enterContest(token, contest.id).catch(() => {});
+              setEntered(true);
+              return await claimSquare(token, contest.id, { row, col });
+            }
             throw e;
           }
-        }
+        });
         if (res.balance != null) applyBalance(res.balance);
         setGrid((g) =>
-          g ? patchBoard(g, (b) => ({ ...b, myClaimCount: res!.myClaimCount })) : g,
+          g ? patchBoard(g, (b) => ({ ...b, myClaimCount: res.myClaimCount })) : g,
         );
 
         // THE FILL: this claim took square #100 and spawned the next board. Refresh
@@ -408,7 +416,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
     },
     [
       token, grid, board, claimable, claimMap, claimingCells, cellKey, entered,
-      contest.id, applyBalance, refresh,
+      contest.id, applyBalance, refresh, runGated,
     ],
   );
 

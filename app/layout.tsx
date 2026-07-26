@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from './auth-context';
+import { AgeGateProvider } from './age-gate';
 import { FollowsProvider } from './follows-context';
 import { PointsProvider } from './points-context';
 import { EarnProvider } from './earn-context';
@@ -25,13 +26,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* PROVIDER ORDER IS LOAD-BEARING. Points must wrap Earn (an earn pushes
             its new balance at the ⚡ chip), and Earn must wrap Follows (a
             successful follow is itself an earn — see follows-context.tsx).
-            Auth wraps all three; nothing below it works without a token. */}
+            Auth wraps all three; nothing below it works without a token.
+            AgeGate sits directly inside Auth because it reads the session and
+            SWAPS THE TOKEN on a successful attestation (setSession) — so it must
+            be under the provider that owns it, and above every surface that can
+            take a gated action. */}
         <AuthProvider>
-          <PointsProvider>
-            <EarnProvider>
-              <FollowsProvider>{children}</FollowsProvider>
-            </EarnProvider>
-          </PointsProvider>
+          <AgeGateProvider>
+            <PointsProvider>
+              <EarnProvider>
+                <FollowsProvider>{children}</FollowsProvider>
+              </EarnProvider>
+            </PointsProvider>
+          </AgeGateProvider>
         </AuthProvider>
       </body>
     </html>

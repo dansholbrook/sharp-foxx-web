@@ -31,6 +31,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
+import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { TownCard } from './town-card';
@@ -375,6 +376,7 @@ export default function TrailPage() {
   const router = useRouter();
   const pathname = usePathname();
   const { token, user } = useAuth();
+  const { runGated } = useAgeGate();
   const allowed = canAccess(user?.roles ?? [], pathname);
 
   const [today, setToday] = useState<TrailToday | null>(null);
@@ -465,7 +467,9 @@ export default function TrailPage() {
     setPicking(side);
     setPickError(null);
     try {
-      const result = await submitTrailPick(token, side);
+      // Through the 18+ gate — see age-gate.tsx. An un-attested fan is prompted
+      // and, on affirming, this same call is retried so the tap completes.
+      const result = await runGated(() => submitTrailPick(token, side));
       setJustPicked(result);
       // Fold the call into the card WITHOUT a round trip: the fan's own side is
       // the one part of the day we now know authoritatively, and the split is

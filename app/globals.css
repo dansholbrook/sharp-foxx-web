@@ -17054,3 +17054,61 @@ a.arena-tile:active {
     transition: none;
   }
 }
+
+/* =================================================================
+   18+ gate — the shared attestation prompt (age-gate.tsx) and the
+   signup checkbox on /join. LAYOUT ONLY: the dialog is .modal-overlay
+   + .modal-card + .card.game, and the checkbox is the existing
+   .checkbox-label, so there are no new colors or type scales here.
+   ================================================================= */
+
+/* Narrower than the form modals — this is one sentence and two buttons. */
+.agegate-card {
+  max-width: 520px;
+}
+
+.agegate-lead {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+}
+
+/* The affirmation sits in a bordered well so it reads as the thing being
+   agreed to, not as body copy. Uses the card's own border/radius tokens. */
+.agegate-affirm {
+  align-items: flex-start;
+  padding: 14px 16px;
+  margin-bottom: 22px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.agegate-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+/* The gold CTA carries a top margin from the form rules; it isn't in a form. */
+.agegate-actions button {
+  margin-top: 0;
+}
+
+.agegate-error {
+  margin-top: 18px;
+}
+
+.agegate-note {
+  margin: 20px 0 0;
+  font-size: 0.8rem;
+}
+
+/* /join: the checkbox opts out of the form grid's full-width input rule and
+   the uppercase <label> chrome (.checkbox-label already handles the latter). */
+.join-age {
+  margin-top: 4px;
+}
+
+.join-age__label {
+  align-items: flex-start;
+}

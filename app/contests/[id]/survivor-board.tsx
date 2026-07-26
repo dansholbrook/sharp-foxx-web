@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../auth-context';
+import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
 import {
   getSurvivorPicks,
@@ -341,6 +342,7 @@ export function SurvivorBoard({
   onWithdrew: () => void;
 }) {
   const { token } = useAuth();
+  const { runGated } = useAgeGate();
   const { applyBalance } = usePoints();
   const entered = contest.myEntry != null;
 
@@ -495,7 +497,11 @@ export function SurvivorBoard({
       try {
         // The PUT returns the rebuilt timeline — reconcile from it rather than
         // trusting the optimistic paint (keeps alive/eliminated counts honest).
-        const next = await submitSurvivorPick(token, contest.id, { round, eventId, teamId });
+        // Through the 18+ gate — see age-gate.tsx. The optimistic paint stays
+        // up while the prompt is open, and stands if the retry lands.
+        const next = await runGated(() =>
+          submitSurvivorPick(token, contest.id, { round, eventId, teamId }),
+        );
         setPicks(next);
         setSubmittingRound(null);
         setExpandedRound(null);
@@ -511,7 +517,7 @@ export function SurvivorBoard({
         });
       }
     },
-    [token, picks, submittingRound, eventsById, contest.id],
+    [token, picks, submittingRound, eventsById, contest.id, runGated],
   );
 
   async function onWithdraw() {

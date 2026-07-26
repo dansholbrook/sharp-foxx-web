@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePoints } from './points-context';
+import { useAgeGate } from './age-gate';
 import {
   getEventPredictions,
   makePick,
@@ -405,6 +406,7 @@ export function usePickBoard<T extends PredictionBase>({
   onPicked?: () => void;
 }) {
   const { applyBalance } = usePoints();
+  const { runGated } = useAgeGate();
   const [rows, setRows] = useState<T[] | null>(null);
   // predictionId -> pickKey for taps still in flight. Overlaid on the server
   // rows at render, so a poll landing mid-flight can replace `rows` wholesale
@@ -469,7 +471,10 @@ export function usePickBoard<T extends PredictionBase>({
         return rest;
       });
       try {
-        const result = await makePick(token, predictionId, pickKey);
+        // Through the 18+ gate: an un-attested fan gets the prompt and, on
+        // affirming, this same pick is retried for them. Declining throws a
+        // plain sentence the catch below renders in the card's own error slot.
+        const result = await runGated(() => makePick(token, predictionId, pickKey));
         // The response carries the fan's new balance straight out of the
         // server-side debit — the ⚡ chip updates from that, no refetch.
         applyBalance(result.balance);
@@ -499,7 +504,7 @@ export function usePickBoard<T extends PredictionBase>({
         });
       }
     },
-    [token, applyBalance, load, onPicked],
+    [token, applyBalance, load, onPicked, runGated],
   );
 
   return { rows, load, onPick, optimistic, errors };

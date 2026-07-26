@@ -32,11 +32,16 @@ const STORAGE_KEY = 'sf_session';
 // is no full redirect-back flow yet.
 const INTENDED_PATH_KEY = 'sf_intended_path';
 
-// The only shape we persist: token + basic user + the forced-change flag.
+// The only shape we persist: token + basic user + the two must-flags.
 interface PersistedSession {
   accessToken: string;
   user: LoginResponse['user'];
   mustChangePassword: boolean;
+  // Optional on read: a session persisted before the 18+ gate shipped has no
+  // such key, and those are exactly the accounts that owe an attestation. Absent
+  // reads as false, which is the SAFE direction -- the gate's 403 still catches
+  // them, we just don't get to open the prompt a beat early.
+  mustAttestAge?: boolean;
 }
 
 interface AuthState {
@@ -45,6 +50,12 @@ interface AuthState {
   // Mirrors the login response. Persisted so a reload mid-forced-change still
   // routes the user to set their real password instead of escaping the flow.
   mustChangePassword: boolean;
+  // Mirrors the login response. DELIBERATELY NOT A REDIRECT, unlike the flag
+  // above: reads are ungated on purpose, so a fan who only follows and watches
+  // is never interrupted. The 18+ gate prompt opens at the eight entry surfaces
+  // and nowhere else -- this flag only lets it open a beat BEFORE the doomed
+  // call instead of after its 403. See age-gate.tsx.
+  mustAttestAge: boolean;
   // True only while the initial localStorage rehydration is in flight. Pages
   // never see this directly -- the provider renders a loader until it clears --
   // but it's exposed for completeness.
@@ -97,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<LoginResponse['user'] | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [mustAttestAge, setMustAttestAge] = useState(false);
   const [restoring, setRestoring] = useState(true);
 
   // Rehydrate once on mount (client only -- localStorage/atob don't exist during
@@ -111,6 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setToken(parsed.accessToken);
           setUser(parsed.user);
           setMustChangePassword(!!parsed.mustChangePassword);
+          // Restored, NOT acted on -- there is no attestation redirect by
+          // design. See the field comment on AuthState.
+          setMustAttestAge(!!parsed.mustAttestAge);
           // Respect the forced-change flow across reloads: if the restored user
           // still owes a password change, route them there (unless already on it).
           if (
@@ -151,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(null);
       setUser(null);
       setMustChangePassword(false);
+      setMustAttestAge(false);
       try {
         localStorage.removeItem(STORAGE_KEY);
       } catch {
@@ -166,17 +182,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       user,
       mustChangePassword,
+      mustAttestAge,
       restoring,
+      // Also the token swap after POST /auth/attest-age: that response is
+      // login-shaped and carries mustAttestAge:false, so affirming clears the
+      // flag and installs the att:true token through this one path.
       setSession: (res) => {
         const mcp = res.mustChangePassword ?? false;
+        const maa = res.mustAttestAge ?? false;
         setToken(res.accessToken);
         setUser(res.user);
         setMustChangePassword(mcp);
+        setMustAttestAge(maa);
         try {
           const persisted: PersistedSession = {
             accessToken: res.accessToken,
             user: res.user,
             mustChangePassword: mcp,
+            mustAttestAge: maa,
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
         } catch {
@@ -187,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null);
         setUser(null);
         setMustChangePassword(false);
+        setMustAttestAge(false);
         try {
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(INTENDED_PATH_KEY);
@@ -210,7 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
     }),
-    [token, user, mustChangePassword, restoring],
+    [token, user, mustChangePassword, mustAttestAge, restoring],
   );
 
   return (

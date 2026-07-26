@@ -26,6 +26,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
+import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { TodayCard } from './today-card';
@@ -378,6 +379,7 @@ export default function OraclePage() {
   const router = useRouter();
   const pathname = usePathname();
   const { token, user } = useAuth();
+  const { runGated } = useAgeGate();
   const allowed = canAccess(user?.roles ?? [], pathname);
 
   const [today, setToday] = useState<OracleToday | null>(null);
@@ -463,7 +465,9 @@ export default function OraclePage() {
     setPicking(choice);
     setPickError(null);
     try {
-      const result = await submitOraclePick(token, choice);
+      // Through the 18+ gate — see age-gate.tsx. An un-attested fan is prompted
+      // and, on affirming, this same call is retried so the tap completes.
+      const result = await runGated(() => submitOraclePick(token, choice));
       setJustPicked(result);
       // Fold the pick into the card WITHOUT a round-trip: the fan's own choice
       // is the one part of the day we now know authoritatively, and the split
