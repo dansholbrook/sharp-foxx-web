@@ -15,17 +15,24 @@
 // read that 500s must not blank the Oracle card beside it. A card that failed
 // says so quietly and still links through — the game itself may well be fine.
 //
-// THE STATE LADDER IS THE SAME ON BOTH CARDS, and it is ordered by which reading
+// THE STATE LADDER IS THE SAME ON EVERY CARD, and it is ordered by which reading
 // stops being true first: settled → called → open → nothing scheduled. The
 // backend hands down `outcome` pre-collapsed, so no card re-derives "graded"
 // from a status plus a nullable correct.
+//
+// THREE GAMES, THREE VOICES. Two are daily and one is weekly, and the third
+// tile has to make that legible without a label — which is why the Call leads
+// with a pot and a two-day countdown where the Oracle leads with a confidence
+// and the Trail with a place.
 // ============================================================================
 
 import Link from 'next/link';
 import {
   arenaLockCountdown,
+  callPhase,
   points,
   trailSideTeam,
+  CallCurrent,
   OracleToday,
   TrailToday,
 } from '../api';
@@ -40,10 +47,28 @@ function lockClock(iso: string | null): string {
   return t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+// A NAME PAST THIS LENGTH GETS THE SMALLER TYPE STEP. The three shipped names
+// are 15, 14 and 24 characters, and once the row goes three-across (856px up,
+// where .arena-page's 860px cap also pins it) the name track is ~171px and the
+// third one wraps to THREE lines while its siblings sit on one. That pushes the
+// Call's status line a whole line below the other two and breaks the row's
+// rhythm, which is the one thing a row of sibling tiles exists to have.
+//
+// A SIZE STEP AND NEVER A TRUNCATION: "The Correspondent's Call" is the game's
+// name, and a name with an ellipsis in it is a name the fan has to guess at. The
+// paired CSS caps the step so the long title lands on two lines at every width
+// the row can be — see .arena-tile__name--long in globals.css.
+const LONG_NAME = 18;
+
 // The shell every card shares: mark, name, tagline, then whatever status line
 // the game computed. `href` null renders the tile as a dead panel rather than a
-// link — that's the "coming soon" case, and a link that goes nowhere is worse
-// than no link.
+// link, because a link that goes nowhere is worse than no link.
+//
+// NO CALLER PASSES null TODAY — the "coming soon" tile it was built for became
+// the Correspondent's Call. The branch stays because the Arena is explicitly a
+// family that keeps growing, and the next announced-but-unbuilt game wants
+// exactly this. Its .arena-tile--dead styling is kept for the same reason; the
+// four copy-specific --soon rules were deleted with the tile they described.
 function GameTile({
   href,
   tone,
@@ -53,7 +78,7 @@ function GameTile({
   children,
 }: {
   href: string | null;
-  tone: 'oracle' | 'trail' | 'soon';
+  tone: 'oracle' | 'trail' | 'call';
   mark: React.ReactNode;
   name: string;
   tagline: string;
@@ -66,7 +91,13 @@ function GameTile({
           {mark}
         </span>
         <span className="arena-tile__names">
-          <span className="arena-tile__name">{name}</span>
+          <span
+            className={`arena-tile__name${
+              name.length > LONG_NAME ? ' arena-tile__name--long' : ''
+            }`}
+          >
+            {name}
+          </span>
           <span className="arena-tile__tagline">{tagline}</span>
         </span>
       </div>
@@ -393,29 +424,142 @@ function TrailState({ day }: { day: TrailToday['day'] }) {
 }
 
 // ---------------------------------------------------------------------------
-// THE THIRD SLOT — what's coming.
+// THE CORRESPONDENT'S CALL CARD
 //
-// A DEAD TILE ON PURPOSE. It carries no link because there is nothing to open,
-// and it names the next game rather than saying "more soon", because a named
-// thing with a described mechanic builds anticipation and a vague one builds
-// nothing. It sits in the grid at full weight so the Arena reads as a place
-// that is filling up rather than a page with two things on it.
+// THE ONLY WEEKLY TILE, and the ladder has to say so — a fan who reads "locks in
+// 2d" on the two daily tiles beside this one has learned something false about
+// them. So the open state leads with the POT, which is this game's equivalent of
+// the Oracle's confidence number: the single figure that makes the tile a
+// proposition rather than a link. It stays on the tile after the fan files,
+// too — the purse keeps growing until kickoff, so it is still news to someone
+// who has already played.
+//
+// NO STREAK, EVER, and none is drawn — the endpoint returns `streaks: null` by
+// design. Nothing about this card contributes to the shared strip above it.
 // ---------------------------------------------------------------------------
-export function ComingSoonCard() {
+export function CallGameCard({
+  current,
+  loading,
+  failed,
+}: {
+  current: CallCurrent | null;
+  loading: boolean;
+  failed: boolean;
+}) {
+  const call = current?.call ?? null;
+
   return (
     <GameTile
-      href={null}
-      tone="soon"
-      mark={<span className="arena-tile__glyph">📻</span>}
+      href="/arena/call"
+      tone="call"
+      mark={
+        <>
+          <span className="arena-tile__glyph">📻</span>
+          <span className="arena-tile__glyph arena-tile__glyph--sub">🎙️</span>
+        </>
+      }
       name="The Correspondent's Call"
-      tagline="Next into the Arena"
+      tagline="One local game a week, five questions from the stands"
     >
-      <p className="arena-tile__state arena-tile__state--soon">
-        <span className="arena-tile__nextpill">NEXT</span>
-        Our correspondents file one question a day from the road. You answer
-        before they do.
-      </p>
-      <p className="arena-tile__soonfoot">More games coming.</p>
+      {loading && <TilePlaceholder text="Raising the press box…" />}
+      {!loading && failed && (
+        <TilePlaceholder text="Couldn't reach the press box — tap to try." />
+      )}
+
+      {!loading && !failed && !call && (
+        <p className="arena-tile__state arena-tile__state--quiet">
+          No card this week — the correspondent files Thursday.
+        </p>
+      )}
+
+      {!loading && !failed && call && (
+        <CallState call={call} hasEntry={current?.myEntry != null} />
+      )}
     </GameTile>
+  );
+}
+
+function CallState({
+  call,
+  hasEntry,
+}: {
+  call: NonNullable<CallCurrent['call']>;
+  hasEntry: boolean;
+}) {
+  // One collapsed phase rather than a status plus a nullable — same refusal the
+  // two cards above make with myPick.outcome. Note it never tests
+  // `status === 'locked'`: nothing writes that status.
+  const phase = callPhase(call);
+
+  // SETTLED. Thin on purpose: no per-fan outcome exists in this payload, so
+  // there is no "+120 · you called it" line to write yet. Saying nothing beats
+  // saying a zero.
+  if (phase === 'voided') {
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        Washed — nothing counted against you.
+      </p>
+    );
+  }
+  if (phase === 'graded') {
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        {hasEntry
+          ? 'Graded — the correspondent has filed.'
+          : 'Graded — you sat this one out.'}
+      </p>
+    );
+  }
+
+  // LOCKED. Not a question any more; the tap can't do anything about it.
+  if (phase === 'locked') {
+    return (
+      <p
+        className={`arena-tile__state arena-tile__state--${
+          hasEntry ? 'ride' : 'quiet'
+        }`}
+      >
+        {hasEntry
+          ? 'Your card is in — locked at kickoff.'
+          : 'Locked at kickoff — you sat this one out.'}
+      </p>
+    );
+  }
+
+  // FILED, still open. The revisability is the news — it is the one thing about
+  // this game that is not true of the two beside it — but the POT RIDES WITH IT,
+  // because a filed card is still a stake in a purse that keeps growing until
+  // kickoff. The Oracle's confidence and the Trail's position bar both persist
+  // past the fan's pick for the same reason; a tile that drops its one figure
+  // the moment the fan plays has nothing left to bring them back.
+  if (hasEntry) {
+    return (
+      <p className="arena-tile__state arena-tile__state--ride">
+        Card filed · <strong>{points(call.pot.projectedPoints)}</strong> pts in
+        the pot
+        {call.locksAt && (
+          <span className="arena-tile__when">
+            {' · '}edit until {lockClock(call.locksAt)}
+          </span>
+        )}
+      </p>
+    );
+  }
+
+  // OPEN. The hook — and THE POT LEADS IT. This is the game's equivalent of the
+  // Oracle's confidence number and the Trail's town: the single figure that
+  // makes the tile a proposition rather than a link, and the question count and
+  // the matchup are the terms of that proposition rather than the offer itself.
+  return (
+    <p className="arena-tile__state arena-tile__state--open">
+      <strong>{points(call.pot.projectedPoints)}</strong> pts in the pot ·{' '}
+      {call.questions.length} questions on <strong>{call.event.matchup}</strong>
+      {call.locksAt && (
+        <span className="arena-tile__when">
+          {' · '}
+          {arenaLockCountdown(call.locksAt)}
+        </span>
+      )}
+    </p>
   );
 }

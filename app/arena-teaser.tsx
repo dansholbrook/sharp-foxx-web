@@ -10,13 +10,23 @@
 // picks ONE thing to say and says it well.
 //
 // THE PRIORITY IS URGENCY, NOT ORDER OF RELEASE:
+//   0. An UNPLAYED Call inside its last day. The only WEEKLY thing in the Arena,
+//      so missing it costs one of 52 rather than one of 365 — but only once the
+//      window is genuinely closing. See the 'urgent' note below.
 //   1. An UNPLAYED, still-open daily. This is the only state that expires, so it
 //      always wins. The Oracle leads among equals because it is the older habit
-//      and its hook (a team and a confidence) is the stronger single line.
+//      and its hook (a team and a confidence) is the stronger single line. An
+//      open Call ranks BELOW both of them the rest of the week: its window is
+//      two days wide, so it is the one that can most afford to wait.
 //   2. Failing that, the most recent thing that HAPPENED — a win, then any other
 //      settled result, then a call still riding. A fan who won at 11pm and opens
 //      the feed at 11:30 should be told, not shown an empty slot.
 //   3. Nothing true to say → no card. Not a skeleton, not "the Arena rests".
+//
+// THE 'urgent' TONE IS THE ONE NEW PRIORITY RULE, and it is deliberately a TONE
+// rather than a branch: the ladder below stays a chain of ?? keyed off a single
+// field, which is the whole reason it reads as a ladder and not a decision tree
+// with three games in it.
 //
 // IT DOES NOT HIDE ONCE PLAYED, and that is the point. The obvious build shows
 // the prompt and disappears when the fan taps, which optimises for today's tap
@@ -37,26 +47,40 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   arenaLockCountdown,
+  callPhase,
+  getCallCurrent,
   getOracleToday,
   getTrailToday,
   points,
   trailSideTeam,
+  CallCurrent,
   OracleToday,
   TrailToday,
 } from './api';
 
+// How close to kickoff an unfiled Call has to be before it outranks the two
+// dailies. A day: inside it, the Call is the thing in the Arena most likely to
+// be missed entirely; outside it, the dailies expire first and should lead.
+const CALL_URGENT_MS = 24 * 60 * 60 * 1000;
+
 // What the card ends up saying: which game, the headline line, and an optional
 // trailing clause (the countdown, or the lock time for a call already made).
 //
-// `tone` doubles as the PRIORITY KEY — 'open' is the expiring state and wins
-// outright, 'win' is the best of the settled ones. Keeping the ladder keyed off
-// one field means the cycle below is a chain of ?? rather than a decision tree
-// with two games' worth of branches in it.
+// `tone` doubles as the PRIORITY KEY — 'urgent' and 'open' are the expiring
+// states and win outright, 'win' is the best of the settled ones. Keeping the
+// ladder keyed off one field means the cycle below is a chain of ?? rather than
+// a decision tree with three games' worth of branches in it.
+//
+// `note` is the small line under the lead, and it is stated by each BUILDER
+// rather than derived from the tone: "Free · once a day" is true of the two
+// dailies and false of the Call, and a tone-keyed switch would have had to grow
+// a game check anyway.
 type Teaser = {
   kicker: string;
   mark: string;
-  tone: 'open' | 'riding' | 'win' | 'quiet';
+  tone: 'urgent' | 'open' | 'riding' | 'win' | 'quiet';
   lead: React.ReactNode;
+  note: string;
   tail: string | null;
 };
 
@@ -80,6 +104,7 @@ function oracleTeaser(today: OracleToday | null, now: number): Teaser | null {
       kicker: "Today's Oracle",
       mark: '🔮',
       tone: 'open',
+      note: 'Free · once a day',
       lead: (
         <>
           <strong>{day.oracle.team ?? day.matchup}</strong> ·{' '}
@@ -95,6 +120,7 @@ function oracleTeaser(today: OracleToday | null, now: number): Teaser | null {
       kicker: "Today's Oracle",
       mark: '🔮',
       tone: mine.outcome === 'win' ? 'win' : 'quiet',
+      note: 'Settled',
       lead:
         mine.outcome === 'win' && mine.pointsAwarded !== null ? (
           <>
@@ -115,6 +141,7 @@ function oracleTeaser(today: OracleToday | null, now: number): Teaser | null {
       kicker: "Today's Oracle",
       mark: '🔮',
       tone: 'riding',
+      note: 'Locked in',
       lead: <>You&apos;re {mine.choice === 'fade' ? 'fading' : 'riding'}</>,
       tail: day.locked ? null : `locks ${lockClock(day.locksAt)}`,
     };
@@ -138,6 +165,7 @@ function trailTeaser(today: TrailToday | null, now: number): Teaser | null {
       kicker: 'The Foxx Trail',
       mark: '🚌',
       tone: 'open',
+      note: 'Free · once a day',
       lead: (
         <>
           The bus is in <strong>{day.town.name}</strong> — pick today&apos;s game
@@ -152,6 +180,7 @@ function trailTeaser(today: TrailToday | null, now: number): Teaser | null {
       kicker: 'The Foxx Trail',
       mark: '🚌',
       tone: mine.outcome === 'win' ? 'win' : 'quiet',
+      note: 'Settled',
       lead:
         mine.outcome === 'win' ? (
           <>
@@ -174,6 +203,7 @@ function trailTeaser(today: TrailToday | null, now: number): Teaser | null {
       kicker: 'The Foxx Trail',
       mark: '🚌',
       tone: 'riding',
+      note: 'Locked in',
       lead: (
         <>
           You&apos;re riding <strong>{trailSideTeam(day, mine.side)}</strong>
@@ -186,9 +216,78 @@ function trailTeaser(today: TrailToday | null, now: number): Teaser | null {
   return null;
 }
 
+// THE CALL. Three differences from the two above, all of them consequences of
+// it being weekly and human-graded:
+//
+//   * IT NEVER PRODUCES A SETTLED LINE. GET /arena/call/current carries no
+//     grading block at all — no score, no payout, no answer key — so there is
+//     nothing true to say about a graded card beyond "it was graded", which is
+//     not a reason to take the Arena's one slot in the rail. It sits it out.
+//   * ITS OPEN STATE CAN BE 'urgent'. See CALL_URGENT_MS.
+//   * "Free · once a WEEK", and the filed state advertises that the card is
+//     still editable — the one thing about this game that isn't true of the
+//     other two, and the reason to tap a card the fan has already played.
+function callTeaser(current: CallCurrent | null, now: number): Teaser | null {
+  const call = current?.call ?? null;
+  if (!call) return null;
+  const phase = callPhase(call);
+  // Graded and voided both sit it out — see above. A void has no reproach in it
+  // either way, but it also has no news.
+  if (phase === 'graded' || phase === 'voided') return null;
+
+  const filed = current?.myEntry != null;
+
+  if (phase === 'locked') {
+    // Locked with a card in: worth a standing reminder, exactly like the
+    // Oracle's "you're fading". Locked with nothing in: no line here that isn't
+    // a reproach, so the game sits it out.
+    if (!filed) return null;
+    return {
+      kicker: "The Correspondent's Call",
+      mark: '📻',
+      tone: 'riding',
+      note: 'Locked in',
+      lead: <>Your card is in the correspondent&apos;s hands</>,
+      tail: null,
+    };
+  }
+
+  // OPEN + already filed. Still a card, because the revisability is news.
+  if (filed) {
+    return {
+      kicker: "The Correspondent's Call",
+      mark: '📻',
+      tone: 'riding',
+      note: 'Filed · editable until kickoff',
+      lead: <>Your card is in — change it any time before kickoff</>,
+      tail: call.locksAt ? `locks ${lockClock(call.locksAt)}` : null,
+    };
+  }
+
+  // OPEN + nothing filed. The expiring state, and the only one that can jump
+  // the two dailies.
+  const msLeft = call.locksAt ? new Date(call.locksAt).getTime() - now : NaN;
+  const urgent = Number.isFinite(msLeft) && msLeft > 0 && msLeft <= CALL_URGENT_MS;
+  return {
+    kicker: "The Correspondent's Call",
+    mark: '📻',
+    tone: urgent ? 'urgent' : 'open',
+    note: urgent ? 'Closes today · free' : 'Free · once a week',
+    lead: (
+      <>
+        {call.questions.length} questions on{' '}
+        <strong>{call.event.matchup}</strong> ·{' '}
+        {points(call.pot.projectedPoints)} pts in the pot
+      </>
+    ),
+    tail: call.locksAt ? arenaLockCountdown(call.locksAt, now) : null,
+  };
+}
+
 export function ArenaTeaser({ token }: { token: string }) {
   const [oracle, setOracle] = useState<OracleToday | null>(null);
   const [trail, setTrail] = useState<TrailToday | null>(null);
+  const [call, setCall] = useState<CallCurrent | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -209,6 +308,13 @@ export function ArenaTeaser({ token }: { token: string }) {
       .catch(() => {
         /* best-effort */
       });
+    getCallCurrent(token)
+      .then((next) => {
+        if (!cancelled) setCall(next);
+      })
+      .catch(() => {
+        /* best-effort */
+      });
     return () => {
       cancelled = true;
     };
@@ -217,18 +323,22 @@ export function ArenaTeaser({ token }: { token: string }) {
   // ---- THE CYCLE. Expiring first, then what actually happened.
   const oracleCard = oracleTeaser(oracle, now);
   const trailCard = trailTeaser(trail, now);
+  const callCard = callTeaser(call, now);
   const teaser =
+    (callCard?.tone === 'urgent' ? callCard : null) ??
     (oracleCard?.tone === 'open' ? oracleCard : null) ??
     (trailCard?.tone === 'open' ? trailCard : null) ??
+    (callCard?.tone === 'open' ? callCard : null) ??
     (oracleCard?.tone === 'win' ? oracleCard : null) ??
     (trailCard?.tone === 'win' ? trailCard : null) ??
     oracleCard ??
-    trailCard;
+    trailCard ??
+    callCard;
 
   // The ticker runs at a MINUTE, not a second: this card shows a coarse
   // countdown, and a per-second timer on a band the fan is scrolling past would
   // be a render a second for no visible change. Only while something is open.
-  const ticking = teaser?.tone === 'open';
+  const ticking = teaser?.tone === 'open' || teaser?.tone === 'urgent';
   useEffect(() => {
     if (!ticking) return;
     const timer = setInterval(() => setNow(Date.now()), 60_000);
@@ -255,11 +365,7 @@ export function ArenaTeaser({ token }: { token: string }) {
         <span
           className={`arena-teaser__state arena-teaser__state--${teaser.tone}`}
         >
-          {teaser.tone === 'open'
-            ? 'Free · once a day'
-            : teaser.tone === 'riding'
-              ? 'Locked in'
-              : 'Settled'}
+          {teaser.note}
           {teaser.tail && (
             <span className="arena-teaser__when">
               {' · '}

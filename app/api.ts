@@ -4543,3 +4543,277 @@ export function trailTrophyMeta(item: TrailItem): {
     sub: towns ? `All ${towns} towns` : null,
   };
 }
+
+// ============================================================================
+// CORRESPONDENT'S CALL — the third Arena game, under /arena/call.
+//
+// WEEKLY, NOT DAILY, and almost every difference from the Oracle and the Trail
+// falls out of that one fact. ONE covered local game becomes the week's event,
+// the correspondent publishes a five-question card by Thursday, fans lock
+// answers before kickoff and may revise until then, and the correspondent grades
+// it from the stands afterwards. Mirrors call.service.ts on the backend.
+//
+// TWO FAN ROUTES, BOTH UNGATED (no @Roles) — GET current and POST entry. That is
+// the whole surface: there is NO leaderboard, NO history, and NO answer
+// distribution, so /arena/call is a much shorter page than /arena/oracle. The
+// missing distribution is a decision, not an omission: five questions of LOCAL
+// KNOWLEDGE are exactly what the pot is paying for, and a visible consensus is
+// what would let a fan with none of it free-ride on the fans who have it. See
+// the long note in call.service.ts.
+//
+// ----------------------------------------------------------------------------
+// COMPLETE SUBMIT, AND NO PARTIAL SAVE ANYWHERE. POST /arena/call/entry takes
+// ALL FIVE answers plus the tiebreaker or it 400s naming the slot. There is no
+// draft endpoint, because call_entries.answers and tiebreaker_answer are both
+// NOT NULL and 0 is a legal tiebreaker (so there is no sentinel for "not yet").
+//
+// The client therefore holds in-progress answers in React state and writes once.
+// A fan who answers three questions and closes the app LOSES THEM. That is the
+// backend's stated, accepted tradeoff — and it is why the answer sheet says so
+// above the first question rather than burying it. Do not add a per-question
+// "Saved ✓" here; the pick sheet's save-on-tap is the one pattern from that
+// surface that must NOT be copied, because nothing has left the browser.
+// ----------------------------------------------------------------------------
+//
+// `streaks` IS ALWAYS null, EXPLICITLY. Not absent, and not a shape to render:
+// ArenaStreakService is built on ET calendar days and would hand a weekly game a
+// 7-day gap every week — burning both freezes and resetting a streak the fan
+// never broke. The Call has no streak in v1, so no chip is drawn for it anywhere,
+// including the Arena hub's shared strip.
+//
+// WHICH CALL IS "CURRENT": the most recent non-draft Call with
+// week_start <= this ET Monday — deliberately NOT `= thisWeek`. A Saturday
+// game's card would otherwise vanish at midnight Sunday while it is still
+// ungraded and still the thing the fan is waiting on. CONSEQUENCE FOR COPY: a
+// fan opening the app on Monday may be looking at LAST week's locked card, so
+// every surface must name the card's own week and must never say "this week"
+// unconditionally. See callWeekLabel.
+// ============================================================================
+
+// The Call lifecycle. A fan never sees 'draft' (the read excludes it), and
+// nothing currently WRITES 'locked' — no sweep exists for it. Openness is
+// therefore read off `locked` (derived in SQL from locks_at <= now(), against
+// the DATABASE clock) and NEVER off status === 'locked'.
+export type CallStatus = 'draft' | 'published' | 'locked' | 'graded' | 'voided';
+
+// One answer option. Keys are STABLE AND SEMANTIC ('home', 'more', 'b1') and are
+// never derived from the labels, because an entry stores the KEY — a label edit
+// must not orphan a locked answer.
+export interface CallOption {
+  key: string;
+  label: string;
+}
+
+// One of the five slots. The prompt and the options are SERVER-RENDERED from a
+// template; the composer only ever sent { templateId, params }. Two or three
+// options depending on the template (the four *_bucket templates are three).
+export interface CallQuestion {
+  id: string;
+  index: number;
+  templateId: string;
+  prompt: string;
+  options: CallOption[];
+}
+
+// The weekly purse. `snapshotted` is false before publish, where the numbers are
+// the defaults the snapshot WILL take rather than the ones it took.
+//
+// projectedPoints = basePoints + perEntrantPoints * entrants. It MOVES until
+// lock, which is why the card labels it as a projection rather than a payout.
+export interface CallPot {
+  snapshotted: boolean;
+  basePoints: number;
+  perEntrantPoints: number;
+  // Band 1 is everyone tied at the top score, band 2 the next distinct score
+  // down, band 3 the one after. The percentages total 100.
+  bands: Array<{ band: number; pct: number }>;
+  entrants: number;
+  projectedPoints: number;
+}
+
+// The game the card is written on. A covered Sharp Foxx broadcast, always —
+// a feed game has no correspondent in the stands, and the backend refuses one.
+export interface CallEventInfo {
+  id: string;
+  sport: string;
+  status: string;
+  venue: string | null;
+  scheduledAt: string;
+  // "Away at Home", already assembled (a team with no row degrades to TBD).
+  matchup: string;
+  homeTeam: string | null;
+  awayTeam: string | null;
+}
+
+export interface CallCard {
+  id: string;
+  weekStart: string;
+  status: CallStatus;
+  tiebreakerPrompt: string | null;
+  publishesAt: string | null;
+  // Kickoff. Null only on a draft, which a fan never receives — the type stays
+  // honest about it rather than being asserted away.
+  locksAt: string | null;
+  // DERIVED IN SQL against the database clock, not computed from locksAt here:
+  // the fan's phone, the API container and the database must not be able to
+  // disagree about whether the game has started.
+  locked: boolean;
+  createdAt: string;
+  correspondent: { repId: string; displayName: string | null };
+  event: CallEventInfo;
+  questions: CallQuestion[];
+  // Nullable in the payload. publish() refuses a card without one, so it is
+  // unreachable on a published Call — the guard stays anyway.
+  tiebreaker: { prompt: string } | null;
+  pot: CallPot;
+}
+
+// The caller's own card. `editable` is the SERVER's read of whether the fan may
+// still revise (it is `!locked`); read it rather than re-deriving it.
+//
+// NO GRADING FIELDS. results / correctCount / pushCount / wrongCount / score /
+// pointsAwarded all exist as columns and none of them are selected by the fan
+// read — see the note on CallCurrent.
+export interface CallEntry {
+  id: string;
+  // questionId -> optionKey. Every one of the five, always: a partial entry is
+  // not a representable row.
+  answers: Record<string, string>;
+  tiebreakerAnswer: number;
+  submittedAt: string;
+  updatedAt: string;
+  editable: boolean;
+}
+
+// What each outcome pays, at the current admin-tuned reward values. Pre-computed
+// for the same reason the Oracle pre-computes ride/fade: a fan should read the
+// number that will land in their wallet, not a base value and a formula.
+//
+// goldenWhistle is paid on wrong === 0 AND correct >= 1 — a push must never cost
+// the bonus, but a card where all five pushed has nothing right about it either.
+export interface CallPayouts {
+  perCorrect: number;
+  goldenWhistle: number;
+  participation: number;
+}
+
+// GET /arena/call/current. `call: null` is NOT an error — a week with nothing
+// published still renders, same as the Oracle's null day and the Trail's null
+// season.
+//
+// ----------------------------------------------------------------------------
+// THERE IS NO RESULTS BLOCK ON THIS READ, AND THAT IS A KNOWN GAP, not something
+// this client can work around. The backend's own TODO names it
+// (call.service.ts, `current`): the projection excludes every grading column on
+// purpose, so a fan opening a GRADED card gets their five answers back and NO
+// OUTCOME AT ALL — no correct/push/wrong, no score, no payout, no answer key,
+// no tiebreaker actual.
+//
+// What a real results view needs added, gated on status === 'graded': per
+// question the `resolution` and `correctKey`; per entry the three-valued
+// `results` map, the three counters, `score`, `pointsAwarded` and the `whistle`
+// flag; the tiebreaker's actual value; and the pot settlement (which band the
+// fan landed in and what it paid). Until that lands, the graded branch of the
+// card shows the fan's answers AS FILED and says the correspondent has graded
+// it — no invented outcomes, no zeroed counters, no placeholder payout.
+// ----------------------------------------------------------------------------
+export interface CallCurrent {
+  weekStart: string;
+  call: CallCard | null;
+  myEntry: CallEntry | null;
+  payouts: CallPayouts;
+  // Always null — see the section header. Typed as the literal so a component
+  // that tries to render a streak block here fails to compile.
+  streaks: null;
+}
+
+// POST /arena/call/entry body. ALL FIVE answers or a 400 naming the slot.
+export interface CallEntryInput {
+  answers: Record<string, string>;
+  tiebreakerAnswer: number;
+}
+
+// POST /arena/call/entry response. `replaced` is false on the first card of the
+// week and true when the fan changed their mind — the write is an upsert, so
+// replacing is the normal path rather than a collision.
+export interface CallEntryResult {
+  callId: string;
+  weekStart: string;
+  replaced: boolean;
+  locksAt: string;
+  myEntry: CallEntry;
+}
+
+export const getCallCurrent = (token: string) =>
+  authGet<CallCurrent>('/arena/call/current', token);
+
+// 404 = no Call open. 409 = locked, or already graded/voided. 400 = a missing,
+// unknown or illegal answer, NAMING THE QUESTION BY ITS SLOT. All surface as the
+// shared "<status> <message>" Error; the sheet matches on the status prefix to
+// decide whether to re-read (a 409 means the screen is stale) and on the slot to
+// decide which question to mark. See callErrorSlot.
+//
+// A REJECTED SUBMISSION LEAVES THE PREVIOUS ENTRY EXACTLY AS IT WAS — the whole
+// write is one transaction. A fan who tries to change their mind at kickoff
+// keeps the card they had; they do not lose it for having been late.
+export const submitCallEntry = (token: string, input: CallEntryInput) =>
+  authPost<CallEntryResult>('/arena/call/entry', token, input);
+
+// The tiebreaker's upper bound, mirroring submitEntrySchema. A fat-finger guard,
+// not a DB CHECK — the column says only >= 0. Enforced client-side too so a typo
+// is caught at the input rather than as a 400 after five taps of work.
+export const CALL_TIEBREAKER_MAX = 100000;
+
+// The number of slots, mirroring CALL_QUESTION_COUNT. Used only for copy ("all 5
+// required") and the progress denominator — the QUESTIONS THEMSELVES always come
+// from the payload, so a card that somehow carried four still renders four.
+export const CALL_QUESTION_COUNT = 5;
+
+// "Week of Jul 20" — a card naming its OWN week, which every Call surface must
+// do. `current` returns the most recent non-draft Call with week_start <= this
+// Monday, so a fan opening the app on Monday may be looking at last week's
+// locked card and "this week" would be a lie.
+//
+// Local noon, same reason as everywhere else on the site: a bare YYYY-MM-DD
+// through `new Date` is UTC midnight, which renders as the day before for every
+// fan west of Greenwich.
+export function callWeekLabel(weekStart: string): string {
+  const [y, m, d] = weekStart.split('-').map(Number);
+  if (!y || !m || !d) return weekStart;
+  return `Week of ${new Date(y, m - 1, d, 12).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })}`;
+}
+
+// Which question a 400 was about, as a ZERO-BASED slot, or null if the message
+// names no slot (an unknown-question error, or anything else).
+//
+// THE SERVER NAMES THE SLOT AND NOT THE UUID, on purpose — "Question 3" is what
+// the fan is looking at. Both of its slot-bearing messages start the same way:
+//   "Question 3 has no answer -- all 5 are required"
+//   "Question 3: 'xyz' is not one of its answers (home, away)"
+// so one match covers both. A long sheet with an error only at the bottom is an
+// error nobody acts on, which is the whole reason this exists.
+export function callErrorSlot(message: string): number | null {
+  const hit = /\bQuestion (\d+)\b/.exec(message);
+  if (!hit) return null;
+  const n = Number(hit[1]);
+  return Number.isFinite(n) && n >= 1 ? n - 1 : null;
+}
+
+// The card's state, collapsed ONCE so no component re-derives it from a status
+// plus a nullable — the same refusal the Oracle and the Trail make with
+// myPick.outcome.
+//
+// ORDERED BY WHICH READING STOPS BEING TRUE FIRST. Note what is NOT tested here:
+// `status === 'locked'`. Nothing writes that status (there is no sweep for it),
+// so a card past kickoff still reads 'published' and a status-based test would
+// leave a live submit button over a locked game.
+export type CallPhase = 'open' | 'locked' | 'graded' | 'voided';
+
+export function callPhase(call: CallCard): CallPhase {
+  if (call.status === 'voided') return 'voided';
+  if (call.status === 'graded') return 'graded';
+  return call.locked ? 'locked' : 'open';
+}

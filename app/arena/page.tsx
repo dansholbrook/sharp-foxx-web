@@ -3,20 +3,20 @@
 // ============================================================================
 // /arena — THE ARENA HUB. One nav link, and inside it the fan chooses a game.
 //
-// WHY A HUB AND NOT MORE NAV ITEMS. The Arena is a family of free daily games
-// and it is going to keep growing; a nav that grows a link per game would push
-// the daily habit into a menu that no longer fits on a phone, and would make
+// WHY A HUB AND NOT MORE NAV ITEMS. The Arena is a family of free games — two
+// daily, one weekly — and it is going to keep growing; a nav that grows a link
+// per game would push the daily habit into a menu that no longer fits on a
+// phone, and would make
 // "the Arena" a category nobody can see. One door, and the games compete for
 // the tap INSIDE it — which is also what makes the game cards worth building as
 // live status tiles rather than as a list of names.
 //
-// TWO READS, IN PARALLEL, EACH FAILING ALONE. The Oracle's today-endpoint and
-// the Trail's are independent: neither gates the page, both have their own
+// THREE READS, IN PARALLEL, EACH FAILING ALONE. The Oracle's today-endpoint, the
+// Trail's and the Call's are independent: none gates the page, each has its own
 // loading and failure flags, and a card whose read died still renders its shell
-// and still links through. Nothing here awaits both before painting — the whole
+// and still links through. Nothing here awaits them before painting — the whole
 // point of the hub is the fan seeing, at a glance, what still wants them today,
-// and a hub that blanks until the slower of two calls returns has thrown that
-// away.
+// and a hub that blanks until the slowest call returns has thrown that away.
 //
 // NO POLLING. The hub is a departures board, not a game screen: the split moves
 // on the game pages (which do poll), and a fan sitting on the hub is a fan about
@@ -27,6 +27,13 @@
 // where a fan sees all of them at once. It self-hides when there is nothing true
 // to say yet, rather than showing a row of zeroes to someone who has never
 // played.
+//
+// THE CALL IS NOT IN THE STRIP, and that is not an oversight. Its endpoint
+// returns `streaks: null` on purpose: ArenaStreakService counts ET calendar days,
+// so a weekly game would hand it a 7-day gap every week, burn both banked
+// freezes and reset a play streak the fan never broke. The Call therefore has no
+// streak in v1 — no chip, and no contribution to the strip's "is there anything
+// true to say" test, which a zeroed third game would silently corrupt.
 // ============================================================================
 
 import { useEffect, useState } from 'react';
@@ -35,12 +42,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
-import { ComingSoonCard, OracleGameCard, TrailGameCard } from './game-cards';
+import { CallGameCard, OracleGameCard, TrailGameCard } from './game-cards';
 import {
+  getCallCurrent,
   getOracleToday,
   getTrailToday,
   oracleBadgeMeta,
   ArenaStreaks,
+  CallCurrent,
   OracleBadge,
   OracleToday,
   TrailToday,
@@ -195,11 +204,14 @@ export default function ArenaPage() {
 
   const [oracle, setOracle] = useState<OracleToday | null>(null);
   const [trail, setTrail] = useState<TrailToday | null>(null);
+  const [call, setCall] = useState<CallCurrent | null>(null);
   // Per-card flags, not one page-wide pair — see the header.
   const [oracleLoading, setOracleLoading] = useState(true);
   const [trailLoading, setTrailLoading] = useState(true);
+  const [callLoading, setCallLoading] = useState(true);
   const [oracleFailed, setOracleFailed] = useState(false);
   const [trailFailed, setTrailFailed] = useState(false);
+  const [callFailed, setCallFailed] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -233,6 +245,17 @@ export default function ArenaPage() {
         if (!cancelled) setTrailLoading(false);
       });
 
+    getCallCurrent(token)
+      .then((next) => {
+        if (!cancelled) setCall(next);
+      })
+      .catch(() => {
+        if (!cancelled) setCallFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setCallLoading(false);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -262,8 +285,12 @@ export default function ArenaPage() {
           <span className="arena-hero__fox">🦊</span>
         </div>
         <h1 className="arena-hero__title">Sharp Foxx Arena</h1>
+        {/* NAMES BOTH CADENCES. "Free daily games" was true of the two games
+            this hub opened with and became a lie the week the Call shipped —
+            it files once a week, and a standfirst that promises a daily habit
+            is the first thing a fan reads and the last thing they check. */}
         <p className="arena-hero__standfirst">
-          Free daily games. Real sports. Bragging rights forever.
+          Free games, daily and weekly. Real sports. Bragging rights forever.
         </p>
       </header>
 
@@ -273,7 +300,7 @@ export default function ArenaPage() {
         badges={oracle?.badges ?? []}
       />
 
-      {/* ---- THE GAMES. One card each, and the third slot is what's next. ---- */}
+      {/* ---- THE GAMES. One card each — two dailies and the week's Call. ---- */}
       <section className="arena-games" aria-label="Games">
         <OracleGameCard
           today={oracle}
@@ -285,12 +312,19 @@ export default function ArenaPage() {
           loading={trailLoading}
           failed={trailFailed}
         />
-        <ComingSoonCard />
+        <CallGameCard
+          current={call}
+          loading={callLoading}
+          failed={callFailed}
+        />
       </section>
 
+      {/* The cadence is spelled out per game rather than averaged: "once a day"
+          across a hub with a weekly game in it is a promise the Call cannot
+          keep, and this line sits directly under the tile that breaks it. */}
       <p className="arena-fineprint">
         Points only · no cash value · never redeemable. Arena games are free to
-        play, once a day, forever.
+        play, forever — the dailies once a day, the Call once a week.
       </p>
     </main>
   );
