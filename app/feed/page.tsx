@@ -531,7 +531,7 @@ function PointsHero() {
       </div>
       {lifetimeEarned !== null && (
         <span className="frail-points__lifetime">
-          {points(lifetimeEarned)} pts won all-time
+          {points(lifetimeEarned)} pts earned all-time
         </span>
       )}
       <div className="frail-points__links">

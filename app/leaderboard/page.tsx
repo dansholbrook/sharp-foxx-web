@@ -13,8 +13,23 @@
 // there is.
 //
 // The two boards deliberately measure DIFFERENT things, which is why they can't
-// be one list: global ranks lifetime_earned (winnings only, never subtracts),
-// event ranks net points on that game (payout − stake, so it can go negative).
+// be one list: global ranks lifetime_earned (everything EARNED, never
+// subtracts), event ranks net points on that game (payout − stake, so it can go
+// negative).
+//
+// "EARNED", NOT "WON" — and the difference is the whole reason the global
+// board's standfirst reads the way it does. lifetime_earned is raised by every
+// positive ledger earn, which includes the engagement verbs (daily_checkin,
+// national_pick, article_read, ...) alongside real winnings. A fan's first 35
+// points can be a check-in plus making one pick, no game won. This board is a
+// legitimate "who's biggest on the platform" ranking; it is NOT a skill
+// ranking, and no copy on this page may imply that it is. See the long note
+// above globalLeaderboard() in the API's predictions.service.ts for why the
+// board can't currently be split.
+//
+// The EVENT board is different and its copy is correct as-is: it reads
+// prediction_picks directly (payout − stake on one game) and genuinely is net
+// winnings.
 
 import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -78,7 +93,8 @@ function Row({
         {me && <span className="points-lb__you">You</span>}
       </span>
       {/* An event board is net points and can be negative, so it's signed; the
-          global board is lifetime winnings and only ever climbs. */}
+          global board is lifetime EARNED (winnings + engagement — see the file
+          header) and only ever climbs. */}
       <span className="points-lb__score">
         {scope === 'event' ? signedPoints(entry.score) : points(entry.score)}
         <span className="points-lb__unit">pts</span>
@@ -180,7 +196,7 @@ function Leaderboard() {
           <p className="masthead-standfirst">
             {(board?.scope ?? scope) === 'event'
               ? 'Net points won on this game. Still-live picks count as staked until they settle.'
-              : 'Total points won across every game. Winnings only — a loss never drags you down the board.'}
+              : 'Total points earned — from games, contests and everyday activity. It only ever climbs; a loss never drags you down.'}
           </p>
         </div>
         <div className="masthead-actions">
@@ -247,7 +263,7 @@ function Leaderboard() {
                     <p className="muted points-lb__hint">
                       {board.scope === 'event'
                         ? "You haven't picked on this game yet."
-                        : "You haven't won any points yet — make a pick to get on the board."}
+                        : "You haven't earned any points yet — make a pick or check in daily to get on the board."}
                     </p>
                   )}
                 </div>

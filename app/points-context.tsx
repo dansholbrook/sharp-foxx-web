@@ -10,9 +10,11 @@
 // rides along because the one read this provider already makes
 // (GET /predictions/my-picks) returns it in the same body: exposing it costs
 // nothing and spares the feed's points hero a fourth copy of this exact fetch.
-// It moves only when a question RESOLVES (courtside, never through this client),
-// so like the balance it's refreshed by whatever authoritative figure a pick or
-// the /picks read next hands back — not polled.
+// It moves when a question RESOLVES (courtside, never through this client) AND
+// on every engagement earn (a check-in, an article read), so like the balance
+// it's refreshed by whatever authoritative figure the /picks read next hands
+// back — not polled. That second mover is why it is "earned", not "won"; see
+// the note on the field below.
 //
 // POINTS ONLY: a closed-loop score with no monetary value. Never money.
 
@@ -32,11 +34,20 @@ interface PointsState {
   // null until the wallet has loaded (or if it failed) — the chip renders
   // nothing rather than flashing a wrong "0 pts" at a fan who has points.
   balance: number | null;
-  // The public score (lifetime points won), loaded alongside the balance. null
-  // on the same terms — not yet loaded / load failed. Only ever set by the
-  // provider's own read: unlike the balance, no pick response carries it, so
-  // applyBalance leaves it untouched (a pick doesn't resolve, so it can't move
-  // lifetime). Refreshed on the next full load (login re-run).
+  // The public score (lifetime points EARNED), loaded alongside the balance.
+  // null on the same terms — not yet loaded / load failed.
+  //
+  // "EARNED", NOT "WON": this is fan_points.lifetime_earned, which is raised by
+  // every positive earn — engagement verbs (daily_checkin, national_pick, ...)
+  // as well as real winnings. Anything rendering it must say "earned"; the feed
+  // hero says "pts earned all-time" for exactly this reason. See the header of
+  // app/leaderboard/page.tsx.
+  //
+  // Only ever set by the provider's own read: unlike the balance, no pick
+  // response carries it, so applyBalance leaves it untouched. Note that it CAN
+  // move without this provider noticing — an engagement earn raises it
+  // server-side — so treat it as last-loaded, not live. Refreshed on the next
+  // full load (login re-run).
   lifetimeEarned: number | null;
   // Set the balance from an authoritative figure (a pick response, or /picks'
   // own full read).

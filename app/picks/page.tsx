@@ -452,7 +452,7 @@ export default function MyPicksPage() {
                 <span className="points-hero__unit">pts</span>
               </span>
               <span className="points-hero__caption">
-                Winnings only — losses don&apos;t subtract.
+                Everything you&apos;ve earned — losses don&apos;t subtract.
               </span>
             </div>
           </div>
