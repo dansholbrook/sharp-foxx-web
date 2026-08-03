@@ -37,6 +37,7 @@ import {
   trailOutcomeCopy,
   trailSideTeam,
   trailStreakCopy,
+  etTime,
   TrailDay,
   TrailPickResult,
   TrailProgress,
@@ -423,10 +424,8 @@ function friendlyDate(date: string): string {
   });
 }
 
-// "7:10 PM" — first pitch, which is also the lock. A real timestamp, so it
-// converts to the fan's own zone like every other time on the site.
+// "7:10 PM ET" — first pitch, which is also the lock. A real timestamp, so it
+// renders in ET and says so, like every other time on the site.
 function kickoffLabel(iso: string): string {
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return '';
-  return t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return etTime(iso, { zone: true });
 }

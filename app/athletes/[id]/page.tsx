@@ -26,6 +26,7 @@ import {
   presignAthleteImage,
   uploadToPresignedUrlWithProgress,
   confirmMedia,
+  etDateTime,
   AthleteProfile,
   AthleteUpdateValidationError,
   FollowMineEntry,
@@ -33,13 +34,10 @@ import {
   SocialLinks,
 } from '../../api';
 
-// Date-only formatting for reel/article/game metadata (mirrors the game page).
+// Date-only ET formatting for reel/article/game metadata (mirrors the game page).
 function formatDate(iso: string | null): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
+  return etDateTime(iso, { dateStyle: 'medium' }) || iso;
 }
 
 // Capitalize a lowercase sport enum ('basketball' -> 'Basketball') for display.

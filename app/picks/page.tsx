@@ -29,6 +29,7 @@ import {
   ledgerActionLabel,
   points,
   signedPoints,
+  etDateTime,
   MyPick,
   MyPicksReport,
   ContestDetail,
@@ -36,13 +37,10 @@ import {
   PointEvent,
 } from '../api';
 
-// Date + time — a pick is a moment in a game, so the clock matters as much as
-// the day.
+// ET date + time — a pick is a moment in a game, so the clock matters as much
+// as the day.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso) || iso;
 }
 
 // The outcome pill's words. 'pending' is the live one and says so — a fan

@@ -11,6 +11,7 @@ import {
   getFieldReps,
   approveApplication,
   rejectApplication,
+  etDateTime,
   Application,
   FieldRep,
 } from '../api';
@@ -27,14 +28,9 @@ const STATUS_TABS: Array<{ value: Application['status']; label: string }> = [
 ];
 
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+  return (
+    etDateTime(iso, { year: 'numeric', month: 'short', day: 'numeric' }) || iso
+  );
 }
 
 // Copy-to-clipboard affordance for the new sign-in id staff share with the

@@ -24,7 +24,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from './auth-context';
 import { SlideOver } from './queue-table';
-import { getFanPointsSummary, points, FanPointsSummary, MyPick } from './api';
+import {
+  getFanPointsSummary,
+  points,
+  etDateTime,
+  FanPointsSummary,
+  MyPick,
+} from './api';
 
 // The record as the UI needs it. Mirrors FanPointsSummary['record'] plus the
 // rate, so the card (which reads it from the API) and the /picks masthead
@@ -70,11 +76,7 @@ export function formatWinRate(rate: number | null): string {
 // Month + year only: "Playing since March 2026". The exact day is noise on a
 // card whose job is "how long has this one been around".
 function formatSince(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? null
-    : d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  return etDateTime(iso, { month: 'long', year: 'numeric' }) || null;
 }
 
 // Matches the board's podium treatment so a name carries the same medal on the

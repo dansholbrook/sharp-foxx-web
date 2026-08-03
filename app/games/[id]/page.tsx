@@ -14,6 +14,8 @@ import {
   getLiveEvents,
   getGamePhotos,
   isFeedEvent,
+  etDateTime,
+  etTime,
   EventListItem,
   EventContentItem,
   FeedItem,
@@ -37,20 +39,15 @@ function LiveBadge({ className }: { className?: string }) {
   );
 }
 
-// Date-only formatting for compact card metadata (mirrors the feed page).
+// Date-only ET formatting for compact card metadata (mirrors the feed page).
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
+  return etDateTime(iso, { dateStyle: 'medium' }) || iso;
 }
 
-// Full date + time — used for "Coverage begins" and the upcoming scoreboard line.
+// Full ET date + time — used for "Coverage begins" and the upcoming scoreboard
+// line. Labelled: this is the tip-off a fan shows up for.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso, { zone: true }) || iso;
 }
 
 // The published feed (FeedItem) carries no eventId, so to link an article back to
@@ -367,12 +364,11 @@ function RailGameCard({ event }: { event: EventListItem }) {
   );
 }
 
-// Time-of-day only, for the courtside feed timestamps ("7:04 PM").
+// Time-of-day only, in ET, for the courtside feed timestamps ("7:04 PM"). No
+// zone label — these are stamps on things that already happened, running down a
+// column, and the game header above them already establishes the clock.
 function formatClock(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return etTime(iso) || iso;
 }
 
 // Human line for a courtside feed event (big_play / timeout / status_note).

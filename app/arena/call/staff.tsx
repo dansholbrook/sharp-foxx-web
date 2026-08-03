@@ -15,6 +15,7 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
 import { AppNav } from '../../nav';
+import { etDateTime } from '../../api';
 
 export function CallStaffShell({
   kicker,
@@ -103,20 +104,23 @@ export function NotYourCall({ detail }: { detail: string }) {
 // rest of the repo does too.
 // ---------------------------------------------------------------------------
 
-// "Sat, Nov 8, 7:30 PM" — kickoff, in the reader's own zone. A correspondent
-// checking whether a card locks tonight wants their own clock, not ET.
+// "Sat, Nov 8, 7:30 PM ET" — kickoff, which is also the lock. In ET and SAID to
+// be, because a correspondent's own clock is exactly the wrong reference here:
+// the card locks at kickoff, the backend evaluates that in ET, and a
+// correspondent working from Denver reading their own 5:30 has half an hour less
+// than the screen implies.
 export function formatKickoff(iso: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
+  return (
+    etDateTime(iso, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      zone: true,
+    }) || iso
+  );
 }
 
 // How long until (or since) a moment, in the coarsest useful unit. Used for the

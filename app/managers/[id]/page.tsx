@@ -14,6 +14,7 @@ import {
   getTerritoryReport,
   getReferralsTerritory,
   updateFieldRepStatus,
+  etDateTime,
   ManagerSummary,
   TerritoryReport,
   ReferralsTerritoryReport,
@@ -35,17 +36,12 @@ function sumMoney(a: string, b: string): string {
   return (Number(a) + Number(b)).toFixed(2);
 }
 
-// Readable created-at timestamp for a recent order (timestamptz ISO); falls back
+// Readable created-at ET date for a recent order (timestamptz ISO); falls back
 // to the raw value if it somehow doesn't parse.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+  return (
+    etDateTime(iso, { year: 'numeric', month: 'short', day: 'numeric' }) || iso
+  );
 }
 
 // Which modal is open: a specific rep to assign, or a self-claim for the

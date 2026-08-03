@@ -37,6 +37,7 @@ import {
   parlayStakeRangeLabel,
   points,
   signedPoints,
+  etDateTime,
   Contest,
   EventListItem,
   FollowMineEntry,
@@ -56,16 +57,18 @@ const RECENT_MS = 48 * 60 * 60 * 1000;
 const NATIONAL_FEED_CAP = 4;
 
 // Tip-off time for a game that hasn't started — the clock is what a fan waiting
-// on a pick actually wants. Same treatment as the rest of the feed's dates.
+// on a pick actually wants. Same treatment as the rest of the feed's dates, and
+// labelled ET because a fan reads this one to decide when to be back.
 function formatKickoff(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return (
+    etDateTime(iso, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      zone: true,
+    }) || iso
+  );
 }
 
 // The resolve-by DATE ('2026-07-15'), which is a promise to fans, not an

@@ -15,6 +15,7 @@ import {
   createAdOrder,
   getEvents,
   createSponsorship,
+  etDateTime,
   Advertiser,
   AdPackage,
   EventListItem,
@@ -36,12 +37,12 @@ function addDays(dateStr: string, days: number): string {
 }
 
 // Compact date for a game option label ("Home vs Away — Aug 3"). scheduledAt is
-// a full ISO timestamp (not a date-only string), so parse it directly.
+// a full ISO INSTANT (not a date-only string), so it takes the ET treatment —
+// unlike addDays/formatDate below, which handle bare yyyy-mm-dd strings and stay
+// in UTC. A 9 PM ET game named "Aug 3" here has to be the same Aug 3 the rest of
+// the app files it under, whatever zone the rep is selling from.
 function formatGameDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return etDateTime(iso, { month: 'short', day: 'numeric' }) || iso;
 }
 
 // The dropdown label for a sponsorable game: "Home vs Away — date", with TBD

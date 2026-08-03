@@ -9,16 +9,14 @@ import { AppNav } from '../../nav';
 import {
   getContentItem,
   getPublishedContent,
+  etDateTime,
   ContentItem,
   FeedItem,
 } from '../../api';
 
-// Full date + time for the byline (mirrors the feed reader / game page).
+// Full ET date + time for the byline (mirrors the feed reader / game page).
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso) || iso;
 }
 
 // ---- Standalone article reader (/articles/[id]). The bare content row

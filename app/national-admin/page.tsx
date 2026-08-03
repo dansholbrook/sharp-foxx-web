@@ -32,6 +32,7 @@ import {
   resolvePrediction,
   voidPrediction,
   points,
+  etWallClockToIso,
   NationalPrediction,
   PredictionKind,
 } from '../api';
@@ -166,9 +167,11 @@ function OpenForm({
         options,
         ...(kind === 'over_under' ? { line: lineNum } : {}),
         ...(stake.trim() !== '' ? { stake: stakeNum } : {}),
-        // datetime-local gives a local wall-clock with no zone; the API wants a
-        // real instant, so it goes through Date to pick up the browser's offset.
-        ...(locksAt ? { locksAt: new Date(locksAt).toISOString() } : {}),
+        // datetime-local gives a wall clock with no zone, and the field says
+        // that clock is EASTERN — so it crosses to an instant through ET rather
+        // than through whatever offset the admin's laptop happens to be on. A
+        // lock time is the one field on this form fans lose points to.
+        ...(locksAt ? { locksAt: etWallClockToIso(locksAt) ?? undefined } : {}),
         // Already a DATE ('2026-07-15') from <input type="date"> — exactly what
         // the backend wants. Deliberately NOT run through Date: that would make
         // an instant out of a promise and could shift the day across a zone.
@@ -334,7 +337,7 @@ function OpenForm({
             onChange={(e) => setLocksAt(e.target.value)}
           />
           <span className="natboard-admin__help">
-            Optional. Picks close automatically at this time.
+            Optional. Eastern Time. Picks close automatically at this time.
           </span>
         </label>
 

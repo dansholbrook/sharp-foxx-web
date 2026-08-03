@@ -35,6 +35,7 @@ import {
   oracleOutcomeCopy,
   points,
   streakOutcomeCopy,
+  etTime,
 } from '../../api';
 
 // The dial and the split bar both animate; both stop dead under reduced motion
@@ -414,10 +415,8 @@ function friendlyDate(date: string): string {
   });
 }
 
-// "7:10 PM" — kickoff, which is also the lock. A real timestamp, so it converts
-// to the fan's own zone the way every other time on the site does.
+// "7:10 PM ET" — kickoff, which is also the lock. A real timestamp, so it
+// renders in ET and says so, the way every other time on the site does.
 function kickoffLabel(iso: string): string {
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return '';
-  return t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return etTime(iso, { zone: true });
 }

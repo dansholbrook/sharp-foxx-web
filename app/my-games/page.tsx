@@ -13,6 +13,7 @@ import {
   getEvents,
   getContentByAuthor,
   getEventSponsorship,
+  etDateTime,
   MyAssignment,
   EventListItem,
 } from '../api';
@@ -23,13 +24,11 @@ import {
 // already loads) and falls back to the status on the assignment.
 type EventStatus = EventListItem['status'];
 
-// Format the timestamptz string the API returns; fall back to the raw value if
-// it somehow doesn't parse.
+// Format the timestamptz string the API returns, in ET; fall back to the raw
+// value if it somehow doesn't parse. Labelled — this is the kickoff a rep plans
+// their night around.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso, { zone: true }) || iso;
 }
 
 // The matchup as readable team names ("Home vs Away"), or null when either side

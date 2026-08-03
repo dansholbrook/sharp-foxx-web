@@ -21,18 +21,31 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { getEarnMenu, points, formatMultiplier, EarnMenu, EarnMenuItem } from './api';
+import {
+  getEarnMenu,
+  points,
+  formatMultiplier,
+  etDateTime,
+  etWeekday,
+  EarnMenu,
+  EarnMenuItem,
+} from './api';
 
 // "through Sunday" / "through Feb 9" — a promotion's end as a fan reads a
 // deadline, not as a timestamp. Inside a week, the weekday IS the clearest
 // wording; beyond that it needs a date.
+//
+// The weekday and the date are both the ET ones: the promotion's window is
+// evaluated in ET on the server, so a Sunday 11 PM ET close that read as
+// "Monday" to a fan in London would be a deadline named wrong. No zone label —
+// this is a bare day, and the wording carries no clock to attach it to.
 function promoEndsLabel(iso: string): string {
   const end = new Date(iso);
   if (Number.isNaN(end.getTime())) return '';
   const daysOut = (end.getTime() - Date.now()) / 86_400_000;
   return daysOut < 7 && daysOut >= 0
-    ? end.toLocaleDateString('en-US', { weekday: 'long' })
-    : end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    ? etWeekday(iso)
+    : etDateTime(iso, { month: 'short', day: 'numeric' });
 }
 
 // The progress line under an action. Three genuinely different states, and the

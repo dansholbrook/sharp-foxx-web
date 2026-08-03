@@ -11,6 +11,7 @@ import {
   createTeam,
   createEvent,
   createAssignment,
+  etWallClockToIso,
   CreateEventInput,
 } from './api';
 import { TeamPicker, TeamSelection } from './team-picker';
@@ -132,9 +133,16 @@ export function AddGameForm({
       setFormError('Home and away teams must be different.');
       return;
     }
-    // datetime-local is local wall-clock with no zone; toISOString normalizes it
-    // to the UTC instant the API expects.
-    const iso = new Date(scheduledAt).toISOString();
+    // datetime-local is a wall clock with no zone, and the field says that clock
+    // is EASTERN — so it converts through the ET crossing, not through the
+    // browser's offset. A correspondent adding a 7:00 PM game from Denver used
+    // to write 01:00Z instead of 23:00Z, and every lock, grade and countdown on
+    // that game inherited the two hours.
+    const iso = etWallClockToIso(scheduledAt);
+    if (!iso) {
+      setFormError('Pick a valid date and time.');
+      return;
+    }
 
     const body: CreateEventInput = {
       sport,
@@ -292,7 +300,9 @@ export function AddGameForm({
 
           {/* ---- Date & time ---- */}
           <div className="field">
-            <label htmlFor="ag-when">Date &amp; time</label>
+            <label htmlFor="ag-when">
+              Date &amp; time <span className="muted">(Eastern Time)</span>
+            </label>
             <input
               id="ag-when"
               type="datetime-local"

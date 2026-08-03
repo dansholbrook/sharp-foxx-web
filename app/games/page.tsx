@@ -27,7 +27,15 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
-import { getGames, EventListItem, isCoveredEvent, isFeedEvent } from '../api';
+import {
+  getGames,
+  isCoveredEvent,
+  isFeedEvent,
+  etDateTime,
+  etDateKey,
+  etWallClockToIso,
+  EventListItem,
+} from '../api';
 
 const PAGE_SIZE = 20;
 
@@ -39,12 +47,10 @@ type Window = 'week' | 'month' | 'all';
 type Scope = 'foxx' | 'all';
 
 // Unlike the feed's date-only thumbnails, a schedule has to answer "tonight?" —
-// so the tip-off time is part of the card, not just the date.
+// so the tip-off time is part of the card, not just the date. Labelled ET: this
+// is the whole reason a fan is on this page.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso, { zone: true }) || iso;
 }
 
 // The shared pulsing LIVE badge (dot + wordmark) — same scoped .live-badge
@@ -100,24 +106,36 @@ const WINDOWS: Array<{ value: Window; label: string }> = [
 // Upcoming counts from the START of today rather than from now: a game that
 // tipped off an hour ago is live right now, and a dateFrom of "now" would filter
 // the very games the tab is meant to pin to the top.
+//
+// THE BOUNDARIES ARE ET MIDNIGHTS, not the browser's. These chips build the
+// dateFrom/dateTo the server filters on, so anchoring them to local midnight
+// made "this week" a DIFFERENT SET OF GAMES per viewer: a fan in LA got a window
+// running three hours behind a fan in New York, and a late Sunday game sat
+// inside one and outside the other. The schedule is one schedule.
 function windowRange(win: Window, tab: Tab): { dateFrom?: string; dateTo?: string } {
   if (win === 'all') return {};
   const days = win === 'week' ? 7 : 30;
   const now = new Date();
+  const today = etDateKey(now.toISOString());
+  if (!today) return {};
 
   if (tab === 'upcoming') {
-    const from = new Date(now);
-    from.setHours(0, 0, 0, 0);
-    const to = new Date(from);
-    to.setDate(to.getDate() + days);
-    to.setHours(23, 59, 59, 999);
-    return { dateFrom: from.toISOString(), dateTo: to.toISOString() };
+    const from = etWallClockToIso(`${today}T00:00:00`);
+    const to = etWallClockToIso(`${shiftDays(today, days)}T23:59:59`);
+    return from && to ? { dateFrom: from, dateTo: to } : {};
   }
 
-  const from = new Date(now);
-  from.setDate(from.getDate() - days);
-  from.setHours(0, 0, 0, 0);
-  return { dateFrom: from.toISOString(), dateTo: now.toISOString() };
+  const from = etWallClockToIso(`${shiftDays(today, -days)}T00:00:00`);
+  return from ? { dateFrom: from, dateTo: now.toISOString() } : {};
+}
+
+// Add (or subtract) days on a bare 'YYYY-MM-DD'. Done in UTC on purpose: this
+// touches no instant, so it walks the calendar without a DST offset ever
+// entering the arithmetic. The result goes back through etWallClockToIso, which
+// is where the ET offset for that particular day gets applied.
+function shiftDays(dayKey: string, days: number): string {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
 // ---- Feed game card (source != null): the QUIETER, play-only variant shown

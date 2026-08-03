@@ -38,6 +38,7 @@ import {
   enterContest,
   points,
   squaresPeriodLabel,
+  etDateTime,
   ContestDetail,
   SquaresGrid,
   SquaresBoard as SquaresBoardData,
@@ -50,17 +51,18 @@ import {
 // gentle refresh keeps the board honest without a socket. 30s: cheap.
 const LIVE_POLL_MS = 30_000;
 
-// Match the app's date+time treatment used across the game/contest surfaces.
+// Match the app's ET date+time treatment used across the game/contest surfaces.
+// Labelled: kickoff is when the grid locks and the numbers get drawn.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
+  return (
+    etDateTime(iso, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      zone: true,
+    }) || iso
+  );
 }
 
 // A short badge for a claimed square: two initials from the owner's name, so 100

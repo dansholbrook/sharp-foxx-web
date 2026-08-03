@@ -41,6 +41,8 @@ import {
   callWeekLabel,
   callPhase,
   points,
+  etDateTime,
+  etTime,
   CallCard,
   Prediction,
   PredictionKind,
@@ -78,16 +80,11 @@ type EditableArticle = ContentItem | EventContentItem;
 // The status values a rep can move an assignment through, in workflow order.
 const STATUSES: MyAssignment['status'][] = ['assigned', 'accepted', 'submitted'];
 
-// Format the timestamptz string the API returns; fall back to the raw value if
-// it somehow doesn't parse.
+// Format the timestamptz string the API returns, in ET; fall back to the raw
+// value if it somehow doesn't parse. Labelled — this is the kickoff the rep is
+// filing against.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      });
+  return etDateTime(iso, { zone: true }) || iso;
 }
 
 // The matchup as readable team names ("Home vs Away"), or null when either side
@@ -210,12 +207,11 @@ function AttachSponsorForm({
   );
 }
 
-// Time-of-day only ("7:04 PM"), for the emitted-events feed + sponsor "aired at".
+// Time-of-day only in ET ("7:04 PM"), for the emitted-events feed + sponsor
+// "aired at". Unlabelled: past stamps in a column, under a header that already
+// names the night.
 function formatClock(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return etTime(iso) || iso;
 }
 
 // Sport-agnostic period chips + the three instant big-play presets.

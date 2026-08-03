@@ -10,14 +10,14 @@
 // inline notice rather than blanking the page around it.
 
 import { useEffect, useState } from 'react';
-import { getMyReferral, RepReferral } from './api';
+import { getMyReferral, etDateTime, RepReferral } from './api';
 
-// A referred fan's joined-at timestamp -> a readable date. '—' if it won't parse.
+// A referred fan's joined-at timestamp -> a readable ET date. '—' if it won't
+// parse.
 function formatJoined(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return (
+    etDateTime(iso, { year: 'numeric', month: 'short', day: 'numeric' }) || '—'
+  );
 }
 
 export function RefShareCard({ token }: { token: string }) {

@@ -19,6 +19,7 @@ import {
   getNilPool,
   approveDeliverable,
   returnDeliverable,
+  etDateTime,
   NilReviewItem,
   NilRelease,
 } from '../api';
@@ -38,10 +39,7 @@ const DEFAULT_FEE_RATE = 0.15;
 
 function formatWhen(iso: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso) || iso;
 }
 
 // Compose the athlete's display name from the review-queue's first/last fields;

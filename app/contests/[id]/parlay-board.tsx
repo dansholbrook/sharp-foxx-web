@@ -54,6 +54,7 @@ import {
   formatMultiplier,
   parlayLadderLabel,
   parlayLegLabel,
+  etDateTime,
   ContestDetail,
   ParlayBoardRead,
   ParlayMarket,
@@ -94,17 +95,18 @@ function defaultStake(min: number, max: number): number {
   return Math.min(Math.max(100, min), max);
 }
 
-// Match the app's date+time treatment used across the game/contest surfaces.
+// Match the app's ET date+time treatment used across the game/contest surfaces.
+// Labelled: a leg's kickoff is when that leg stops being pickable.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
+  return (
+    etDateTime(iso, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      zone: true,
+    }) || iso
+  );
 }
 
 // A slate game is closed to legging once it has started: the backend rejects a

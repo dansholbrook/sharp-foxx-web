@@ -10,23 +10,20 @@ import {
   getReviewQueue,
   publishContent,
   returnContent,
+  etDateTime,
   ReviewQueueItem,
 } from '../api';
 
-// Full date + time — used for the "submitted" column/line.
+// Full ET date + time — used for the "submitted" column/line. No zone label: a
+// submission time is a past fact on an editor's queue, not a deadline, and a
+// label on every row of a queue is noise.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso) || iso;
 }
 
-// Date-only — used for the game's scheduled date in the meta line.
+// Date-only ET — used for the game's scheduled date in the meta line.
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
+  return etDateTime(iso, { dateStyle: 'medium' }) || iso;
 }
 
 // The matchup as "Away @ Home", or null when either side is missing a name.

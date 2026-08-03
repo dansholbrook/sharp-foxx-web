@@ -26,6 +26,7 @@ import {
   getEvents,
   getPublishedContent,
   getGamePhotos,
+  etDateTime,
   TeamDetail,
   TeamRosterAthlete,
   EventListItem,
@@ -35,19 +36,16 @@ import {
 } from '../../api';
 
 // ---- formatting helpers (mirror the game / athlete-profile pages) ----
+// Both render in ET. formatWhen carries the zone label because it's the tip-off
+// on an upcoming game; formatDate doesn't, because a bare day has no clock to
+// pin a zone to.
 function formatDate(iso: string | null): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
+  return etDateTime(iso, { dateStyle: 'medium' }) || iso;
 }
 
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso, { zone: true }) || iso;
 }
 
 function titleCase(s: string): string {

@@ -2777,6 +2777,222 @@ export function signedPoints(n: number): string {
 }
 
 // ============================================================================
+// TIME — every instant on this site renders in EASTERN TIME, not the viewer's
+// zone and not the venue's.
+//
+// WHY ET AND NOT THE BROWSER'S ZONE. The server spine is already ET end to end:
+// arena-streak, oracle, trail and economy all bucket their days with
+// `AT TIME ZONE 'America/New_York'`. So the day a game *counts* toward is an ET
+// day. Rendering the same instant in the viewer's zone means a Friday 11 PM ET
+// tip-off shows as Friday 8 PM to a fan in LA — while the backend files it, and
+// the Oracle grades it, under Friday too... but a Saturday 12:30 AM ET game
+// shows as *Friday* 9:30 PM in LA and counts as SATURDAY. The fan's card, their
+// streak and their calendar disagree, and nothing on screen explains why. One
+// zone across the whole product is the only version where the clock a fan reads
+// and the clock the ledger keeps are the same clock.
+//
+// WHY NOT VENUE-LOCAL. Venue-local has the same defect, just harder to see: the
+// game still displays as Friday in LA while counting toward Saturday's Oracle,
+// and now the date-flip is attributable to a venue the fan may not know the
+// location of. More decisively, venue-local CANNOT HELP LOCK TIMES — a lock, a
+// contest close, a promotion window and a countdown target belong to the
+// platform, not to a stadium, and those are the times that actually cost a fan
+// points when they're wrong.
+//
+// Venue-local is a real Phase II feature, and when we build it it needs an
+// `events.venue_tz` column populated from ESPN's venue geo. NOT a state_code
+// map: state does not determine timezone (Florida, Indiana, Kentucky, Tennessee
+// and six others split across two zones), so a state lookup would be wrong for
+// real venues in a way that looks right in testing.
+//
+// BARE DATES DO NOT COME THROUGH HERE. weekStart ('2026-07-27'), the Oracle's
+// date and resolvesBy are YYYY-MM-DD with no instant in them; they keep their
+// existing local-noon parse. Only real timestamps get zoned.
+// ============================================================================
+
+export const ET_ZONE = 'America/New_York';
+
+// The label is the generic 'ET', not the Intl-derived 'EST'/'EDT'. It's how
+// every schedule a fan already reads publishes a kickoff, and it's correct in
+// both halves of the year — which the two specific abbreviations are not, in
+// the hands of anyone typing one by hand.
+export const ET_LABEL = 'ET';
+
+// Intl options plus `zone`, which appends the ET label. It's a separate flag
+// rather than `timeZoneName` because passing timeZoneName alongside
+// dateStyle/timeStyle is a TypeError, and dateStyle is what most callers want.
+export type EtFormatOptions = Intl.DateTimeFormatOptions & { zone?: boolean };
+
+// Constructing an Intl.DateTimeFormat is expensive and these render inside
+// lists, so formatters are built once per distinct shape and reused.
+const ET_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function etFormatter(fields: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = JSON.stringify(fields);
+  let fmt = ET_FORMATTERS.get(key);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat('en-US', { ...fields, timeZone: ET_ZONE });
+    ET_FORMATTERS.set(key, fmt);
+  }
+  return fmt;
+}
+
+const ET_DATETIME_DEFAULT: Intl.DateTimeFormatOptions = {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+};
+
+const ET_TIME_DEFAULT: Intl.DateTimeFormatOptions = {
+  hour: 'numeric',
+  minute: '2-digit',
+};
+
+// An ISO instant, rendered in ET. Returns '' — never a half-rendered string —
+// for null, empty or unparseable input, so each call site keeps its own
+// fallback: `etDateTime(iso) || iso`, `|| '—'`, `|| null`, whatever it had.
+//
+// Default shape is "Jul 26, 2026, 6:35 PM"; pass any Intl field options to
+// change it, and `zone: true` to append " ET".
+export function etDateTime(
+  iso: string | null | undefined,
+  opts: EtFormatOptions = {},
+): string {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  const { zone = false, ...fields } = opts;
+  const shape = Object.keys(fields).length > 0 ? fields : ET_DATETIME_DEFAULT;
+  const text = etFormatter(shape).format(ms);
+  return zone ? `${text} ${ET_LABEL}` : text;
+}
+
+// Time of day only, in ET — "7:10 PM". The kickoff/lock clock on the Arena
+// cards, where the day is already named by the card around it.
+export function etTime(
+  iso: string | null | undefined,
+  opts: EtFormatOptions = {},
+): string {
+  const { zone = false, ...fields } = opts;
+  return etDateTime(iso, {
+    ...(Object.keys(fields).length > 0 ? fields : ET_TIME_DEFAULT),
+    zone,
+  });
+}
+
+// The weekday an instant falls on IN ET — "Sunday". A deadline inside the week
+// reads better as a weekday than as a date, and the weekday has to be the ET
+// one or a Sunday 11 PM ET close is "Sunday" on the server and "Sunday" in
+// London but "Sunday" only until you're west of it.
+export function etWeekday(
+  iso: string | null | undefined,
+  opts: EtFormatOptions = {},
+): string {
+  return etDateTime(iso, { weekday: 'long', ...opts });
+}
+
+// ---- The instant <-> ET wall-clock crossings -------------------------------
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+// hourCycle 'h23' rather than hour12:false — en-US with hour12:false renders
+// midnight as hour "24" on some engines, which breaks the arithmetic below.
+const ET_PART_FIELDS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+};
+
+type EtParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+};
+
+// The ET calendar/clock fields of an instant.
+function etParts(ms: number): EtParts {
+  const parts = etFormatter(ET_PART_FIELDS).formatToParts(ms);
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? '0');
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour'),
+    minute: get('minute'),
+    second: get('second'),
+  };
+}
+
+// ET's UTC offset in ms at a given instant (-4h in EDT, -5h in EST). Derived by
+// reading the instant's ET wall clock back out of Intl and diffing it against
+// UTC, so the DST rules come from the platform's tz database rather than from a
+// date we'd have to maintain here twice a year.
+function etOffsetMs(ms: number): number {
+  const p = etParts(ms);
+  const wallAsUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return wallAsUtc - Math.floor(ms / 1000) * 1000;
+}
+
+// The ET calendar day an instant lands on, as 'YYYY-MM-DD'.
+//
+// THE REASON THIS EXISTS rather than `iso.slice(0, 10)`: the API's instants are
+// UTC, so slicing gives the UTC day. Everything from 8 PM ET (7 PM in winter)
+// onward has already rolled over to tomorrow in UTC, so a slice files an
+// evening's worth of activity — which is most of it, on a sports product —
+// under the wrong day.
+export function etDateKey(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  const p = etParts(ms);
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
+}
+
+// A staff member's `<input type="datetime-local">` value -> the UTC instant the
+// API stores. The input is a bare wall clock with NO ZONE, and the forms now
+// say that clock is ET, so this is the only place that decision is applied.
+//
+// `new Date(value).toISOString()` — what these forms used to do — reads the
+// wall clock in the BROWSER's zone, which means a correspondent in Denver
+// scheduling a 7:00 PM game writes 01:00Z instead of 23:00Z. Every lock, grade
+// and countdown downstream inherits the two-hour error, and nothing about the
+// stored row looks wrong.
+//
+// Two passes: the offset depends on the instant, and the instant depends on the
+// offset. The first pass guesses with the offset at the naive UTC reading, the
+// second corrects it — which is exact everywhere except inside the one-hour
+// spring-forward gap, where the named wall clock does not exist and any answer
+// is a choice.
+export function etWallClockToIso(wall: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(wall.trim());
+  if (!m) return null;
+  const naive = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], m[6] ? +m[6] : 0);
+  if (Number.isNaN(naive)) return null;
+  const guess = naive - etOffsetMs(naive);
+  const instant = naive - etOffsetMs(guess);
+  return new Date(instant).toISOString();
+}
+
+// The reverse crossing: a stored instant -> the 'YYYY-MM-DDTHH:mm' an edit form
+// puts back in a datetime-local. Must be ET for the same reason as above, or
+// opening an existing row in a non-ET browser and saving it unchanged would
+// silently move it.
+export function isoToEtWallClock(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return '';
+  const p = etParts(ms);
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}T${pad2(p.hour)}:${pad2(p.minute)}`;
+}
+
+// ============================================================================
 // CONTESTS — the generic contest chassis + pick'em gameplay. POINTS ONLY, the
 // same closed loop as predictions: entry costs points, payouts pay points, and
 // every move is an immutable point_events row. Mirrors contests.service.ts,
@@ -4624,7 +4840,10 @@ export function trailItemMeta(item: TrailItem): {
     title: str(m.townName) ?? str(m.region) ?? 'Collected',
     region: str(m.region),
     season: str(m.seasonName),
-    date: str(m.date) ?? item.earnedAt.slice(0, 10),
+    // The snapshot's own date if it captured one, else the day the pennant was
+    // earned — as an ET day. `earnedAt.slice(0, 10)` would give the UTC day,
+    // which puts anything collected after 8 PM ET on tomorrow's card.
+    date: str(m.date) ?? (etDateKey(item.earnedAt) || null),
   };
 }
 

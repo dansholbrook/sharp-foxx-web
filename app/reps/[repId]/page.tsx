@@ -13,6 +13,7 @@ import {
   getEvents,
   getRepAdOrders,
   getAdvertisers,
+  etDateTime,
   MyAssignment,
   EventContentItem,
   EventListItem,
@@ -37,13 +38,12 @@ function formatDate(dateStr: string | null): string {
       });
 }
 
-// Format the timestamptz string the API returns; fall back to the raw value if
-// it somehow doesn't parse (same helper shape as My Games).
+// Format the timestamptz string the API returns, in ET; fall back to the raw
+// value if it somehow doesn't parse (same helper shape as My Games). No zone
+// label: this is a manager's read of a rep's past activity, not a time anyone
+// acts on, and a per-row label would be noise down a whole column.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso) || iso;
 }
 
 // "Home vs Away" when both names are present, else null -- callers fall back to

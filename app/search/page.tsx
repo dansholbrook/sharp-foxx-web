@@ -5,14 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav } from '../nav';
-import { getEvents, EventListItem } from '../api';
+import { getEvents, etDateTime, EventListItem } from '../api';
 
-// Date-only formatting for compact thumbnail metadata (mirrors the feed page).
+// Date-only ET formatting for compact thumbnail metadata (mirrors the feed page).
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
+  return etDateTime(iso, { dateStyle: 'medium' }) || iso;
 }
 
 // The shared pulsing LIVE badge (dot + wordmark) — same scoped .live-badge

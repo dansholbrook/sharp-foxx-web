@@ -31,6 +31,7 @@ import {
   getMyPicks,
   withdrawContest,
   contestCost,
+  etDateTime,
   ContestDetail,
   SurvivorPicks,
   SurvivorRound,
@@ -44,17 +45,19 @@ import {
 // same cadence the pick'em scorecard and squares grid use.
 const LIVE_POLL_MS = 30_000;
 
-// Match the app's date+time treatment used across the game/contest surfaces.
+// Match the app's ET date+time treatment used across the game/contest surfaces.
+// Labelled: kickoff is the elimination deadline, and it costs the fan the whole
+// contest to read it an hour late.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
+  return (
+    etDateTime(iso, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      zone: true,
+    }) || iso
+  );
 }
 
 // A game is closed to picking once it has started: the backend locks the round at

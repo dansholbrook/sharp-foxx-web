@@ -73,6 +73,7 @@ import {
   callPhase,
   callWeekLabel,
   points,
+  etDateTime,
   CALL_QUESTION_COUNT,
   CALL_TIEBREAKER_MAX,
   CallCard,
@@ -99,18 +100,16 @@ function parseTiebreaker(text: string): number | null {
   return Number.isSafeInteger(n) && n <= CALL_TIEBREAKER_MAX ? n : null;
 }
 
-// "Saturday, July 25 · 7:00 PM" — the game, in the fan's own zone. A real
-// timestamp, so it converts like every other time on the site.
+// "Saturday, July 25 · 7:00 PM ET" — the game, which is also the lock. A real
+// timestamp, so it renders in ET and says so, like every other time on the site.
 function kickoffLabel(iso: string | null): string {
-  if (!iso) return '';
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return '';
-  return t.toLocaleString('en-US', {
+  return etDateTime(iso, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    zone: true,
   });
 }
 

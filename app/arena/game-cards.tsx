@@ -32,20 +32,19 @@ import {
   callPhase,
   points,
   trailSideTeam,
+  etTime,
   CallCurrent,
   CallEntry,
   OracleToday,
   TrailToday,
 } from '../api';
 
-// "7:10" — the lock, in the fan's own zone. The hub says the TIME rather than a
-// countdown for a day already called: a fan who has picked wants to know when
-// it goes live, not how many minutes they have left to do a thing they've done.
+// "7:10 PM ET" — the lock. The hub says the TIME rather than a countdown for a
+// day already called: a fan who has picked wants to know when it goes live, not
+// how many minutes they have left to do a thing they've done. Labelled, because
+// it's still the moment their pick stops being editable.
 function lockClock(iso: string | null): string {
-  if (!iso) return '';
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return '';
-  return t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return etTime(iso, { zone: true });
 }
 
 // A NAME PAST THIS LENGTH GETS THE SMALLER TYPE STEP. The three shipped names

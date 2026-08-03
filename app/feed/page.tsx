@@ -26,6 +26,7 @@ import {
   followTargetName,
   isCoveredEvent,
   points,
+  etDateTime,
   FeedItem,
   EventListItem,
   FollowMineEntry,
@@ -35,13 +36,10 @@ import {
   PointsLeaderboard,
 } from '../api';
 
-// Format the timestamptz string the API returns; fall back to the raw value if
-// it somehow doesn't parse. Date-only for compact thumbnail metadata.
+// Format the timestamptz string the API returns, in ET; fall back to the raw
+// value if it somehow doesn't parse. Date-only for compact thumbnail metadata.
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', { dateStyle: 'medium' });
+  return etDateTime(iso, { dateStyle: 'medium' }) || iso;
 }
 
 // The shared pulsing LIVE badge (dot + wordmark) — same scoped .live-badge

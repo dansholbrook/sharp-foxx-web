@@ -20,6 +20,7 @@ import {
   getAdPackages,
   getFieldReps,
   getMyEarnings,
+  etDateTime,
   AdOrder,
   AdPackage,
   MyEarningsReport,
@@ -48,17 +49,12 @@ function ratePct(rate: string): string {
   return `${Number(n.toFixed(2))}%`;
 }
 
-// Readable earned/paid timestamp (timestamptz ISO); '—' when absent.
+// Readable earned/paid timestamp as an ET date; '—' when absent.
 function formatEarned(iso: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+  return (
+    etDateTime(iso, { year: 'numeric', month: 'short', day: 'numeric' }) || iso
+  );
 }
 
 // Readable date for an ad order's date-only fields (yyyy-mm-dd), parsed as UTC so

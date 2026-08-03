@@ -44,6 +44,9 @@ import {
   promotionWindowState,
   formatMultiplier,
   ledgerActionLabel,
+  etDateTime,
+  etWallClockToIso,
+  isoToEtWallClock,
   ACTION_POINTS_MAX,
   ACTION_DAILY_CAP_MAX,
   PROMOTION_MULTIPLIER_MIN,
@@ -54,26 +57,25 @@ import {
 } from '../api';
 
 // ---------------------------------------------------------------------------
-// Time formatting. <input type="datetime-local"> speaks LOCAL WALL-CLOCK with no
-// zone; the API speaks ISO instants. These two functions are the only crossing
-// points, and they go through Date so the browser's offset is applied once,
-// deliberately, rather than being smeared across the page.
+// Time. <input type="datetime-local"> speaks WALL CLOCK with no zone; the API
+// speaks ISO instants. These are the only crossing points, and the wall clock
+// they speak is EASTERN — see the ET block in api.ts, and the "Eastern Time"
+// note on the two inputs below.
+//
+// This used to go through the browser's offset, which meant an admin in Denver
+// scheduling a promotion for 6 PM wrote 01:00Z and got a window that opened two
+// hours late for everyone — including, silently, for the multiplier the ledger
+// applies.
 // ---------------------------------------------------------------------------
-function toLocalInput(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
+function toEtInput(iso: string): string {
+  return isoToEtWallClock(iso);
 }
 
 function formatWhen(iso: string | null): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  // Labelled: a promotion's window is a thing staff schedule against, and the
+  // row is the only place the boundary is stated.
+  return etDateTime(iso, { zone: true }) || iso;
 }
 
 // ---------------------------------------------------------------------------
@@ -400,8 +402,8 @@ function promoDraftOf(p: PointPromotion): PromoDraft {
   return {
     name: p.name,
     multiplier: formatMultiplier(p.multiplier),
-    startsAt: toLocalInput(p.startsAt),
-    endsAt: toLocalInput(p.endsAt),
+    startsAt: toEtInput(p.startsAt),
+    endsAt: toEtInput(p.endsAt),
     appliesTo: p.appliesTo ?? [],
     enabled: p.enabled,
   };
@@ -416,7 +418,13 @@ function validatePromo(d: PromoDraft): string | null {
   }
   if (!d.startsAt) return 'Start time is required';
   if (!d.endsAt) return 'End time is required';
-  if (new Date(d.endsAt).getTime() <= new Date(d.startsAt).getTime()) {
+  // Compared as the ET instants they'll actually be stored as, not as two local
+  // parses — which agree on ordering right up until the pair straddles a DST
+  // boundary, and then don't.
+  const startsAt = etWallClockToIso(d.startsAt);
+  const endsAt = etWallClockToIso(d.endsAt);
+  if (!startsAt || !endsAt) return 'Start and end must be valid times';
+  if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
     return 'End must be after start';
   }
   return null;
@@ -501,6 +509,7 @@ function PromotionForm({
             disabled={busy}
             onChange={(e) => setDraft((d) => ({ ...d, startsAt: e.target.value }))}
           />
+          <span className="economy-field__help">Eastern Time</span>
         </label>
 
         <label className="economy-field">
@@ -511,6 +520,7 @@ function PromotionForm({
             disabled={busy}
             onChange={(e) => setDraft((d) => ({ ...d, endsAt: e.target.value }))}
           />
+          <span className="economy-field__help">Eastern Time</span>
         </label>
       </div>
 
@@ -622,8 +632,9 @@ function PromotionRow({
       const next = await updatePointPromotion(token, promo.id, {
         name: d.name.trim(),
         multiplier: Number(d.multiplier),
-        startsAt: new Date(d.startsAt).toISOString(),
-        endsAt: new Date(d.endsAt).toISOString(),
+        // Non-null: validatePromo already rejected a draft these can't parse.
+        startsAt: etWallClockToIso(d.startsAt) ?? '',
+        endsAt: etWallClockToIso(d.endsAt) ?? '',
         // Empty selection WIDENS back to all engagement earns (explicit null),
         // which is the same thing the create form's empty state means.
         appliesTo: d.appliesTo.length > 0 ? d.appliesTo : null,
@@ -768,8 +779,9 @@ function PromotionsSection({
     createPointPromotion(token, {
       name: d.name.trim(),
       multiplier: Number(d.multiplier),
-      startsAt: new Date(d.startsAt).toISOString(),
-      endsAt: new Date(d.endsAt).toISOString(),
+      // Non-null: validatePromo already rejected a draft these can't parse.
+      startsAt: etWallClockToIso(d.startsAt) ?? '',
+      endsAt: etWallClockToIso(d.endsAt) ?? '',
       appliesTo: d.appliesTo.length > 0 ? d.appliesTo : null,
       enabled: d.enabled,
     })

@@ -39,6 +39,7 @@ import {
   contestTypeLabel,
   contestCost,
   points,
+  etDateTime,
   ContestDetail,
   PickSheet,
   PickSheetGame,
@@ -53,17 +54,19 @@ import {
 // final contests don't poll (settled). 30s is slow enough to be cheap.
 const LIVE_POLL_MS = 30_000;
 
-// Match the app's date+time treatment used on the game/picks surfaces.
+// Match the app's ET date+time treatment used on the game/picks surfaces.
+// Labelled: this renders the contest's own open/close window and its games'
+// kickoffs — every one of them a moment a fan has to beat.
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
+  return (
+    etDateTime(iso, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      zone: true,
+    }) || iso
+  );
 }
 
 // The over/under line reads off the sheet game as a `numeric` STRING ("16.50").

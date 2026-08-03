@@ -53,6 +53,7 @@ import {
   getTrailToday,
   points,
   trailSideTeam,
+  etTime,
   CallCurrent,
   OracleToday,
   TrailToday,
@@ -84,12 +85,9 @@ type Teaser = {
   tail: string | null;
 };
 
-// "7:10" — the lock, in the fan's own zone.
+// "7:10 PM ET" — the lock. Labelled, because it's a deadline a fan acts on.
 function lockClock(iso: string | null): string {
-  if (!iso) return '';
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return '';
-  return t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return etTime(iso, { zone: true });
 }
 
 function oracleTeaser(today: OracleToday | null, now: number): Teaser | null {

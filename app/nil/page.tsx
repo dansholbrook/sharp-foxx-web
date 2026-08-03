@@ -22,6 +22,7 @@ import {
   confirmMedia,
   submitDeliverable,
   setDeliverablePublicity,
+  etDateTime,
   NilDeliverable,
   NilWallet,
   NilWalletRelease,
@@ -35,13 +36,11 @@ const usdCents = (cents: number) =>
     currency: 'USD',
   });
 
-// Readable date for a timestamptz ISO string; '—' when absent, raw on a parse miss.
+// Readable ET date for a timestamptz ISO string; '—' when absent, raw on a
+// parse miss.
 function formatWhen(iso: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return etDateTime(iso) || iso;
 }
 
 // Client-side proof guards, mirrored on the backend: images, video/mp4, or pdf,
