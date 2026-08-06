@@ -493,21 +493,35 @@ export interface UpdateContentInput {
 // the Add Game form). level is the backend enum ('pro' | 'college' |
 // 'high_school'); league is nullable (optional on create). Reading a list of
 // teams goes through searchTeams -> TeamSearchResult, which is richer.
+// The bare teams row POST /teams returns (`.returning()`, so it's the whole
+// row). isActive and institutionId are read by the Add Game form: a team
+// created under a school we don't cover yet comes back is_active FALSE, which
+// is expected and has to be explained rather than treated as a failure.
 export interface Team {
   id: string;
   name: string;
   sport: string;
   level: string;
   league: string | null;
+  isActive: boolean;
+  institutionId: string | null;
 }
 
-// POST /teams body (mirrors createTeamSchema). A duplicate name within a sport
-// comes back 409 -> surfaced as "409 <message>" by the client.
+// POST /teams body (mirrors createTeamSchema). A duplicate name comes back
+// 409 -> surfaced as "409 <message>" by the client. The clash is scoped to
+// (institution, sport, name) -- two schools may each field a "Tigers", but one
+// school may not field two.
+//
+// institutionId is what stops an inline-created team being orphaned from its
+// school forever. Optional on the wire because a pro team genuinely has none;
+// see add-game-form.tsx for why this form still insists on one in practice.
+// An unknown id comes back 404.
 export interface CreateTeamInput {
   name: string;
   sport: string;
   level: 'pro' | 'college' | 'high_school';
   league?: string;
+  institutionId?: string;
 }
 
 // POST /events body (mirrors createEventSchema). scheduledAt is an ISO datetime

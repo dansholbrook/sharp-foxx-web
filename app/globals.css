@@ -242,6 +242,22 @@ button:disabled {
   word-break: break-word;
 }
 
+/* Neither a failure nor a win: "this worked, and here is the part of the
+   outcome you would otherwise be surprised by later." Used for a team created
+   under a school we don't cover yet, which comes back inactive by design. It
+   must not be red (nothing went wrong) and must not be green (something needs
+   knowing), so it takes the gold accent. */
+.notice {
+  margin-top: 14px;
+  padding: 11px 13px;
+  background: #241f14;
+  border: 1px solid #5c4a2b;
+  border-radius: 8px;
+  color: #e6d3b4;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+
 /* ---- Tables: editorial spacing, gold-accented totals ---- */
 table {
   width: 100%;
@@ -1711,6 +1727,33 @@ tfoot td {
   flex: 0 0 auto;
   width: auto;
   min-width: 140px;
+}
+
+/* School type-ahead inside the inline creator. Full width on its own row —
+   school names are long ("University of North Carolina at Chapel Hill") and
+   cramming it beside the name input would truncate the one field that
+   disambiguates two "Lincoln"s. */
+.new-team-school {
+  margin-top: 10px;
+}
+
+.new-team-hint {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* The consequence of opting out of the school. Warm, not red: it's a valid
+   choice with a cost, not an error. */
+.new-team-hint--warn {
+  color: #e6d3b4;
+}
+
+.new-team-noschool {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 /* Checkbox field opts out of the full-width input rule and sits inline. */
@@ -6235,6 +6278,95 @@ a.follow-sugcard__name:hover {
 }
 
 .team-picker__hint--error {
+  color: #d98b8b;
+}
+
+/* ============================================================================
+   School picker type-ahead (Add Game → + New team) — mirrors .team-picker*
+   above, the same way .discover-menu mirrors it for the conference field.
+   Duplicated rather than shared: these are three separate surfaces that happen
+   to look alike, and merging them into one selector list makes a change to any
+   one of them a change to all three.
+   ============================================================================ */
+.school-picker {
+  position: relative;
+}
+
+/* Room for the Clear button sitting inside the input's right edge. */
+.school-picker__input {
+  padding-right: 62px;
+}
+
+/* No label above this input (the creator's own label covers the block), so it
+   sits higher than .team-picker__clear. */
+.school-picker__clear {
+  position: absolute;
+  right: 10px;
+  top: 11px;
+  font-size: 0.72rem;
+}
+
+.school-picker__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  /* Above the modal card's own stacking context. */
+  z-index: 30;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+}
+
+/* Options are <button>s, so undo the global gold-fill button styling. */
+.school-picker__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin-top: 0;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+  cursor: pointer;
+}
+
+.school-picker__option--active,
+.school-picker__option:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.1);
+  border: none;
+  color: var(--text);
+}
+
+.school-picker__option-name {
+  font-weight: 600;
+}
+
+.school-picker__option-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.school-picker__hint {
+  padding: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.school-picker__hint--error {
   color: #d98b8b;
 }
 
@@ -17179,8 +17311,10 @@ a.arena-tile:active {
 }
 
 /* ---- "Not yet covered": an imported team is perfectly valid to schedule
-   against, so this is a note, not a warning. ---- */
-.team-picker__option-tag {
+   against, and an imported school is perfectly valid to attach a team to, so
+   this is a note on both pickers, not a warning. ---- */
+.team-picker__option-tag,
+.school-picker__option-tag {
   margin-left: 8px;
   padding: 1px 7px;
   border: 1px solid var(--border-strong);
