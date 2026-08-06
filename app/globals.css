@@ -3402,6 +3402,15 @@ a.btn-inline:hover {
   border-color: var(--accent-hover);
 }
 
+/* Why End Game is disabled on an unscored board — sits beside the button so the
+   precondition is legible without a hover. */
+.console-endgame-hint {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
 .console-sponsor-meta {
   font-size: 0.72rem;
   font-weight: 600;

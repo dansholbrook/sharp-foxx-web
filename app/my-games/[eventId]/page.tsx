@@ -619,6 +619,26 @@ function ConsolePredictions({
   );
 }
 
+// A score for an input draft: a real number (including 0) becomes its digits,
+// "no score yet" becomes an empty field — which renders as the board's em-dash
+// placeholder instead of a 0 nobody entered.
+function scoreText(n: number | null): string {
+  return n === null ? '' : String(n);
+}
+
+// A score_update against a game the API has already settled (final, postponed
+// or canceled) comes back 409. The client formats every failure as
+// "<status> <message>", so strip the numeric prefix and show the server's
+// sentence on its own — it explains a precondition ("its score is settled"),
+// and reading as a status dump would make it look like a transient failure the
+// rep should retry. Colour events (big_play, period, timeout, status_note,
+// sponsor_spot) are still accepted on a terminal game and don't come through here.
+function scoreErrorMessage(err: unknown): string {
+  if (!(err instanceof Error)) return 'Failed to update score';
+  const settled = err.message.match(/^409 (.+)$/s);
+  return settled ? settled[1] : err.message;
+}
+
 // The COURTSIDE console — shown at the top of the workspace only while a game is
 // live. Phone-first, big tap targets: a score pad (+1/+2/+3 per team, optimistic
 // then reconciled from the emit response), period chips, big-play input + preset
@@ -652,14 +672,18 @@ function LiveConsole({
   // lands; throws so the console can surface the failure on its own error line.
   onEndGame: (homeScore: number, awayScore: number) => Promise<void>;
 }) {
-  const [home, setHome] = useState(initialHome ?? 0);
-  const [away, setAway] = useState(initialAway ?? 0);
+  // null means NOBODY HAS SCORED THIS GAME YET -- it is not zero. Defaulting it
+  // to 0 would render a 0 - 0 board that End Game would then publish as a real
+  // final, and reportResult settles pick'em/predictions/Oracle/Trail off that
+  // score irreversibly. Keep the null all the way to the End Game gate below.
+  const [home, setHome] = useState<number | null>(initialHome);
+  const [away, setAway] = useState<number | null>(initialAway);
   // The Sync inputs are the PRIMARY control: editable drafts of each score,
   // kept in step with the reconciled totals (history load, +N bumps, and the
   // post-sync echo all flow through home/away) so the fields always show the
-  // live number until the rep types a new one.
-  const [homeDraft, setHomeDraft] = useState(String(initialHome ?? 0));
-  const [awayDraft, setAwayDraft] = useState(String(initialAway ?? 0));
+  // live number until the rep types a new one. Empty draft == no score entered.
+  const [homeDraft, setHomeDraft] = useState(scoreText(initialHome));
+  const [awayDraft, setAwayDraft] = useState(scoreText(initialAway));
   const [feed, setFeed] = useState<LiveEvent[]>([]); // newest-first for display
   const [showAllFeed, setShowAllFeed] = useState(false);
   const [bigPlay, setBigPlay] = useState('');
@@ -668,13 +692,23 @@ function LiveConsole({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setHomeDraft(String(home));
-    setAwayDraft(String(away));
+    setHomeDraft(scoreText(home));
+    setAwayDraft(scoreText(away));
   }, [home, away]);
 
   // The rep has typed a score that differs from what's on the board -> Sync is
   // meaningful (and enabled).
-  const scoreDirty = homeDraft !== String(home) || awayDraft !== String(away);
+  const scoreDirty =
+    homeDraft !== scoreText(home) || awayDraft !== scoreText(away);
+  // Both fields have to carry a number before Sync can fire: Number('') is 0,
+  // so syncing a half-filled board would invent a 0 for the empty side -- the
+  // same fabrication as the old `?? 0` default, one field over.
+  const scoreDraftsFilled =
+    homeDraft.trim() !== '' && awayDraft.trim() !== '';
+  // A score EXISTS once both sides are non-null. Deliberately a null test, not
+  // a truthiness test: a real, entered 0 - 0 is a publishable final, and
+  // `!home` would block it while letting the never-entered case through.
+  const scoreEntered = home !== null && away !== null;
 
   // Seed tonight's emitted events, and derive the running score from the last
   // score_update (if any) so reopening the console mid-game shows the right
@@ -747,9 +781,12 @@ function LiveConsole({
       }
       setFeed((f) => [created, ...f]);
     } catch (err) {
+      // Roll the board back to exactly what it was — including back to null if
+      // this was the first score entered, so a rejected update can't leave a
+      // number on a board that never had one. Covers the terminal-game 409.
       setHome(prevHome);
       setAway(prevAway);
-      setError(err instanceof Error ? err.message : 'Failed to update score');
+      setError(scoreErrorMessage(err));
     } finally {
       setEmitting(false);
     }
@@ -759,6 +796,9 @@ function LiveConsole({
   // the gym board and match it" flow). Clamp to non-negative integers; bail on
   // a non-numeric draft (type=number makes that unlikely, but be safe).
   function syncScore() {
+    // Both fields must carry something — an empty one would read as 0 through
+    // Number('') and publish a score the rep never entered.
+    if (!scoreDraftsFilled) return;
     const nextHome = Math.max(0, Math.trunc(Number(homeDraft)));
     const nextAway = Math.max(0, Math.trunc(Number(awayDraft)));
     if (!Number.isFinite(nextHome) || !Number.isFinite(nextAway)) return;
@@ -768,8 +808,14 @@ function LiveConsole({
   // SECONDARY: tap +1/+2/+3 for one team — a one-tap optimistic bump through the
   // same commit/reconcile path.
   function bumpScore(team: 'home' | 'away', points: number) {
-    const nextHome = team === 'home' ? home + points : home;
-    const nextAway = team === 'away' ? away + points : away;
+    // A bump off an unscored board materializes BOTH sides: a score_update
+    // carries { homeScore, awayScore } together, so there's no wire shape for
+    // "home 2, away unknown". Tapping +2 is the rep entering a score, and the
+    // other side genuinely standing at 0 is part of what they just said.
+    const baseHome = home ?? 0;
+    const baseAway = away ?? 0;
+    const nextHome = team === 'home' ? baseHome + points : baseHome;
+    const nextAway = team === 'away' ? baseAway + points : baseAway;
     void commitScore(nextHome, nextAway);
   }
 
@@ -801,6 +847,9 @@ function LiveConsole({
   // workspace's PATCH. Owns its own busy/error state so a failure shows on the
   // console's error line (the Live & Result section isn't on screen while live).
   async function handleEndGame() {
+    // Precondition, mirrored by the disabled button: never publish a final off
+    // a board nobody has scored. Also narrows both to number for onEndGame.
+    if (home === null || away === null) return;
     if (
       !window.confirm(
         'End this game and mark it final? The current live score will be published as the final result.',
@@ -851,6 +900,7 @@ function LiveConsole({
           inputMode="numeric"
           className="console-board__score console-board__score--home"
           aria-label={`${homeLabel} score`}
+          placeholder="—"
           value={homeDraft}
           disabled={emitting}
           onChange={(e) => setHomeDraft(e.target.value)}
@@ -865,6 +915,7 @@ function LiveConsole({
           inputMode="numeric"
           className="console-board__score console-board__score--away"
           aria-label={`${awayLabel} score`}
+          placeholder="—"
           value={awayDraft}
           disabled={emitting}
           onChange={(e) => setAwayDraft(e.target.value)}
@@ -874,7 +925,7 @@ function LiveConsole({
       <button
         type="button"
         className="console-sync"
-        disabled={emitting || !scoreDirty}
+        disabled={emitting || !scoreDirty || !scoreDraftsFilled}
         onClick={syncScore}
       >
         {emitting ? 'Syncing…' : 'Sync score'}
@@ -975,11 +1026,21 @@ function LiveConsole({
         <button
           type="button"
           className="btn-inline btn-ghost console-endgame"
-          disabled={emitting || ending}
+          disabled={emitting || ending || !scoreEntered}
+          title={
+            scoreEntered ? undefined : 'Enter a score before ending the game'
+          }
           onClick={handleEndGame}
         >
           {ending ? 'Ending…' : 'End Game (Final)'}
         </button>
+        {/* Reads as a precondition rather than a broken button. An entered
+            0 - 0 clears this; a never-entered board does not. */}
+        {!scoreEntered && (
+          <span className="console-endgame-hint">
+            Enter a score before ending the game
+          </span>
+        )}
         {sponsorship && (
           <div className="console-sponsor">
             <button
