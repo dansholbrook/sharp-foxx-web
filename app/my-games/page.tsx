@@ -14,6 +14,7 @@ import {
   getContentByAuthor,
   getEventSponsorship,
   etDateTime,
+  eventStatusLabel,
   MyAssignment,
   EventListItem,
 } from '../api';
@@ -57,6 +58,39 @@ function bucket(status: EventStatus): number {
   if (status === 'live') return 0;
   if (status === 'final') return 2;
   return 1;
+}
+
+// The next thing to DO on a game, as a label for the row's action cell.
+//
+// The workspace was always one click away -- the whole row has been activatable
+// since it was built -- but nothing on the row said so: eight data columns, no
+// action, no chevron. A reviewer looking straight at a scheduled game concluded
+// the result form didn't exist. It does, and it does NOT require going live; a
+// correspondent can open a scheduled game and file 3-5 without ever touching
+// Go Live. This column is the door, labelled.
+// Returns null when there is no next thing to do -- the cell then renders
+// nothing rather than inventing an action.
+function actionLabel(status: EventStatus, scheduledAt: string): string | null {
+  if (status === 'live') return 'Open console →';
+  if (status === 'final') return 'Write recap →';
+  // A canceled game did not happen, so there is no result to report and nothing
+  // to write up. This branch exists because its ABSENCE was a bug: canceled used
+  // to fall through to the pre-game default below, and since a canceled game's
+  // kickoff is almost always in the past it rendered "Report result →" --
+  // walking a correspondent into a form for a game that was never played. The
+  // workspace still lets them file one (a wrongly-canceled game must not be a
+  // dead end), but the row must not invite it.
+  if (status === 'canceled') return null;
+  // Postponed means "not tonight", not "not happening": the workspace keeps its
+  // Go Live button for exactly that reason, so the row says the same thing. It
+  // must skip the kickoff check below -- a postponed game is past its original
+  // tip-off by definition, which would otherwise read "Report result →".
+  if (status === 'postponed') return 'Go live →';
+  // Scheduled. Past its kickoff, the job is filing what happened; before it,
+  // the job is starting the broadcast.
+  const kickoff = new Date(scheduledAt).getTime();
+  if (!Number.isNaN(kickoff) && kickoff < Date.now()) return 'Report result →';
+  return 'Go live →';
 }
 
 export default function MyGamesPage() {
@@ -220,7 +254,7 @@ export default function MyGamesPage() {
         return status === 'live' ? (
           <LiveBadge />
         ) : (
-          <span className="pill">{status === 'final' ? 'Final' : status}</span>
+          <span className="pill">{eventStatusLabel(status)}</span>
         );
       },
     },
@@ -249,6 +283,19 @@ export default function MyGamesPage() {
                 : 'Draft'}
           </span>
         );
+      },
+    },
+    {
+      key: 'action',
+      header: '',
+      // A span, not a button: the whole <tr> already activates (role="link",
+      // Enter/Space, pointer cursor), so a nested control here would be a second
+      // tab stop that does the same thing. This is the affordance, not the
+      // handler.
+      cell: (g) => {
+        const label = actionLabel(statusOf(g), g.event.scheduledAt);
+        if (!label) return null;
+        return <span className="mygames-action">{label}</span>;
       },
     },
   ];
@@ -307,7 +354,61 @@ export default function MyGamesPage() {
       {loading && <div className="card muted">Loading games…</div>}
       {error && <div className="error">{error}</div>}
 
-      {!loading && !error && sortedGames && (
+      {/* ---- FIRST RUN: no assignments at all. Two empty tables taught a new
+           correspondent nothing and the only Add Game button was up in the
+           masthead, so the screen that should be their home base and their
+           onboarding was a pair of blank boxes. One card, the three steps of the
+           job in order, and the action that starts it. ---- */}
+      {!loading && !error && sortedGames && sortedGames.length === 0 && (
+        <section className="card game">
+          <span className="game-kicker">Start here</span>
+          <h2>Your first game</h2>
+          <p className="firstrun__lead">
+            My Games is your home base. Every game you cover runs from here —
+            add it, go live from the stands, then file the result and the recap.
+          </p>
+          <ol className="firstrun__steps">
+            <li className="firstrun__step">
+              <span className="firstrun__step-n">1</span>
+              <span className="firstrun__step-text">
+                <span className="firstrun__step-title">Add the game</span>
+                Pick the sport, both teams and the tip-off time. Times are
+                Eastern, and the line under the date shows you exactly what you
+                picked.
+              </span>
+            </li>
+            <li className="firstrun__step">
+              <span className="firstrun__step-n">2</span>
+              <span className="firstrun__step-text">
+                <span className="firstrun__step-title">Go live from the gym</span>
+                Open the game and hit Go Live. The courtside console gives you
+                the scoreboard, quick +1/+2/+3, big plays and fan predictions.
+              </span>
+            </li>
+            <li className="firstrun__step">
+              <span className="firstrun__step-n">3</span>
+              <span className="firstrun__step-text">
+                <span className="firstrun__step-title">File the result</span>
+                End the game to mark it final, then write the recap and upload
+                your photos. You can file a score without going live — open the
+                game and use Report the result.
+              </span>
+            </li>
+          </ol>
+          <button
+            type="button"
+            className="btn-inline"
+            onClick={() => setShowAdd(true)}
+          >
+            + Add your first game
+          </button>
+          <p className="game-hint">
+            Assigned a game by your manager? It shows up here automatically.
+          </p>
+        </section>
+      )}
+
+      {!loading && !error && sortedGames && sortedGames.length > 0 && (
         <>
           {/* ---- Upcoming: live pinned on top, then soonest-first ---- */}
           <section className="card game">
@@ -333,11 +434,14 @@ export default function MyGamesPage() {
             )}
           </section>
 
-          {/* ---- Past: finals, newest-first ---- */}
-          <section className="card game">
-            <span className="game-kicker">Schedule</span>
-            <h2>Past games</h2>
-            {past.length > 0 ? (
+          {/* ---- Past: finals, newest-first. The section doesn't exist until
+               there IS a final -- an empty "No completed games yet" box on a new
+               correspondent's screen is a second blank panel telling them
+               nothing they can act on. ---- */}
+          {past.length > 0 && (
+            <section className="card game">
+              <span className="game-kicker">Schedule</span>
+              <h2>Past games</h2>
               <QueueTable
                 columns={columns}
                 rows={past}
@@ -346,15 +450,8 @@ export default function MyGamesPage() {
                 pageSize={10}
                 ariaLabel="Past games"
               />
-            ) : (
-              <div className="results-empty">
-                <p className="results-empty__title">No completed games yet</p>
-                <p className="results-empty__hint">
-                  Once a game you covered is marked final, it will move here.
-                </p>
-              </div>
-            )}
-          </section>
+            </section>
+          )}
         </>
       )}
     </main>

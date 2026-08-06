@@ -322,6 +322,29 @@ export function isCoveredEvent(source: string | null | undefined): boolean {
   return source == null;
 }
 
+// An event status as a human label. Every caller used to hand-capitalize the one
+// status it cared about (`status === 'final' ? 'Final' : status`) and let the
+// other four fall through raw, so a column could show a capitalized "Final"
+// beside a lowercase "canceled". The shared .pill happens to uppercase its
+// contents, which hid that in some places and not others -- so the fix is the
+// STRING, here, once, rather than a CSS rule per surface.
+export function eventStatusLabel(status: EventListItem['status']): string {
+  switch (status) {
+    case 'scheduled':
+      return 'Scheduled';
+    case 'live':
+      return 'Live';
+    case 'final':
+      return 'Final';
+    case 'postponed':
+      return 'Postponed';
+    case 'canceled':
+      return 'Canceled';
+    default:
+      return status;
+  }
+}
+
 // PATCH /events/:id/result body (mirrors updateResultSchema in events.service.ts).
 // Every field is optional but the backend requires at least one (empty body ->
 // 400); scores are non-negative ints and videoUrl must be an http(s) URL. Send

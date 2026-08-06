@@ -42,6 +42,7 @@ import {
   callPhase,
   points,
   etDateTime,
+  eventStatusLabel,
   etTime,
   CallCard,
   Prediction,
@@ -1600,6 +1601,14 @@ function GameWorkspace({
   const isScheduled = currentStatus === 'scheduled';
   const isLive = currentStatus === 'live';
   const isFinal = currentStatus === 'final';
+  const isPostponed = currentStatus === 'postponed';
+  const isCanceled = currentStatus === 'canceled';
+  // EVERY not-live, not-final shape renders the pre-game section set. The page
+  // used to branch on isScheduled/isLive/isFinal only, so a postponed or
+  // canceled game (both real event statuses -- see EventListItem) rendered the
+  // header and NOTHING else: no result form, no notes, no article, no photos.
+  // My Games happily linked to it, so a row led straight into a dead page.
+  const isPreGame = !isLive && !isFinal;
   const resultBusy = resultSaving || liveSaving;
 
   // At least one field must be sent (empty body -> 400), so gate Save on that.
@@ -1909,9 +1918,9 @@ function GameWorkspace({
         <input
           type="url"
           className="result-video-input"
-          aria-label={isScheduled ? 'Stream URL' : 'Video URL'}
+          aria-label={isPreGame ? 'Stream URL' : 'Video URL'}
           placeholder={
-            isScheduled
+            isPreGame
               ? 'Stream URL (https://…) — paste before going live'
               : 'Video URL (https://…)'
           }
@@ -1930,12 +1939,23 @@ function GameWorkspace({
         >
           {resultSaving ? 'Saving…' : 'Save result'}
         </button>
-        {isScheduled && (
+        {/* A postponed game still gets Go Live -- postponed means "not tonight",
+            and when it is played this is the button that starts it. A CANCELED
+            game doesn't: it's never being played, and the result form stays only
+            so a wrongly-canceled game isn't a dead end. */}
+        {(isScheduled || isPostponed) && (
           <button className="btn-inline" disabled={resultBusy} onClick={goLive}>
             {liveSaving ? 'Going live…' : 'Go Live'}
           </button>
         )}
       </div>
+      {(isPostponed || isCanceled) && (
+        <p className="game-hint">
+          This game is marked {eventStatusLabel(currentStatus).toLowerCase()}.
+          You can still file a result or write it up
+          {isPostponed ? ', and Go Live when it’s played.' : '.'}
+        </p>
+      )}
       {needsUrl && (
         <p className="game-hint">
           Paste the stream URL above first — it needs to be set before the game
@@ -2236,7 +2256,7 @@ function GameWorkspace({
           {isLive ? (
             <LiveBadge />
           ) : (
-            <span className="pill">{isFinal ? 'Final' : currentStatus}</span>
+            <span className="pill">{eventStatusLabel(currentStatus)}</span>
           )}
           <span className="pill">{assignmentStatus}</span>
           <Link href={`/games/${eventId}`} className="ws-public-link">
@@ -2251,11 +2271,15 @@ function GameWorkspace({
            have to hunt for it either. Self-hides on every other game. ---- */}
       <CallTile token={token} eventId={eventId} />
 
-      {/* ---- SCHEDULED (pre-game): Go-Live is the job. Notes + Sponsor open
-           for prep; Article + Photos collapsed (mostly post-game work). ---- */}
-      {isScheduled && (
+      {/* ---- PRE-GAME (scheduled, postponed, canceled): filing the result is
+           the job, and Go-Live starts it. Notes + Sponsor open for prep;
+           Article + Photos collapsed (mostly post-game work). The kicker no
+           longer says "Live &" -- the result form does NOT require going live
+           (saveResult never touches status), and the old label taught the
+           opposite to anyone skimming. ---- */}
+      {isPreGame && (
         <>
-          <Section key="sched-result" kicker="Live & result" title="Report result">
+          <Section key="sched-result" kicker="Result" title="Report the result">
             {resultBody}
           </Section>
           <Section key="sched-notes" kicker="Assignment" title="Status & notes">

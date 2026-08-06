@@ -4,10 +4,24 @@
 // loaded every team for a sport up front: after the college import that list is
 // ~25.8k rows, which no dropdown should hold.
 //
-// Instead it queries GET /teams?search=&activeOnly=true as you type (debounced),
-// so the backend does the filtering and only the matches cross the wire.
-// activeOnly is pinned true — the imported rows exist so the school graph
-// resolves, not so they can be scheduled as games.
+// Instead it queries GET /teams?search= as you type (debounced), so the backend
+// does the filtering and only the matches cross the wire.
+//
+// activeOnly is pinned FALSE, deliberately. It used to be true, on the theory
+// that the imported rows exist so the school graph resolves rather than so they
+// can be scheduled. The import inserts every row is_active=false
+// (scripts/import-colleges.ts), which made that theory catastrophic in practice:
+// 25,832 of 25,875 teams are inactive, so the picker could offer a correspondent
+// 43 teams — 40 pro, 2 college, 1 high school. Searching for any of the ~2,000
+// imported schools returned nothing and funnelled them straight into
+// "+ New team", creating an orphan duplicate of a school we already have.
+//
+// Searching the whole directory is safe end to end: POST /events validates only
+// that a team id EXISTS, with no active check (events.service.ts), and a school
+// page lists its teams without filtering on active — so a game against an
+// imported team resolves onto its school correctly. The backend orders
+// active-first then by name, so the teams we actually cover still float to the
+// top, and inactive rows are tagged "Not yet covered" below rather than hidden.
 //
 // Controlled: the parent owns the selection ({id, label}) so it can also set it
 // after creating a team inline. Typing clears the selection and searches again.
@@ -94,7 +108,8 @@ export function TeamPicker({
         const page = await searchTeams(token, {
           search: term,
           sport,
-          activeOnly: true,
+          // See the header note: hiding inactive rows hid 25,832 of 25,875 teams.
+          activeOnly: false,
           limit: RESULT_LIMIT,
         });
         if (!cancelled) {
@@ -169,6 +184,12 @@ export function TeamPicker({
 
   const showDropdown = open && !disabled && !selected;
   const tooShort = term.length > 0 && term.length < MIN_QUERY;
+  // A real search that came back with nothing. This is the ONLY state that
+  // offers team creation: "+ New team" used to sit in the menu permanently,
+  // level with genuine results and reachable before you'd typed a character,
+  // which made inventing a duplicate as easy as picking the real thing.
+  const noMatches =
+    !loading && !error && !tooShort && term.length >= MIN_QUERY && visible.length === 0;
 
   return (
     <div className="field team-picker">
@@ -208,6 +229,9 @@ export function TeamPicker({
       {showDropdown && (
         <div className="team-picker__menu">
           {loading && <div className="team-picker__hint">Searching…</div>}
+          {!loading && term.length === 0 && (
+            <div className="team-picker__hint">Type a school or team name…</div>
+          )}
           {!loading && tooShort && (
             <div className="team-picker__hint">
               Keep typing — {MIN_QUERY} characters minimum.
@@ -216,8 +240,30 @@ export function TeamPicker({
           {!loading && error && (
             <div className="team-picker__hint team-picker__hint--error">{error}</div>
           )}
-          {!loading && !error && !tooShort && term.length >= MIN_QUERY && visible.length === 0 && (
-            <div className="team-picker__hint">No active teams match “{term}”.</div>
+
+          {/* ---- Nothing matched: the one place a new team can be created,
+               with the copy aimed at the case that's actually legitimate —
+               a school genuinely outside the imported set. ---- */}
+          {noMatches && (
+            <>
+              <div className="team-picker__hint">No school matches “{term}”.</div>
+              <button
+                type="button"
+                className="team-picker__option team-picker__option--new"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onCreateNew(term);
+                  setOpen(false);
+                }}
+              >
+                <span className="team-picker__option-name">
+                  Covering a school that isn’t in our list? Create the team →
+                </span>
+                <span className="team-picker__option-school">
+                  Adds “{term}” as a new team
+                </span>
+              </button>
+            </>
           )}
 
           {!loading &&
@@ -236,7 +282,15 @@ export function TeamPicker({
                 onMouseEnter={() => setActiveIndex(i)}
                 onClick={() => choose(team)}
               >
-                <span className="team-picker__option-name">{team.name}</span>
+                <span className="team-picker__option-name">
+                  {team.name}
+                  {/* Imported rows are is_active=false until an admin activates
+                      the school. They're still perfectly valid to schedule
+                      against, so the flag is shown, not used to hide them. */}
+                  {!team.isActive && (
+                    <span className="team-picker__option-tag">Not yet covered</span>
+                  )}
+                </span>
                 {team.institution && (
                   <span className="team-picker__option-school">
                     {team.institution.name}
@@ -245,19 +299,6 @@ export function TeamPicker({
                 )}
               </button>
             ))}
-
-          {/* Parity with the old select's "+ New team…" sentinel option. */}
-          <button
-            type="button"
-            className="team-picker__option team-picker__option--new"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              onCreateNew(query.trim());
-              setOpen(false);
-            }}
-          >
-            + New team{query.trim() ? ` “${query.trim()}”` : '…'}
-          </button>
         </div>
       )}
     </div>

@@ -21,6 +21,7 @@ import {
   EventListItem,
   CreateAdOrderInput,
 } from './api';
+import { DateEcho } from './date-echo';
 
 // Sentinel option value that reveals the inline "new advertiser" input.
 const NEW_ADVERTISER = '__new__';
@@ -390,6 +391,11 @@ export function LogSaleForm({
               value={startsOn}
               onChange={(e) => setStartsOn(e.target.value)}
             />
+            {/* Same OS-locale trap as the game form: this box is day-first on a
+                European-locale machine and says nothing about it. Echo the
+                committed date back unambiguously. A bare yyyy-mm-dd has no time
+                in it, so kind="date" formats in UTC and adds no ET label. */}
+            <DateEcho value={startsOn} kind="date" />
             {computedEndsOn && (
               <span className="muted" style={{ marginTop: 6, fontSize: '0.85rem' }}>
                 Ends {formatDate(computedEndsOn)} ({selectedPackage!.durationDays} days)

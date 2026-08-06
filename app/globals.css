@@ -17112,3 +17112,139 @@ a.arena-tile:active {
 .join-age__label {
   align-items: flex-start;
 }
+
+/* ============================================================================
+   CORRESPONDENT SURFACE — the four small pieces added when My Games and Add
+   Game were made legible to someone filing from the stands:
+
+     .date-echo            echo line under a native date field (see date-echo.tsx)
+     .mygames-action       the "what to do next" cell on a My Games row
+     .team-picker__option-tag   "Not yet covered" on an imported team
+     .firstrun__*          the zero-assignments home-base card
+
+   All four are built from the existing palette tokens; nothing new is
+   introduced. No new colors: the nudge uses the --warn trio already promoted
+   for the NIL health table.
+   ============================================================================ */
+
+/* ---- Date echo. Quiet by default: it's a confirmation, not a message. It
+   turns loud only when the parsed date looks wrong. ---- */
+.date-echo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.date-echo__value {
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.date-echo__note {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+/* The nudge state. --warn is deliberately outside the gold family: gold reads
+   as "this is your money" everywhere else here, so an alarm painted gold
+   doesn't register as one. */
+.date-echo--warn {
+  padding: 8px 10px;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+}
+
+.date-echo--warn .date-echo__value,
+.date-echo--warn .date-echo__note {
+  color: var(--warn);
+}
+
+/* ---- My Games action cell. Gold + arrow so the row reads as a door; the <tr>
+   owns the actual activation, so this is presentation only. ---- */
+.mygames-action {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.queue-row:hover .mygames-action {
+  color: var(--accent-hover);
+}
+
+/* ---- "Not yet covered": an imported team is perfectly valid to schedule
+   against, so this is a note, not a warning. ---- */
+.team-picker__option-tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+/* ---- First-run card: the three steps of the job, in the order they happen. */
+.firstrun__lead {
+  margin: -4px 0 22px;
+  max-width: 62ch;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.firstrun__steps {
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.firstrun__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* The numeral reads as a gold marker, matching the kicker treatment. */
+.firstrun__step-n {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.firstrun__step-text {
+  display: block;
+  max-width: 62ch;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.firstrun__step-title {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 600;
+  color: var(--text);
+}

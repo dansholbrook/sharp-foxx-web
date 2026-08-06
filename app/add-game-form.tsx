@@ -15,6 +15,7 @@ import {
   CreateEventInput,
 } from './api';
 import { TeamPicker, TeamSelection } from './team-picker';
+import { DateEcho } from './date-echo';
 
 // The sport enum, matching the values used on the Feed/Search surfaces.
 const SPORTS = ['basketball', 'football', 'baseball', 'hockey', 'soccer', 'other'];
@@ -129,7 +130,14 @@ export function AddGameForm({
       setFormError('Pick a date and time.');
       return;
     }
-    if (home && away && home.id === away.id) {
+    // Both sides are required. They used to be optional, which let a
+    // correspondent file "basketball, Sep 5, 7 PM" -- a row with no matchup,
+    // which no school page, contest or recap can ever reconcile.
+    if (!home || !away) {
+      setFormError('Pick both teams — a game without a matchup can’t be covered.');
+      return;
+    }
+    if (home.id === away.id) {
       setFormError('Home and away teams must be different.');
       return;
     }
@@ -148,10 +156,10 @@ export function AddGameForm({
       sport,
       scheduledAt: iso,
       isLocalStream,
+      homeTeamId: home.id,
+      awayTeamId: away.id,
     };
     if (venue.trim()) body.venue = venue.trim();
-    if (home) body.homeTeamId = home.id;
-    if (away) body.awayTeamId = away.id;
 
     setSubmitting(true);
     try {
@@ -163,8 +171,15 @@ export function AddGameForm({
         onClose();
         return;
       }
-      // Manager/admin: confirm and clear for the next entry.
-      setSuccess('Game added.');
+      // Manager/admin: confirm and clear for the next entry. Say plainly that
+      // the game is UNCLAIMED -- selfClaim is false for anyone without the
+      // field_rep role, so this game is in no one's My Games and its workspace
+      // access-denies the person who just made it. "Game added." on its own read
+      // as success and left them hunting for a game they could never open.
+      setSuccess(
+        'Game added — but not assigned to anyone yet. It won’t appear in My Games ' +
+          'until a correspondent claims it or a manager assigns it from their roster.',
+      );
       setHome(null);
       setAway(null);
       setVenue('');
@@ -219,7 +234,11 @@ export function AddGameForm({
               id="ag-venue"
               value={venue}
               onChange={(e) => setVenue(e.target.value)}
-              placeholder="Foxx Arena"
+              // A placeholder, never a default -- an empty venue is omitted from
+              // the body entirely. It reads as a real example so nobody mistakes
+              // it for a prefilled value and submits it verbatim, which is what
+              // the old "Foxx Arena" invited.
+              placeholder="e.g. Lincoln High School gym"
               autoComplete="off"
             />
           </div>
@@ -309,6 +328,12 @@ export function AddGameForm({
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
             />
+            {/* The box above is drawn in the BROWSER'S locale, so a
+                European-locale laptop shows dd.mm.yyyy and turns "Sep 5" into
+                "May 9" without a word. We can't restyle it and we're not
+                replacing it (that would cost the mobile date wheel) -- we echo
+                it back instead. See date-echo.tsx before changing this. */}
+            <DateEcho value={scheduledAt} />
           </div>
 
           {/* ---- Local stream toggle ---- */}
@@ -325,7 +350,10 @@ export function AddGameForm({
           </div>
 
           <div className="rep-form-actions">
-            <button type="submit" disabled={submitting || !sport || !scheduledAt}>
+            <button
+              type="submit"
+              disabled={submitting || !sport || !scheduledAt || !home || !away}
+            >
               {submitting ? 'Adding…' : 'Add game'}
             </button>
           </div>
