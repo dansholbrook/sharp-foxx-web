@@ -9039,10 +9039,13 @@ a.follow-sugcard__name:hover {
 
 /* ---- Nav: desktop link row vs. mobile hamburger cluster. The cluster is
    display:none by default (desktop) and the <=767px block swaps the two. ---- */
+/* Tightened from 12px when the bell landed: this cluster now carries three
+   controls (the ⚡ chip, the bell, the hamburger) rather than two, and the two
+   44px tap targets are not negotiable. */
 .nav-mobile {
   display: none;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 /* 44px square tap target; three bars drawn by the middle span + its two
@@ -17390,4 +17393,324 @@ a.arena-tile:active {
   margin-bottom: 2px;
   font-weight: 600;
   color: var(--text);
+}
+
+/* =================================================================
+   NOTIFICATIONS — the bell in the nav, the tray, and the
+   /account/notifications preference rows.
+
+   Built entirely on existing tokens and existing classes: the badge
+   is .nav-badge (the Review/NIL queue pill) repositioned, the tray
+   is .slideover-* with its own body content, the filters are
+   .chip / .chip--on, the empty states are .results-empty, and the
+   failure box is .error. Nothing here introduces a colour or a
+   token; the only literal is rgba(201, 163, 78, …), which is the
+   accent already spelled out by hand in .points-chip,
+   .nav-hamburger and .pill.
+   ================================================================= */
+
+/* ---- The bell -----------------------------------------------------------
+   ONE bell in TWO STATES, never two icons. Outline is the resting state; the
+   --desk modifier fills the body in gold, which is how one control says "there
+   is work on your desk" without a second permanent icon that would be empty for
+   every fan forever. The badge always carries the WHOLE count — outside the
+   tray, "is there anything?" is not a segmented question. */
+.notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* .nav-links aligns on the baseline, which an icon-only button has nothing
+     useful to contribute to — centre it against the link row instead. */
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.notif-bell:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.08);
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+
+/* Anything unread on the correspondent side. Gold, and filled below. */
+.notif-bell--desk {
+  color: var(--accent);
+}
+
+.notif-bell__icon {
+  display: block;
+  width: 19px;
+  height: 19px;
+}
+
+.notif-bell__body,
+.notif-bell__clapper {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* THE SECOND STATE. Same glyph, same place, same badge — solid instead of
+   outline. The clapper stays open so the silhouette still reads as a bell. */
+.notif-bell--desk .notif-bell__body {
+  fill: currentColor;
+}
+
+/* .nav-badge, moved off the baseline and onto the glyph. The ring is the page
+   ground, so the pill stays legible where it overlaps the bell's shoulder. */
+.notif-bell__badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  margin-left: 0;
+  box-shadow: 0 0 0 2px var(--bg);
+  pointer-events: none;
+}
+
+/* Mobile: a 44px tap target matching .nav-hamburger beside it. */
+@media (max-width: 767px) {
+  .notif-bell {
+    width: 44px;
+    height: 44px;
+    border-color: var(--border-strong);
+  }
+  .notif-bell__icon {
+    width: 22px;
+    height: 22px;
+  }
+  .notif-bell__badge {
+    top: 3px;
+    right: 1px;
+  }
+}
+
+/* ---- The tray's toolbar: the audience filter + the settings door ---------
+   The filters are the shared .chip; only the row around them is new. The
+   settings link sits here rather than in the nav because the moment a user
+   forms the intent to mute something is the moment they are looking at the
+   thing that annoyed them. */
+.notif-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 20px;
+}
+
+.notif-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notif-toolbar__settings {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.notif-toolbar__settings:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ---- The list, grouped by ET day ---------------------------------------- */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.notif-day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Sans and small-caps rather than the serif h3 default: this is a divider, not
+   a heading anyone reads for its own sake. */
+.notif-day__label {
+  margin: 0 0 2px;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+/* ---- One notification ---------------------------------------------------
+   READ STATE CARRIES THREE CUES AND NONE OF THEM IS COLOUR ALONE: the ground
+   (--panel vs --panel-raised), the left rail (transparent-ish vs gold), and the
+   title's weight and colour. Someone who cannot separate the gold still has the
+   rail's presence and the heavier title. The accessible name says "Unread" too
+   — see NotificationRow. */
+.notif-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 400;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+/* A gold wash rather than a ground swap, so hovering a read row can never make
+   it momentarily look unread. */
+.notif-item:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.06);
+  border-color: var(--border-strong);
+}
+
+.notif-item--unread {
+  background: var(--panel-raised);
+  border-left-color: var(--accent);
+}
+
+/* An unread row KEEPS ITS GROUND on hover. Without this the generic hover wash
+   above (which is translucent, so it composites over the panel) would flatten a
+   raised row back down and cost the read state one of its three cues at exactly
+   the moment the user is pointing at it. The hover affordance here is the
+   border instead. */
+.notif-item--unread:hover:not(:disabled) {
+  background: var(--panel-raised);
+  border-color: var(--border-strong);
+  border-left-color: var(--accent-hover);
+}
+
+.notif-item__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notif-item__kicker {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.notif-item__time {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.notif-item__title {
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  line-height: 1.25;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.notif-item--unread .notif-item__title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notif-item__body {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* The "showing your last 30" line. Full width inside .slideover-footer, the
+   same idiom .slideover-footer .field--wide already uses. */
+.notif-foot__note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* ---- /account/notifications --------------------------------------------- */
+.notif-prefs {
+  margin-bottom: 20px;
+}
+
+.notif-prefs__standfirst {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.notif-pref {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.notif-pref input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.notif-pref__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.notif-pref__label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Says "on, but nobody has chosen it" — which is what isDefault is for. */
+.notif-pref__default {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.notif-pref__desc {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted);
 }

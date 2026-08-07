@@ -5,6 +5,7 @@ import { AgeGateProvider } from './age-gate';
 import { FollowsProvider } from './follows-context';
 import { PointsProvider } from './points-context';
 import { EarnProvider } from './earn-context';
+import { NotificationsProvider } from './notifications-context';
 
 export const metadata: Metadata = {
   title: 'Sharp Foxx — Admin',
@@ -30,12 +31,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             AgeGate sits directly inside Auth because it reads the session and
             SWAPS THE TOKEN on a successful attestation (setSession) — so it must
             be under the provider that owns it, and above every surface that can
-            take a gated action. */}
+            take a gated action.
+
+            Notifications sits INNERMOST on purpose: it reads useAuth and nothing
+            else, and nothing else reads it, so it is the one provider here that
+            can be added without disturbing the load-bearing chain above it. It
+            renders the notification tray itself (the EarnProvider/EarnToasts
+            shape) because two bells are mounted at once — the desktop row and
+            the mobile cluster — and one panel must be rendered once. */}
         <AuthProvider>
           <AgeGateProvider>
             <PointsProvider>
               <EarnProvider>
-                <FollowsProvider>{children}</FollowsProvider>
+                <FollowsProvider>
+                  <NotificationsProvider>{children}</NotificationsProvider>
+                </FollowsProvider>
               </EarnProvider>
             </PointsProvider>
           </AgeGateProvider>

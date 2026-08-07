@@ -5934,3 +5934,204 @@ export function callStaffRoute(call: { id: string; status: CallStatus }): string
     ? `/arena/call/compose/${call.id}`
     : `/arena/call/grade/${call.id}`;
 }
+
+// ============================================================================
+// NOTIFICATIONS — the bell, the tray, and the preferences screen.
+//
+// Mirrors sharp-foxx-api/src/modules/notifications/notification-reads.service.ts.
+// These shapes were taken from the WIRE (a live read against the running API),
+// not from the spec prose, and they differ from it in three ways worth knowing:
+//
+//   * the list envelope is { items, unread, limit } -- `unread` is the SEGMENTED
+//     block, not a single `unreadCount`, and it rides along on every list read,
+//   * an item carries `reference: { type, id } | null` -- nested, not two flat
+//     referenceType/referenceId fields,
+//   * an item carries `read` (a boolean) and `sentOnEt` (the platform's ET day).
+//     Both are taken rather than derived: `read` spares every call site a
+//     comparison of two nullable timestamps, and `sentOnEt` is the ONLY correct
+//     key to group a tray by -- see the note on it below.
+//
+// `priority` is deliberately not on the wire. The tray is chronological.
+// ============================================================================
+
+export type NotificationAudience = 'fan' | 'correspondent';
+
+// The coalesce unit on the backend; here it is only a grouping/label hint.
+// null = not scoped to one Arena game.
+export type NotificationGame = 'oracle' | 'trail' | 'call' | null;
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  audience: NotificationAudience;
+  title: string;
+  body: string;
+  // A PATH, never an absolute URL (the backend puts a CHECK on it). Resolve it
+  // against this origin -- and through resolveDeepLink() below, which repairs
+  // the two shapes the backend currently emits wrong.
+  deepLink: string;
+  // The row this is about. Not used for routing (deepLink already points at the
+  // one-tap action); carried because it is the only stable handle on the
+  // subject if a later surface wants one.
+  reference: { type: string; id: string } | null;
+  read: boolean;
+  seenAt: string | null;
+  readAt: string | null;
+  // The instant. What a timestamp renders from, and what `before` is taken from.
+  createdAt: string;
+  // The ET CALENDAR DAY this notification belongs to, as YYYY-MM-DD, decided by
+  // the platform rather than by the viewer's clock. A tray that grouped by the
+  // viewer's timezone applied to createdAt would put a 9pm ET result under
+  // "tomorrow" for anyone east of the Atlantic and under "today" for everyone
+  // else -- two users disagreeing about which day the same event happened on.
+  sentOnEt: string;
+}
+
+// Never blended. `total` is the badge; the split is what lets one bell show a
+// rep's work queue without a second icon.
+export interface NotificationUnread {
+  total: number;
+  fan: number;
+  correspondent: number;
+}
+
+export interface NotificationList {
+  items: NotificationItem[];
+  // NOT derived from `items`: the page is the last 30 and the badge is about
+  // everything, so a tray of 30 read rows can still honestly say 46 are unread.
+  // It also stays WHOLE on a filtered read -- ?audience=correspondent narrows
+  // the items and leaves both counts alone.
+  unread: NotificationUnread;
+  // The server's fixed page size, stated rather than inferred so the tray never
+  // has to guess whether it is looking at a truncated list.
+  limit: number;
+}
+
+export interface MarkAllReadResult {
+  marked: number;
+  // Echoed so the client can prove which render its clear applied to.
+  before: string;
+  unread: NotificationUnread;
+}
+
+export interface NotificationPreference {
+  type: string;
+  label: string;
+  description: string;
+  audience: NotificationAudience;
+  game: NotificationGame;
+  enabled: boolean;
+  // False once the user has actually expressed an opinion. Lets the screen show
+  // "on" without claiming the user chose it.
+  isDefault: boolean;
+}
+
+export interface NotificationPreferences {
+  items: NotificationPreference[];
+}
+
+// The tray. `audience` narrows to one side of the fan/correspondent split;
+// omitted means everything, which is the default a client cannot forget its way
+// out of. `unreadOnly` exists on the endpoint and is unused here -- the tray
+// shows read rows too, because "what happened while I was away" includes the
+// things you have already seen.
+export function getNotifications(
+  token: string,
+  opts: { audience?: NotificationAudience; unreadOnly?: boolean } = {},
+): Promise<NotificationList> {
+  const qs = new URLSearchParams();
+  if (opts.audience) qs.set('audience', opts.audience);
+  if (opts.unreadOnly) qs.set('unreadOnly', 'true');
+  const q = qs.toString();
+  return authGet<NotificationList>(`/notifications${q ? `?${q}` : ''}`, token);
+}
+
+// Just the badge. A separate endpoint from the list on purpose: the bell renders
+// on every screen and most of them never open the tray, so making them fetch 30
+// rows to render a number would be the wrong trade.
+export const getNotificationUnread = (token: string) =>
+  authGet<NotificationUnread>('/notifications/unread-count', token);
+
+// Tapping one. IDEMPOTENT -- a second call returns the row unchanged rather than
+// 409ing, so a retry after a dropped response is free. Returns the updated row.
+export const markNotificationRead = (token: string, id: string) =>
+  authPost<NotificationItem>(
+    `/notifications/${encodeURIComponent(id)}/read`,
+    token,
+    {},
+  );
+
+// Clear everything the client actually RENDERED. `before` is required by the
+// server and must be the createdAt of the newest row on screen -- see the call
+// site in notifications-context.tsx for why "now" would be wrong.
+export const markAllNotificationsRead = (token: string, before: string) =>
+  authPost<MarkAllReadResult>('/notifications/read-all', token, { before });
+
+// The full resolved type list with defaults applied -- never the sparse saved
+// rows, so the settings screen never has to know the type set. Correspondent
+// types are absent for a caller with no rep row, which is why the screen renders
+// whatever it is given and never asks "am I a rep".
+export const getNotificationPreferences = (token: string) =>
+  authGet<NotificationPreferences>('/notifications/preferences', token);
+
+// Save the toggles that moved. Echoes the WHOLE resolved list back, so the
+// screen re-renders from the response and cannot drift from the server's view.
+export const updateNotificationPreferences = (
+  token: string,
+  preferences: Array<{ type: string; enabled: boolean }>,
+) =>
+  authPatch<NotificationPreferences>('/notifications/preferences', token, {
+    preferences,
+  });
+
+// ----------------------------------------------------------------------------
+// DEEP LINK RESOLUTION — A CLIENT-SIDE WORKAROUND FOR A BACKEND MISMATCH.
+//
+// THIS DOES NOT BELONG HERE PERMANENTLY. The fix is in the API, in
+// src/modules/notifications/deep-links.ts, and it is being raised separately.
+// This exists so the feature can ship without waiting on that, and so the
+// workaround sits in ONE auditable place rather than being spread across the
+// tray, a router call and a settings screen.
+//
+// THE MISMATCH. deep-links.ts builds the correspondent's two Call paths with
+// the id BEFORE the verb:
+//
+//     linkCallGrade(id)   -> /arena/call/<id>/grade
+//     linkCallCompose(id) -> /arena/call/<id>/compose
+//
+// This client serves them with the verb before the id -- see callStaffRoute()
+// above, and the route files app/arena/call/grade/[callId]/ and
+// app/arena/call/compose/[callId]/. The segments are transposed, so both links
+// currently resolve to nothing.
+//
+// The types affected are `call_needs_grading` -- which the backend's own type
+// file calls the highest-value correspondent message on the platform -- and
+// `call_assigned`, whose entire stated purpose is to be the link a rep cannot
+// otherwise get. deep-links.ts flags the risk in its own header ("confirm them
+// against the client before the first emit ships to production"); this is that
+// confirmation, and it failed.
+//
+// The other four shapes it emits are correct and are NOT touched here:
+// /arena/oracle, /arena/trail, /arena/call, /my-games/<eventId>.
+//
+// UNKNOWN SHAPES PASS THROUGH UNTOUCHED. This is a repair for two known-broken
+// paths, not a router. A path this function does not recognise is returned
+// exactly as it arrived: a new emit site should reach its destination without
+// having to be registered here first, and a genuinely dead link should surface
+// as a 404 rather than be silently rewritten into something else.
+// ----------------------------------------------------------------------------
+
+// /arena/call/<uuid>/grade  |  /arena/call/<uuid>/compose
+//
+// The uuid is matched by SHAPE rather than as [^/]+, so the already-correct
+// form (/arena/call/grade/<uuid>) cannot match with "grade" captured as the id.
+// It could not anyway -- the trailing segment would have to be grade|compose --
+// but a rewrite rule guarding its own inverse cheaply is worth the extra class.
+const TRANSPOSED_CALL_LINK =
+  /^\/arena\/call\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\/(grade|compose)$/;
+
+export function resolveDeepLink(deepLink: string): string {
+  const transposed = TRANSPOSED_CALL_LINK.exec(deepLink);
+  if (transposed) return `/arena/call/${transposed[2]}/${transposed[1]}`;
+  return deepLink;
+}

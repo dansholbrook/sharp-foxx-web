@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './auth-context';
 import { usePoints } from './points-context';
+import { NotificationBell } from './notifications-context';
 import { navLinksFor } from './roles';
 import { getReviewQueue, getNilReviewQueue, points } from './api';
 
@@ -113,6 +114,7 @@ export function AppNav() {
       {/* Desktop (>=768px): the wide uppercase link row, unchanged. */}
       <div className="nav-links nav-links--desktop">
         <PointsChip />
+        <NotificationBell />
         {links.map((l) => (
           <Link key={l.href} href={l.href} className="link-btn">
             {l.label}
@@ -127,9 +129,13 @@ export function AppNav() {
         </button>
       </div>
 
-      {/* Mobile (<768px): a slim cluster of the points chip + a hamburger. */}
+      {/* Mobile (<768px): a slim cluster of the points chip, the bell + a
+          hamburger. The bell sits in the HEADER and deliberately not inside the
+          nav sheet: the sheet is z-index 80 and the slide-over is 60, so a bell
+          opened from inside the sheet would put the tray underneath it. */}
       <div className="nav-mobile">
         <PointsChip />
+        <NotificationBell />
         <button
           type="button"
           className="nav-hamburger"
