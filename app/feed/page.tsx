@@ -25,6 +25,7 @@ import {
   followTargetId,
   followTargetName,
   isCoveredEvent,
+  isUpcomingEvent,
   points,
   etDateTime,
   FeedItem,
@@ -346,6 +347,18 @@ function FollowGameCard({ entry }: { entry: Extract<FollowFeedEntry, { kind: 'ga
   const hasScore = entry.homeScore !== null && entry.awayScore !== null;
   const isLive = entry.status === 'live';
   const isFinal = entry.status === 'final';
+  // THE ENTRY STAYS; ONLY THE CLAIM GOES. "From your follows" is a mixed
+  // activity track -- finals belong in it -- so this is NOT an upcoming set and
+  // the fan-facing filter would be the wrong tool. The bug here was narrower and
+  // it was a LIE: every non-live, non-final game got an "Upcoming" pill, so a
+  // followed team's game that tipped off three weeks ago and never had a result
+  // filed sat in the feed labelled as still to come.
+  //
+  // So a game we cannot honestly describe gets NO pill rather than a wrong one.
+  // The card still carries the matchup, the date and the "via ..." source, which
+  // is everything the fan needs; inventing a fourth state ("Result pending")
+  // would be putting our housekeeping on a fan surface. See THE RULE in api.ts.
+  const isUpcoming = isUpcomingEvent(entry);
   return (
     <Link href={`/games/${entry.id}`} className="ffeed-card">
       <div className="ffeed-card__top">
@@ -353,9 +366,9 @@ function FollowGameCard({ entry }: { entry: Extract<FollowFeedEntry, { kind: 'ga
           <LiveBadge />
         ) : isFinal ? (
           <span className="ffeed-pill">Final</span>
-        ) : (
+        ) : isUpcoming ? (
           <span className="ffeed-pill ffeed-pill--soon">Upcoming</span>
-        )}
+        ) : null}
         {hasScore && (
           <span className="ffeed-card__score">
             {entry.homeScore} – {entry.awayScore}
@@ -736,13 +749,25 @@ export default function FeedPage() {
     (ev) => isCoveredEvent(ev.source) && (sport === ALL || ev.sport === sport),
   );
   // Live = in progress right now (its own row above Upcoming); Upcoming =
-  // scheduled/not-yet-started (excludes live so a game shows in one row, not
-  // two); Results = finished games, which carry a replay videoUrl and open the
-  // watch page on click.
+  // scheduled AND NOT YET KICKED OFF (excludes live so a game shows in one row,
+  // not two); Results = finished games, which carry a replay videoUrl and open
+  // the watch page on click.
+  //
+  // WHY A GAME CAN BE IN NONE OF THESE THREE ROWS. isUpcomingEvent requires the
+  // kickoff to be in the future, so a game that was scheduled, tipped off, and
+  // never had a result filed falls out of Upcoming without landing in Results --
+  // it is not final, so there is nothing to show. That is deliberate: a stale
+  // 'scheduled' row is our housekeeping (nobody filed the result), and because
+  // the backend orders scheduled games soonest-first it used to sort to the TOP
+  // of this carousel -- a three-week-old game leading the row of games that have
+  // not happened yet. See THE RULE in api.ts; the correspondent still sees it,
+  // flagged, on /my-games.
+  //
+  // The filter is also POSITIVE on 'scheduled' now. The old negative form
+  // (`!== 'final' && !== 'live'`) let POSTPONED and CANCELED games through, so
+  // this row was advertising games that had been called off.
   const liveEvents = visibleEvents.filter((ev) => ev.status === 'live');
-  const upcomingEvents = visibleEvents.filter(
-    (ev) => ev.status !== 'final' && ev.status !== 'live',
-  );
+  const upcomingEvents = visibleEvents.filter(isUpcomingEvent);
   const resultEvents = visibleEvents.filter((ev) => ev.status === 'final');
   const visibleArticles = (articles ?? []).filter(
     (item) => sport === ALL || item.eventSport === sport,

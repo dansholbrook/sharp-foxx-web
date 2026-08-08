@@ -26,6 +26,7 @@ import {
   getEvents,
   getPublishedContent,
   getGamePhotos,
+  isUpcomingEvent,
   etDateTime,
   TeamDetail,
   TeamRosterAthlete,
@@ -381,13 +382,27 @@ export default function TeamPage() {
     [teamEvents],
   );
 
-  // Live game (if any) wins the Next-up slot; otherwise the soonest scheduled.
+  // Live game (if any) wins the Next-up slot; otherwise the soonest scheduled
+  // game THAT HAS NOT KICKED OFF YET.
+  //
+  // WHY THE TIME BOUND MATTERS MORE HERE THAN ANYWHERE ELSE. This is a
+  // SINGLE-SLOT surface, so a stale row does not merely sort high -- it wins.
+  // A game's status does not advance on its own, so a covered game nobody filed
+  // a result for stays 'scheduled' forever; sorted ascending it is the "soonest"
+  // scheduled game this team has, so it took the [0] slot and rendered under a
+  // "Next up" kicker while the team's real next game was nowhere on the page.
+  //
+  // The ASCENDING sort is still right -- soonest-first is what "next" means. It
+  // was never the ordering that was wrong, only the absence of a floor under it.
+  // A team whose only scheduled games are all past kickoff now shows no Next-up
+  // card at all, which is honest: we do not know when they play next. See THE
+  // RULE in api.ts, and /my-games for where those games are still surfaced.
   const nextUp = useMemo(() => {
     const live = teamEvents.find((e) => e.status === 'live');
     if (live) return live;
     return (
       teamEvents
-        .filter((e) => e.status === 'scheduled')
+        .filter(isUpcomingEvent)
         .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0] ?? null
     );
   }, [teamEvents]);

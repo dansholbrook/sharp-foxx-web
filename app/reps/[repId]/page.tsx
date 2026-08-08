@@ -122,6 +122,25 @@ export default function RepDrilldownPage() {
         // id that content is keyed on (the roster payload has no user id). events
         // is only for score/video badges, so a failure there mustn't break the
         // page -> swallow it.
+        //
+        // ------------------------------------------------------------------
+        // CANDIDATE FOR THE "RESULT DUE" FLAG, and it will be the obvious next
+        // ask. /my-games flags a game whose kickoff has passed and whose result
+        // nobody filed, because that page's audience is the correspondent who
+        // can file it (see the note above the Upcoming/Past split there). THIS
+        // page is the same argument one audience over: it is the MANAGER's view
+        // of a rep's games, and a manager chasing an overdue result is the
+        // second person who can make it happen.
+        //
+        // NOT DONE HERE, deliberately, because this page has no upcoming set to
+        // fix -- `events` is a score/video lookup keyed by id, and the game list
+        // is the rep's assignments. Adding the flag is a real change to what
+        // this page says about a rep's work, not a bug fix, so it wants its own
+        // decision: it turns a roster page into a chase list, and whether a
+        // manager should see "3 results outstanding" beside a rep's name is a
+        // product call rather than a rendering one. The predicate is already
+        // shared and exported (hasKickedOff in api.ts) if the answer is yes.
+        // ------------------------------------------------------------------
         const [reps, assignments, events] = await Promise.all([
           getFieldReps(token),
           getRepAssignments(token, repId),

@@ -17263,6 +17263,7 @@ a.arena-tile:active {
 
      .date-echo            echo line under a native date field (see date-echo.tsx)
      .mygames-action       the "what to do next" cell on a My Games row
+     .mygames-pill--owed   "Result due" on a game whose kickoff has passed
      .team-picker__option-tag   "Not yet covered" on an imported team
      .firstrun__*          the zero-assignments home-base card
 
@@ -17320,6 +17321,28 @@ a.arena-tile:active {
 
 .queue-row:hover .mygames-action {
   color: var(--accent-hover);
+}
+
+/* ---- "Result due": a game whose kickoff has passed and whose result nobody
+   filed. A .pill variant, so it sits in the Game column exactly where the
+   neutral "Scheduled" pill it replaces did -- the row's placement and sort are
+   unchanged (see the note above the Upcoming/Past split in my-games/page.tsx).
+
+   IT IS A JOB, NOT AN ERROR. The --warn trio carries it for the reason
+   .date-echo--warn above states -- gold reads as "this is your money"
+   everywhere else on this surface, so a nudge painted gold does not register --
+   but it stops SHORT of that treatment: no filled panel, no border-radius
+   change, no raised background beyond the pill's own. A red-box error state
+   would tell a correspondent something is broken, when what is true is that
+   there is one more thing on their list. Mixed case for the same reason: the
+   shared .pill uppercases with wide tracking, which reads as a system label;
+   this is closer to a sentence. ---- */
+.mygames-pill--owed {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  text-transform: none;
+  letter-spacing: 0.04em;
 }
 
 /* ---- "Not yet covered": an imported team is perfectly valid to schedule

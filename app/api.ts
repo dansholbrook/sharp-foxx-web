@@ -322,6 +322,74 @@ export function isCoveredEvent(source: string | null | undefined): boolean {
   return source == null;
 }
 
+// ---------------------------------------------------------------------------
+// UPCOMING MEANS THE FUTURE. One rule, one place, because it is the answer to a
+// question someone will ask in three months.
+//
+// THE PROBLEM. A game's status does not advance on its own. A covered game that
+// nobody ever filed a result for stays `scheduled` forever -- and every
+// "upcoming" filter on this platform used to select on status alone, with no
+// time bound. So a game from three weeks ago was still "scheduled", and because
+// the backend orders scheduled rows ASCENDING by kickoff
+// (events.service.ts, the list() orderBy), it was the SOONEST scheduled game in
+// the set and sorted to the very TOP of a list of games that have not happened
+// yet. On the team page it did worse than sort first: it WAS the "Next up" card.
+//
+// THE RULE, for fan-facing surfaces: upcoming = scheduled AND kickoff in the
+// future. A past-kickoff scheduled game therefore appears in NEITHER the
+// upcoming set nor the results set, and that is deliberate -- it is a game whose
+// result nobody filed, which is our housekeeping, not something a fan needs to
+// reason about. If you are here because a real game has gone missing from a
+// listing, the game's status or its kickoff time is wrong, or nobody filed its
+// result; fix it at the source rather than widening this.
+//
+// WHERE THE RULE DOES *NOT* APPLY, and each exclusion is on purpose:
+//   * MY GAMES (/my-games) keeps showing these, flagged. Its audience is the
+//     correspondent who can actually file the result, so hiding it there would
+//     make the problem invisible to the only person who can act on it. Same
+//     reason its ASCENDING sort is right where it is wrong here: the most
+//     overdue game floats to the top of the person who owes the work.
+//   * The game page's "More games" rail is a MIXED rail that deliberately
+//     includes finals. It never claims its contents have not happened, so the
+//     rule would be answering a question it does not ask.
+//   * /games is server-filtered and server-paged, so its fix cannot live here --
+//     filtering a page in the browser would break both the "X of Y" count and
+//     "Show more". It needs a status token the API does not have yet; note that
+//     the existing dateFrom CANNOT be reused, because it applies to the whole
+//     query and a live game's kickoff is in the past BY DEFINITION, so
+//     dateFrom=now would delete the Live row the tab exists to pin.
+//   * The staff pickers (assign-game-form, log-sale-form) still offer these. A
+//     past-kickoff game is exactly the one you may need to assign someone to.
+// ---------------------------------------------------------------------------
+
+// The narrow shape the two predicates below need. Structural rather than
+// EventListItem so the follows feed (FollowFeedEntry) and an assignment's nested
+// event satisfy it without a cast -- all three carry these same two fields.
+export interface EventTiming {
+  status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
+  scheduledAt: string;
+}
+
+// Has this game's kickoff passed? THE ONE TIME COMPARISON on the client.
+//
+// Extracted rather than inlined at each site because two copies of a time
+// comparison is how they drift -- one gets a tolerance window, one switches to
+// >=, and two surfaces start disagreeing about whether the same game has
+// started. An unparseable timestamp reads as NOT kicked off: the conservative
+// direction, since it keeps a real game visible instead of silently hiding it.
+export function hasKickedOff(scheduledAt: string): boolean {
+  const kickoff = new Date(scheduledAt).getTime();
+  return !Number.isNaN(kickoff) && kickoff < Date.now();
+}
+
+// The fan-facing upcoming test. POSITIVE on 'scheduled' rather than negative on
+// final/live, which fixes a second bug the negative form carried: `status !==
+// 'final' && status !== 'live'` also let POSTPONED and CANCELED games through,
+// so "Upcoming Games" was advertising games that had been called off.
+export function isUpcomingEvent(event: EventTiming): boolean {
+  return event.status === 'scheduled' && !hasKickedOff(event.scheduledAt);
+}
+
 // An event status as a human label. Every caller used to hand-capitalize the one
 // status it cared about (`status === 'final' ? 'Final' : status`) and let the
 // other four fall through raw, so a column could show a capitalized "Final"

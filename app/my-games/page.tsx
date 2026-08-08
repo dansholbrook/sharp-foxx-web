@@ -15,6 +15,7 @@ import {
   getEventSponsorship,
   etDateTime,
   eventStatusLabel,
+  hasKickedOff,
   MyAssignment,
   EventListItem,
 } from '../api';
@@ -60,6 +61,33 @@ function bucket(status: EventStatus): number {
   return 1;
 }
 
+// ---------------------------------------------------------------------------
+// "THIS CORRESPONDENT OWES A RESULT." The one predicate behind both the action
+// label and the row flag.
+//
+// EXTRACTED, NOT DUPLICATED, and that is the whole reason it is a named function
+// for a two-line body: the label and the flag must never be able to disagree
+// about whether a game is overdue. Two copies of a time comparison is exactly
+// how they drift -- one grows a grace period, the other switches to >=, and the
+// row ends up saying "Go live" beside a badge saying the result is due.
+//
+// It is deliberately NARROWER than "kickoff has passed". Only a SCHEDULED game
+// can owe a result:
+//   * canceled  -- did not happen, so there is nothing to file. actionLabel
+//                  returns null for it, and that null is a documented fix (a
+//                  canceled game's kickoff is almost always past, so it used to
+//                  fall through and invite a result form for a game nobody
+//                  played). This predicate must not undo that.
+//   * postponed -- "not tonight", not "not happening". Past its ORIGINAL tip-off
+//                  by definition, so a bare kickoff check would flag every
+//                  postponed game forever.
+//   * live      -- being covered right now; the job is the console, not a form.
+//   * final     -- already filed.
+// ---------------------------------------------------------------------------
+function owesResult(status: EventStatus, scheduledAt: string): boolean {
+  return status === 'scheduled' && hasKickedOff(scheduledAt);
+}
+
 // The next thing to DO on a game, as a label for the row's action cell.
 //
 // The workspace was always one click away -- the whole row has been activatable
@@ -87,9 +115,9 @@ function actionLabel(status: EventStatus, scheduledAt: string): string | null {
   // tip-off by definition, which would otherwise read "Report result →".
   if (status === 'postponed') return 'Go live →';
   // Scheduled. Past its kickoff, the job is filing what happened; before it,
-  // the job is starting the broadcast.
-  const kickoff = new Date(scheduledAt).getTime();
-  if (!Number.isNaN(kickoff) && kickoff < Date.now()) return 'Report result →';
+  // the job is starting the broadcast. Shares owesResult with the row flag so
+  // the two can never disagree -- see the note above it.
+  if (owesResult(status, scheduledAt)) return 'Report result →';
   return 'Go live →';
 }
 
@@ -236,6 +264,34 @@ export default function MyGamesPage() {
   // first, then upcoming ascending, then finals descending -- so filtering by
   // bucket preserves the right per-table order (upcoming: live pinned on top,
   // then soonest-first; past: newest-first).
+  //
+  // ---------------------------------------------------------------------------
+  // THIS PAGE DELIBERATELY DOES *NOT* APPLY THE FAN-FACING "UPCOMING" RULE.
+  //
+  //   Every fan surface (the feed carousel, a team's Next-up card) now requires
+  //   an upcoming game's kickoff to be in the FUTURE, so a scheduled game nobody
+  //   filed a result for drops out of both the upcoming and the results set.
+  //   See THE RULE in api.ts.
+  //
+  //   HERE IT STAYS, AND THE ORDER STAYS ASCENDING. The audience is the
+  //   correspondent who can actually file the missing result -- hiding it from
+  //   them would make the problem invisible to the ONLY person who can act on
+  //   it, which is the opposite of what the fan-side fix is for. And the same
+  //   ascending sort that put a three-week-old game at the top of a fan's
+  //   carousel puts the most overdue game at the top of the list of the person
+  //   who owes it. Same mechanism, right answer, different audience.
+  //
+  //   What the game gets instead is the "Result due" flag in the Game column.
+  //   Two shapes were considered and rejected:
+  //     * A THIRD TABLE ("Needs a result") -- fragments a schedule the
+  //       correspondent reads top to bottom, and buys nothing the bucket sort
+  //       does not already deliver, since those rows are at the top by
+  //       construction.
+  //     * REUSING THE POSTPONED TREATMENT -- actively wrong. Postponed means
+  //       "not tonight"; this means "it happened and you have not filed". This
+  //       file already keeps those two apart on purpose in actionLabel, and
+  //       collapsing them visually would undo a documented fix.
+  // ---------------------------------------------------------------------------
   const upcoming = sortedGames?.filter((g) => statusOf(g) !== 'final') ?? [];
   const past = sortedGames?.filter((g) => statusOf(g) === 'final') ?? [];
 
@@ -251,11 +307,28 @@ export default function MyGamesPage() {
       header: 'Game',
       cell: (g) => {
         const status = statusOf(g);
-        return status === 'live' ? (
-          <LiveBadge />
-        ) : (
-          <span className="pill">{eventStatusLabel(status)}</span>
-        );
+        if (status === 'live') return <LiveBadge />;
+        // THE OVERDUE FLAG. Everything about this game's PLACEMENT is unchanged
+        // and that is on purpose -- see the note above the Upcoming/Past split.
+        // It stays in the Upcoming table, and the ascending sort keeps the most
+        // overdue game at the top, which is right here even though the same sort
+        // was the bug on every fan surface: this is the one audience that can
+        // act on it, so the staleness should lead their list.
+        //
+        // What was missing was only that it LOOKED like every other scheduled
+        // game. The action cell has said "Report result →" all along, but that
+        // is the last column on the row; a correspondent scanning this column
+        // saw a neutral "Scheduled" pill and nothing to catch on.
+        //
+        // "Result due", not "Overdue"/"Missing"/"Error": this is a job on the
+        // correspondent's list, not a fault. The --warn trio (already promoted
+        // for the NIL health table and the date echo) is used because gold reads
+        // as "this is your money" everywhere else on this surface, so a nudge
+        // painted gold does not register as one.
+        if (owesResult(status, g.event.scheduledAt)) {
+          return <span className="pill mygames-pill--owed">Result due</span>;
+        }
+        return <span className="pill">{eventStatusLabel(status)}</span>;
       },
     },
     {
