@@ -37,7 +37,6 @@ import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import {
   getGames,
-  isCoveredEvent,
   isFeedEvent,
   etDateTime,
   etDateKey,
@@ -51,7 +50,9 @@ type Tab = 'upcoming' | 'results';
 type Window = 'week' | 'month' | 'all';
 // The WATCH/PLAY scope toggle. 'foxx' (default) = covered Sharp Foxx broadcasts
 // only; 'all' also surfaces ingested feed games, rendered as the quieter,
-// play-only card. See THE RULE in api.ts (isCoveredEvent/isFeedEvent).
+// play-only card. It maps to the coverage query param, so this is a server
+// filter like the rest -- isFeedEvent still picks the CARD, which is rendering,
+// not filtering. See THE RULE in api.ts (isCoveredEvent/isFeedEvent).
 type Scope = 'foxx' | 'all';
 
 // Unlike the feed's date-only thumbnails, a schedule has to answer "tonight?" —
@@ -291,6 +292,12 @@ function Games() {
   // the client can't re-filter, because paging happened server-side and the
   // stale rows already consumed slots in this page.
   const [unfilteredUpcoming, setUnfilteredUpcoming] = useState(false);
+  // The same skew, for the coverage filter: we asked for Sharp Foxx games and
+  // the API didn't confirm it, so this is a build that predates the parameter
+  // and stripped it. Every row it sent is real, but feed games are mixed in and
+  // `total` counts them. Detection only, for the same reason as above -- the
+  // rows we'd want gone already consumed slots in this server-built page.
+  const [unfilteredCoverage, setUnfilteredCoverage] = useState(false);
 
   useEffect(() => {
     if (!token) router.replace('/');
@@ -332,12 +339,18 @@ function Games() {
         // live games survive the date filter; upcomingOnly does the finer cut
         // the date filter can't, scoped to scheduled rows alone.
         const wantsUpcomingOnly = tab === 'upcoming';
+        // The scope toggle is a SERVER filter: GET /events takes coverage, so
+        // the narrowing happens before paging and `total` counts what the user
+        // asked for. Under 'all' we send nothing -- that's the server default,
+        // and asking for nothing can't come back wrong.
+        const wantsCoverage = scope === 'foxx' ? 'covered' : undefined;
         const page = await getGames(token, {
           status: tab === 'upcoming' ? 'scheduled,live' : 'final',
           sport: sport || undefined,
           state: stateCode || undefined,
           ...range,
           upcomingOnly: wantsUpcomingOnly || undefined,
+          coverage: wantsCoverage,
           limit: PAGE_SIZE,
           offset,
         });
@@ -348,6 +361,11 @@ function Games() {
         setUnfilteredUpcoming(
           wantsUpcomingOnly && page.applied?.upcomingOnly !== true,
         );
+        // Compare the echoed VALUE, never `'coverage' in applied` -- see the
+        // note on GamesPage. Under 'all' there's nothing to confirm.
+        setUnfilteredCoverage(
+          wantsCoverage !== undefined && page.applied?.coverage !== wantsCoverage,
+        );
         setItems((prev) => (offset === 0 ? page.items : [...prev, ...page.items]));
         setTotal(page.total);
 
@@ -355,7 +373,13 @@ function Games() {
         // of a blank page. Only worth asking on the first page of an unfiltered
         // Upcoming tab — every other empty result is one the user asked for.
         if (offset === 0 && tab === 'upcoming' && !hasFilters && page.total === 0) {
-          const recent = await getGames(token, { status: 'final', limit: PAGE_SIZE });
+          // Same scope as the list it stands in for: offering feed scores under
+          // the Sharp Foxx toggle would answer a question nobody asked.
+          const recent = await getGames(token, {
+            status: 'final',
+            coverage: wantsCoverage,
+            limit: PAGE_SIZE,
+          });
           if (!current()) return;
           setFallback(recent.items);
         } else if (offset === 0) {
@@ -372,7 +396,7 @@ function Games() {
         }
       }
     },
-    [token, tab, sport, stateCode, win, hasFilters],
+    [token, tab, sport, stateCode, win, scope, hasFilters],
   );
 
   // Refetch from the top whenever the query changes (`load`'s identity is the
@@ -398,23 +422,11 @@ function Games() {
   const inFallback = fallback !== null && items.length === 0;
   const noun = tab === 'upcoming' ? 'game' : 'result';
 
-  // Scope is a client-side VIEW filter over the already-loaded (server-paged)
-  // rows -- the list endpoint has no source param, and at this data volume
-  // filtering the page in the browser is honest and cheap. 'foxx' keeps only
-  // covered games; 'all' passes everything. The count and "Show more" note below
-  // reflect what's actually shown, and a page that comes back all-feed under
-  // 'foxx' gets its own "switch to All games" empty state rather than a false
-  // "no matches". More server pages may still hold covered games, so Show more
-  // stays available while items.length < total regardless of scope.
-  const visible =
-    scope === 'foxx' ? items.filter((e) => isCoveredEvent(e.source)) : items;
-  const visibleFallback =
-    scope === 'foxx'
-      ? (fallback ?? []).filter((e) => isCoveredEvent(e.source))
-      : (fallback ?? []);
-  // Under 'foxx', are there feed rows on this page we filtered out? Drives the
-  // "these are external scores -- switch to All" empty state.
-  const feedFilteredOut = scope === 'foxx' && items.length > visible.length;
+  // Scope narrows on the SERVER (coverage=covered), so `items` is already the
+  // list to render and `total` already counts it -- there is nothing left to
+  // filter here. Nothing between the response and the grid drops rows, which is
+  // what makes "Show more" and "X of Y" mean what they say.
+  const fallbackItems = fallback ?? [];
 
   return (
     <main className="feed-home gamesdir-page">
@@ -545,6 +557,15 @@ function Games() {
         </div>
       )}
 
+      {unfilteredCoverage && !error && (
+        <div className="notice">
+          Showing every game, not just Sharp Foxx ones — this API build
+          doesn&apos;t support the coverage filter, so external feed scores are
+          mixed in below and counted in the total. Refresh once the API finishes
+          deploying.
+        </div>
+      )}
+
       {showSkeleton && !error && <div className="card muted">Loading games…</div>}
 
       {!showSkeleton && !error && (
@@ -556,7 +577,7 @@ function Games() {
               <div className="results-empty">
                 <p className="results-empty__title">No games scheduled yet</p>
                 <p className="results-empty__hint">
-                  {visibleFallback.length > 0 ? (
+                  {fallbackItems.length > 0 ? (
                     <>Nothing upcoming on the calendar. Here&apos;s what was played recently.</>
                   ) : (
                     // Genuinely nothing in the graph, either direction. Don't
@@ -569,11 +590,11 @@ function Games() {
                   )}
                 </p>
               </div>
-              {visibleFallback.length > 0 && (
+              {fallbackItems.length > 0 && (
                 <>
                   <h2 className="row-title gamesdir-fallback-title">Recent results</h2>
                   <div className="results-grid">
-                    {visibleFallback.map((ev) => (
+                    {fallbackItems.map((ev) => (
                       <GameCard key={ev.id} event={ev} />
                     ))}
                   </div>
@@ -582,74 +603,51 @@ function Games() {
             </>
           ) : (
             <>
+              {/* Straight off `total` — the server counted what it filtered. */}
               <p className="result-count">
-                {scope === 'foxx'
-                  ? `${visible.length.toLocaleString()} Sharp Foxx ${
-                      visible.length === 1 ? noun : `${noun}s`
-                    }`
-                  : `${total.toLocaleString()} ${total === 1 ? noun : `${noun}s`}${
-                      hasFilters ? ' match your filters' : ''
-                    }`}
+                {`${total.toLocaleString()} ${scope === 'foxx' ? 'Sharp Foxx ' : ''}${
+                  total === 1 ? noun : `${noun}s`
+                }${hasFilters ? ' match your filters' : ''}`}
               </p>
 
-              {visible.length === 0 ? (
-                feedFilteredOut ? (
-                  // All that's here under 'foxx' is feed scores -- point at the
-                  // toggle rather than the filters, which aren't the reason.
-                  <div className="results-empty">
-                    <p className="results-empty__title">
-                      No Sharp Foxx {noun}s here
-                    </p>
-                    <p className="results-empty__hint">
-                      What&apos;s here are external scores. Switch to{' '}
-                      <button
-                        type="button"
-                        className="link-btn"
-                        onClick={() => setScope('all')}
-                      >
-                        All games
-                      </button>{' '}
-                      to see them.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="results-empty">
-                    <p className="results-empty__title">No games match these filters</p>
-                    <p className="results-empty__hint">
-                      Try widening them —{' '}
-                      <button type="button" className="link-btn" onClick={clearFilters}>
-                        clear all filters
-                      </button>
-                      .
-                    </p>
-                  </div>
-                )
+              {items.length === 0 ? (
+                <div className="results-empty">
+                  <p className="results-empty__title">No games match these filters</p>
+                  <p className="results-empty__hint">
+                    Try widening them —{' '}
+                    <button type="button" className="link-btn" onClick={clearFilters}>
+                      clear all filters
+                    </button>
+                    .
+                  </p>
+                </div>
               ) : (
-                <>
-                  <div className="results-grid">
-                    {visible.map((ev) => (
-                      <GameCard key={ev.id} event={ev} />
-                    ))}
-                  </div>
+                <div className="results-grid">
+                  {items.map((ev) => (
+                    <GameCard key={ev.id} event={ev} />
+                  ))}
+                </div>
+              )}
 
-                  {items.length < total && (
-                    <div className="queue-more">
-                      <button
-                        type="button"
-                        className="btn-ghost"
-                        disabled={loadingMore}
-                        onClick={() => load(items.length)}
-                      >
-                        {loadingMore ? 'Loading…' : 'Show more'}
-                      </button>
-                      <span className="muted queue-more__note">
-                        {scope === 'foxx'
-                          ? `Showing ${visible.length} Sharp Foxx ${noun}s`
-                          : `Showing ${items.length} of ${total.toLocaleString()}`}
-                      </span>
-                    </div>
-                  )}
-                </>
+              {/* OUTSIDE the non-empty branch on purpose. "More rows exist than
+                  we've loaded" is a fact about the response, not about whether
+                  this page happened to render any — nesting it under the grid
+                  makes an empty page the end of the list, with the button that
+                  would fix it hidden by the condition it needs to clear. */}
+              {items.length < total && (
+                <div className="queue-more">
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    disabled={loadingMore}
+                    onClick={() => load(items.length)}
+                  >
+                    {loadingMore ? 'Loading…' : 'Show more'}
+                  </button>
+                  <span className="muted queue-more__note">
+                    {`Showing ${items.length} of ${total.toLocaleString()}`}
+                  </span>
+                </div>
               )}
             </>
           )}

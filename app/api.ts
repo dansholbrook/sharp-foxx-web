@@ -1425,6 +1425,12 @@ export interface GameFilters {
   // job: dateFrom applies to the whole query and would delete the Live row.
   // Omitted by default -- the server's default is off too.
   upcomingOnly?: boolean;
+  // Narrows to Sharp Foxx broadcasts ('covered') or ingested scores ('feed').
+  // Omitted, or 'all', means no narrowing -- which is the server's default too.
+  // This is the ONLY correct way to scope a list by coverage: the client can't
+  // do it over a server-paged response, because the rows it would drop already
+  // consumed slots in the page (same trap as upcomingOnly above).
+  coverage?: 'covered' | 'feed' | 'all';
   limit?: number;
   offset?: number;
 }
@@ -1436,9 +1442,15 @@ export interface GameFilters {
 // honored renders stale games as upcoming with nothing saying otherwise. The
 // key is absent exactly when the server didn't understand the parameter, which
 // is the only way the client can tell the two apart. Check it (see /games) --
-// unchecked, the marker buys nothing.
+// unchecked, the marker buys nothing. coverage echoes the same way, and echoes
+// 'all' when nothing was narrowed.
+//
+// Compare the VALUE to what you asked for (applied?.coverage === 'covered'),
+// never `'coverage' in applied`: an undefined field doesn't survive
+// JSON.stringify, so an old build's response and a new build's are byte-
+// identical under a presence test and the skew sails through undetected.
 export interface GamesPage extends Page<EventListItem> {
-  applied?: { upcomingOnly?: boolean };
+  applied?: { upcomingOnly?: boolean; coverage?: 'covered' | 'feed' | 'all' };
 }
 
 // The paged schedule read behind /games -- same endpoint as getEvents, kept
@@ -1456,6 +1468,9 @@ export const getGames = (token: string, params: GameFilters = {}) => {
   // keeps the query string identical to today's for every caller that doesn't
   // want the filter, which is what makes this additive.
   if (params.upcomingOnly) qs.set('upcomingOnly', 'true');
+  // Same reasoning: 'all' is the server default, so sending it would only add
+  // noise to a query string that means the same thing without it.
+  if (params.coverage && params.coverage !== 'all') qs.set('coverage', params.coverage);
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
   if (params.offset) qs.set('offset', String(params.offset));
   const s = qs.toString();
