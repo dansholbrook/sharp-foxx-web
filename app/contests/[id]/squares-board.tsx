@@ -288,7 +288,15 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
   // A squares board IS one game, so the conflict refusal closes the whole grid
   // rather than any subset of it — there is no partial version of this on this
   // surface the way there is on a parlay slate.
-  const covering = entryRefusal(grid?.entry);
+  //
+  // GUARDS THE GRID, NOT THE FIELD. This sits above the `if (!grid) return null`
+  // below (it has to — hooks ordering), so on every mount there is a beat where
+  // there is no payload at all. That is "not loaded yet" and it is nothing like
+  // "the server didn't send the advisory"; passing `grid?.entry` flattened the
+  // two into one `undefined` and made the second one unreportable. No grid, no
+  // advisory to have an opinion about — say so here, and let entryRefusal treat
+  // everything it does receive as a payload that owes it a field.
+  const covering = grid ? entryRefusal(grid.entry, 'GET /contests/:id/squares') : null;
 
   // Claims land on the FILLING board, whatever the switcher is showing. Tapping is
   // therefore allowed only when the shown board IS that board.

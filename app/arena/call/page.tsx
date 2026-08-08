@@ -282,7 +282,7 @@ export default function CallPage() {
             submitting={submitting}
             submitError={submitError}
             saved={saved}
-            covering={entryRefusal(current.entry)}
+            covering={entryRefusal(current.entry, 'GET /arena/call/current')}
           />
 
           <p className="call-fineprint">

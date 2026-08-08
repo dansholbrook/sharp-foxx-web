@@ -576,7 +576,7 @@ export function SurvivorBoard({
   const alive = picks.entryStatus === 'active';
   const elimRound = alive ? null : eliminationRound(picks.rounds);
   const canWithdraw = picks.contestStatus === 'open';
-  const covering = entryRefusal(picks.entry);
+  const covering = entryRefusal(picks.entry, 'GET /contests/:id/picks');
 
   return (
     <div className="contest-detail__body survivor">

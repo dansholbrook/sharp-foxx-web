@@ -825,13 +825,95 @@ export type EntryRefusal = Extract<EntryAdvisory, { allowed: false }>;
 // The narrowing helper, so no surface writes `entry.allowed === false` inline and
 // none of them re-derive the union. Returns the refusing branch or null.
 //
-// TOLERATES `undefined` ON PURPOSE: these seven fields are new, and a client
-// running against an API that predates them would otherwise crash on a missing
-// key instead of simply not advising. No advisory means "allowed" here — the
-// 403 backstop is still behind it, which is the whole point of having two
-// layers rather than trusting either one alone.
-export function entryRefusal(entry: EntryAdvisory | undefined): EntryRefusal | null {
-  return entry && !entry.allowed ? entry : null;
+// ----------------------------------------------------------------------------
+// THIS TOOK A `| undefined` AND RETURNED null FOR IT, AND THAT COST US A WEEK.
+//
+// `PickSheet.entry` and `SurvivorPicks.entry` were declared NON-OPTIONAL, the
+// server never sent either one, and this helper read absent as "nothing to
+// say". Two `<EntryAdvisoryNotice>` render sites sat dead on the contest pick
+// sheet and the survivor board with no error, no warning and nothing on screen.
+// A field that never arrives was indistinguishable from a caller who is free to
+// play, and silence is the failure mode this gate keeps hitting.
+//
+// The old comment's forward-compat argument was real — an older API would crash
+// a surface rather than merely under-advise — but it loses to the above, and it
+// was solving the wrong problem anyway. THE HELPER WAS CONFLATING TWO DIFFERENT
+// ABSENCES:
+//
+//   1. "The payload hasn't loaded yet."  Legitimate, transient, happens on
+//      every mount. The squares board hits it on every single page view: it
+//      computes the refusal above its `if (!grid) return null` guard (hooks
+//      ordering), so `grid?.entry` is genuinely undefined for a beat.
+//   2. "The payload loaded and the field wasn't in it."  A defect. Always.
+//
+// Both arrived here as `undefined` because callers flattened them with `?.`, so
+// no check inside this function could ever have told them apart. That is why
+// the parameter is now REQUIRED rather than merely warned about: case 1 belongs
+// to the caller, which is the only place that knows whether its container has
+// loaded (see squares-board.tsx, which now guards `grid` instead of `grid.entry`).
+// What reaches this function is case 2 and only case 2 — so it can be loud.
+//
+// LOUD IN DEVELOPMENT, NOT IN PRODUCTION, and the asymmetry is the whole design:
+//
+//   * DEV THROWS. Every call site runs during render, so this hits the Next
+//     error overlay the first time anyone opens the surface — which is both
+//     unmissable and exactly when the fix is cheap. A console error would not
+//     have been: it is ignorable, and being ignorable is how we got here.
+//
+//   * PRODUCTION DOES NOT THROW. There is no error.tsx anywhere in this app, so
+//     a throw here takes the whole route down — for every fan, not just the
+//     handful of correspondents the advisory is even about. A missing advisory
+//     degrades one notice; the 403 backstop still refuses the tap, which is the
+//     entire point of having two layers rather than trusting either alone.
+//     Trading a silent minor degradation for a loud total outage is the wrong
+//     direction, so prod logs once per surface and returns null.
+//
+// `surface` is REQUIRED for the prod half. Stacks are minified there, so an
+// unlabelled console error names nothing and gets triaged as noise; with the
+// label it names the endpoint to go look at.
+// ----------------------------------------------------------------------------
+
+// Deduped per surface: several of these boards poll (squares and the parlay
+// board every 30s, the game predictions board every 5s while live), and an
+// undeduped log would bury the first occurrence under hundreds of copies inside
+// a minute.
+const reportedMissingAdvisory = new Set<string>();
+
+function missingAdvisory(surface: string, detail: string): null {
+  const message =
+    `Entry advisory missing or malformed on ${surface}: ${detail}. ` +
+    'The server owns this field and every entry-surface read carries one — ' +
+    'see src/common/covering.ts. The surface is rendering as if the caller may ' +
+    'play; only the 403 backstop is left.';
+  if (process.env.NODE_ENV !== 'production') throw new Error(message);
+  if (!reportedMissingAdvisory.has(surface)) {
+    reportedMissingAdvisory.add(surface);
+    console.error(message);
+  }
+  return null;
+}
+
+export function entryRefusal(
+  entry: EntryAdvisory,
+  // Where to go look when this is wrong. Name the READ, not the component —
+  // the fix is always on the server side of that endpoint.
+  surface: string,
+): EntryRefusal | null {
+  // The cast is the point: the type says this cannot happen and the wire has
+  // already disagreed twice. TypeScript cannot see a payload.
+  if ((entry as EntryAdvisory | undefined) == null) {
+    return missingAdvisory(surface, 'the field was absent from the payload');
+  }
+  if (typeof entry.allowed !== 'boolean') {
+    return missingAdvisory(surface, 'the field carried no `allowed` boolean');
+  }
+  if (entry.allowed) return null;
+  // A refusal whose message is empty renders an empty gold box, which is the
+  // same silence in a different costume — catch it here rather than on screen.
+  if (typeof entry.message !== 'string' || entry.message.trim() === '') {
+    return missingAdvisory(surface, 'the refusal carried no message to render');
+  }
+  return entry;
 }
 
 // The refusal code on the conflict gate's 403. Routed on like the age gate's --

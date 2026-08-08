@@ -837,7 +837,7 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
   // how a leg is priced are the server's rules, and a second implementation on
   // this side would be one refactor away from disagreeing with the 403.
   // ---------------------------------------------------------------------
-  const covering = entryRefusal(board.entry);
+  const covering = entryRefusal(board.entry, 'GET /contests/:id/tickets');
   const building = open && !slateStarted && !covering;
 
   const potential = multiplier !== null && stakeValid ? payoutFor(stake, multiplier) : null;

@@ -564,7 +564,7 @@ export default function OraclePage() {
             onPick={onPick}
             picking={picking}
             pickError={pickError}
-            covering={entryRefusal(today.entry)}
+            covering={entryRefusal(today.entry, 'GET /arena/oracle/today')}
           />
 
           <StreaksRail streaks={today.streaks} badges={today.badges} />

@@ -577,7 +577,7 @@ export default function TrailPage() {
             onPick={onPick}
             picking={picking}
             pickError={pickError}
-            covering={entryRefusal(today.entry)}
+            covering={entryRefusal(today.entry, 'GET /arena/trail/today')}
           />
 
           <TrailRail today={today} />

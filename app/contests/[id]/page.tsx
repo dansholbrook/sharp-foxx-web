@@ -119,7 +119,7 @@ function EnterHero({
     contest.maxEntries != null && contest.entrants >= contest.maxEntries;
   // The conflict-of-interest refusal. Reads exactly like `full` does — a fact
   // about this contest that closes the button — and takes the same shape below.
-  const covering = entryRefusal(contest.entry);
+  const covering = entryRefusal(contest.entry, 'GET /contests/:id');
   // A soft pre-check so the button reads honestly; the backend's 409 is still
   // the authority (the chip can be stale), so we don't hard-block on it.
   const shortOnPoints =
@@ -492,7 +492,7 @@ function PickSheetView({
 
   const picked = sheet.games.filter((g) => g.pick).length;
   const totalGames = sheet.games.length;
-  const covering = entryRefusal(sheet.entry);
+  const covering = entryRefusal(sheet.entry, 'GET /contests/:id/picks');
 
   return (
     <div className="contest-detail__body">
