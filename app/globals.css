@@ -15753,9 +15753,41 @@ a.arena-tile:active {
   font-variant-numeric: tabular-nums;
 }
 
+/* A BAND THE FIELD HASN'T REACHED YET. Dashed and quiet, like every other
+   not-yet on this surface (the tiebreaker row, the degenerate settlement) —
+   NEVER --warn, because nothing has gone wrong: this is the card's headroom, and
+   the pill is a target the room can hit rather than a rule against it. It stays
+   in the row at full width so the terms don't appear to change length as
+   entrants arrive. */
+.call-pot__band--shut {
+  border-style: dashed;
+  border-color: var(--border);
+  background: transparent;
+}
+
+/* The threshold, standing where the percentage stands on an open band. Sized
+   with the pill rather than up at the percentage's weight: it is a condition,
+   not a payout, and it must not out-shout the numbers beside it. */
+.call-pot__bandgate {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .call-pot__split {
   margin: 0;
   font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* WHERE THE CLOSED BANDS' SHARE WENT: into the open ones. Body-weight rather
+   than a caveat's — the purse concentrating is a feature of a small field and
+   reads as one, so it gets the same colour as the split line above it and no
+   alarm styling of any kind. */
+.call-pot__concentrate {
+  margin: 6px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
   color: var(--muted);
 }
 
@@ -16508,6 +16540,86 @@ a.arena-tile:active {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- Caller of the Week --------------------------------------------------
+   RECOGNITION, AND IT MUST NOT LOOK LIKE MONEY. It sits directly under the
+   tiebreaker row it was decided by and a long way from the settlement, and it
+   borrows that row's dashed frame so the two read as one unit — the guess and
+   what the guess won. The names carry the emphasis; nothing in here is set in
+   the serif face or the accent colour used for point figures, because a gold
+   number under a tiebreaker is precisely the thing breaksTies: false says did
+   not happen. */
+.call-caller {
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+}
+
+/* The fan's own win. The one place this block warms up — same accent wash the
+   settled card gives the fan's own band, and for the same reason: find yourself
+   at a glance. Still no points anywhere in it. */
+.call-caller--mine {
+  border-style: solid;
+  border-color: var(--accent-dim);
+  background: rgba(201, 163, 78, 0.07);
+}
+
+.call-caller__label {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.call-caller__list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Name and gap on one line, the gap pushed right and never wrapped — a tie can
+   run to several rows and they should read as a column of names. */
+.call-caller__who {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.call-caller__name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.call-caller__gap {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.call-caller__mine {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+/* The line that keeps the title honest: it moves none of the pot. Smallest type
+   in the block, but unconditional — a fan who reads only this one sentence must
+   come away knowing the tiebreaker paid nobody. */
+.call-caller__note {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .call-fineprint {
   margin: 0;
   font-size: 0.72rem;
@@ -16819,6 +16931,34 @@ a.arena-tile:active {
   color: var(--warn);
   font-size: 0.85rem;
   line-height: 1.7;
+}
+
+/* ADVICE, AND DELIBERATELY NOT THE CHECKLIST'S BOX. `warnings` never blocks the
+   publish button, so it must not borrow the tokens that mean "publish will
+   refuse this" — same shape, dashed neutral frame, no warn wash. A correspondent
+   scanning the screen should be able to tell at a glance whether there is
+   something they MUST fix or something they MIGHT, without reading either
+   list. */
+.compose-advice {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+
+.compose-advice__list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+.compose-advice__note {
+  margin: 8px 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
 }
 
 .compose-actions,

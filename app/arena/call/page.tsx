@@ -158,7 +158,11 @@ export default function CallPage() {
       // Fold the filed card in without a round trip — the response carries the
       // authoritative entry, and it is the only thing about the read that
       // changed. The pot's entrant count moved too if this was a FIRST card, so
-      // nudge it locally rather than re-reading the whole surface for +5.
+      // nudge it locally rather than re-reading the whole surface for one
+      // entrant's worth of purse. THE RATE COMES OFF THE WIRE and is never
+      // written down here: it is snapshotted per card and has already moved once
+      // (5 to 2), so a hardcoded figure would be a lie on every card published
+      // either side of the change.
       //
       // TWO FIELDS MOVE, AND `projectedPoints` IS NOT ONE OF THEM. The write
       // path returns the FAN-SAFE entry shape (no outcome, no grading half), and

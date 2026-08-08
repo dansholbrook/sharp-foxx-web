@@ -39,8 +39,10 @@
 //   is unconditional — so the figure is always there, including on the 0-for-5
 //   card, which is what stops that card reading as a punishment.
 //
-//   THEN THE ANSWER KEY, then the tiebreaker, THEN THE POT. The pot moves BELOW
-//   the key on this state alone, and that is structural rather than cosmetic:
+//   THEN THE ANSWER KEY, then the tiebreaker — WITH CALLER OF THE WEEK UNDER IT,
+//   because the title is what that guess won and it is worth no points — THEN
+//   THE POT. The pot moves BELOW the key on this state alone, and that is
+//   structural rather than cosmetic:
 //   the settled purse and the fan's receipt must never sit adjacent, because two
 //   money figures next to each other invite a subtraction whose answer is
 //   "they owe me the rest". Five question rows and a tiebreaker is the distance.
@@ -76,6 +78,7 @@ import {
   etDateTime,
   CALL_QUESTION_COUNT,
   CALL_TIEBREAKER_MAX,
+  CallCallerOfTheWeek,
   CallCard,
   CallEntry,
   CallEntryInput,
@@ -351,33 +354,100 @@ function ResultMark({ result }: { result: CallResult }) {
 // is not scored — it is recorded on the Call and plays no part in the band
 // split, and rendering it in the list would imply it broke something.
 //
-// THE ACTUAL SITS BESIDE IT ON A GRADED CARD AND NOTHING IS SAID ABOUT THE GAP.
-// breaksTies is an explicit false on the wire: everyone tied at a score is in
-// the same band and paid the same, so the tiebreaker settled nothing about the
-// money. Two numbers, no verdict, no distance, and it stays down here beside the
-// fan's own card rather than anywhere near the settlement.
+// THE ACTUAL SITS BESIDE IT ON A GRADED CARD AND NOTHING IS SAID ABOUT THE GAP
+// IN THE ROW ITSELF. breaksTies is an explicit false on the wire: everyone tied
+// at a score is in the same band and paid the same, so the tiebreaker settled
+// nothing about the money. Two numbers, no verdict, and it stays down here
+// beside the fan's own card rather than anywhere near the settlement.
+//
+// WHAT THE TIEBREAKER DOES DECIDE HANGS UNDERNEATH IT — Caller of the Week, a
+// name and a badge and no points. That is why the block lives here and not in
+// the settlement: the title is the closest guess in the room, the settlement is
+// what the room was paid, and those two must never be made to look like one
+// sentence. See CallerBlock for the one distance this screen is allowed to draw.
 function FiledTiebreaker({
   prompt,
   answer,
   actual,
+  caller,
 }: {
   prompt: string | null;
   answer: number | null;
   actual?: number | null;
+  // Graded cards only, and null on plenty of those — open, voided, and the
+  // degenerate card where nobody scored above zero all send null. Passed only
+  // from the graded branch; the locked and voided ones have nothing to pass.
+  caller?: CallCallerOfTheWeek | null;
 }) {
   if (!prompt) return null;
   return (
-    <div className="call-filed__tb">
-      <span className="call-filed__tblabel">Tiebreaker</span>
-      <span className="call-filed__tbprompt">{prompt}</span>
-      {actual !== null && actual !== undefined && (
-        <span className="call-filed__tbactual">
-          Actually {points(actual)} ·{' '}
+    <>
+      <div className="call-filed__tb">
+        <span className="call-filed__tblabel">Tiebreaker</span>
+        <span className="call-filed__tbprompt">{prompt}</span>
+        {actual !== null && actual !== undefined && (
+          <span className="call-filed__tbactual">
+            Actually {points(actual)} ·{' '}
+          </span>
+        )}
+        <span className="call-filed__tbanswer">
+          {answer === null ? '—' : points(answer)}
         </span>
-      )}
-      <span className="call-filed__tbanswer">
-        {answer === null ? '—' : points(answer)}
+      </div>
+      {caller && caller.winners.length > 0 && <CallerBlock caller={caller} />}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CALLER OF THE WEEK — RECOGNITION, AND THE ONE THING ON THIS CARD THAT IS NOT
+// A NUMBER OF POINTS.
+//
+// PLURAL WHENEVER THE WIRE SAYS SO. A tie on distance awards every fan tied and
+// nothing breaks it further, so the heading counts the array rather than
+// assuming a winner: "Callers of the Week" is the normal case in a big room, not
+// an edge case to degrade into.
+//
+// THE DISTANCE IS RENDERED HERE AND NOWHERE ELSE, and that is not a loosening of
+// the rule at answer-sheet.tsx:355 — it is the point of it. A distance beside the
+// POT would tell a fan their money hinged on a guess it did not hinge on; a
+// distance beside a TITLE is the explanation of the title. It never travels up
+// into the settlement and the band table is never sorted by it.
+//
+// AND IT SAYS SO OUT LOUD. One line, unconditionally, stating that the title
+// moves none of the pot — breaksTies is false and the fan is told rather than
+// left to infer it from an absence.
+// ---------------------------------------------------------------------------
+function CallerBlock({ caller }: { caller: CallCallerOfTheWeek }) {
+  const many = caller.winners.length > 1;
+  return (
+    <div
+      className={`call-caller${caller.youWon ? ' call-caller--mine' : ''}`}
+    >
+      <span className="call-caller__label">
+        {many ? 'Callers of the Week' : 'Caller of the Week'}
       </span>
+      <ul className="call-caller__list">
+        {caller.winners.map((w) => (
+          <li key={w.userId} className="call-caller__who">
+            <span className="call-caller__name">{w.displayName}</span>
+            {/* An exact hit is a word, not "0 off" — the zero reads as a
+                missing value in a column of distances. */}
+            <span className="call-caller__gap">
+              {w.distance === 0 ? 'called it exactly' : `${points(w.distance)} off`}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {caller.youWon && (
+        <p className="call-caller__mine">
+          {many ? 'You share it this week.' : 'That is you.'} The badge is in
+          your inventory.
+        </p>
+      )}
+      <p className="call-caller__note">
+        A title, not a payout — the closest guess moves none of the pot.
+      </p>
     </div>
   );
 }
@@ -535,6 +605,18 @@ function bandRank(band: number): string {
       : `${band}rd score`;
 }
 
+// A BAND ONLY PAYS ONCE THE FIELD REACHES IT — minEntrants is 0 / 10 / 50 today,
+// so a quiet week plays for fewer bands than a busy one. Shared by the open
+// card's pills and the settled card's note so the two cannot disagree about
+// which bands a given week was ever playing for.
+//
+// WHAT A CLOSED BAND MEANS, AND THE ONLY THING IT MEANS: the purse CONCENTRATES
+// on the bands that are open. It does not shrink, nothing is withheld, and no
+// copy on this screen may suggest either — a five-entrant week pays its whole
+// purse to the top score.
+const bandOpen = (band: { minEntrants: number }, entrants: number) =>
+  entrants >= band.minEntrants;
+
 // ---------------------------------------------------------------------------
 // THE SETTLEMENT — what the room did, and the last thing on the card.
 //
@@ -574,6 +656,21 @@ function SettlementBlock({
   unscored: CallUnscored | null;
 }) {
   const bands = settlement.bands;
+
+  // WHICH BANDS THIS WEEK WAS EVER PLAYING FOR — cut on the FINAL entrant count,
+  // which is what `pot.entrants` is on a settled card. Everything below the note
+  // hangs off the difference between three counts: how many bands the terms
+  // advertise, how many the field opened, and how many the room actually filled.
+  const openBandCount = pot.bands.filter((b) =>
+    bandOpen(b, pot.entrants),
+  ).length;
+  // Never opened: the field was too small. Clamped at zero rather than trusted,
+  // because a settlement carrying more bands than the field opened is a backend
+  // disagreement, and the honest response to it is to say nothing rather than to
+  // print a negative count in prose.
+  const shutByField = Math.max(0, pot.bands.length - openBandCount);
+  // Opened, and nobody reached the score. The ORIGINAL cause, still its own line.
+  const unreached = Math.max(0, openBandCount - bands.length);
 
   if (bands.length === 0) {
     return (
@@ -634,8 +731,27 @@ function SettlementBlock({
       </ul>
       {/* Stated as a RULE and never as arithmetic. A fan who read three pills on
           the open card and is looking at two rows here is owed the reason, and
-          the reason is not a sum they should be checking. */}
-      {bands.length < pot.bands.length && (
+          the reason is not a sum they should be checking.
+
+          TWO DIFFERENT CAUSES, TWO DIFFERENT SENTENCES, and they are independent
+          — a week can hit either or both. A band can be missing because the ROOM
+          never reached its score (nobody was fourth-best because there were only
+          three distinct scores), or because the FIELD never reached its
+          minEntrants (the band was never open to be reached at all). Collapsing
+          them into one line would tell a fan in a five-person week that nobody
+          scored well enough, when the truth is there was nobody to score
+          against. Neither sentence says the purse was reduced, because it wasn't:
+          both describe the same money landing in fewer places. */}
+      {shutByField > 0 && (
+        <p className="call-settle__note">
+          {openBandCount === 1
+            ? `${points(pot.entrants)} ${pot.entrants === 1 ? 'card' : 'cards'} filed, so only the top score's band was open — the whole purse paid out there.`
+            : `${points(pot.entrants)} ${pot.entrants === 1 ? 'card' : 'cards'} filed, so the ${countWord(
+                openBandCount,
+              ).toLowerCase()} bands above were the ones open — the whole purse paid out across them.`}
+        </p>
+      )}
+      {unreached > 0 && (
         <p className="call-settle__note">
           Bands nobody reached fold back into the ones above.
         </p>
@@ -685,8 +801,32 @@ function PayoutStrip({ payouts }: { payouts: CallPayouts }) {
 // THIS BLOCK IS NOT RENDERED ON A GRADED CARD. The settled purse belongs BELOW
 // the answer key, where it cannot sit adjacent to the fan's receipt — see
 // SettlementBlock and the file header.
-// ---------------------------------------------------------------------------
+//
+// ----------------------------------------------------------------------------
+// THE BANDS ARE NO LONGER A STATIC LIST, and the reason is the whole shape of
+// the card's week. Each band carries a minEntrants (0 / 10 / 50), so at a given
+// moment some of them are OPEN and paying and the rest are not open YET.
+//
+// CLOSED BANDS ARE SHOWN, NOT HIDDEN. Hiding them would make the pill row change
+// LENGTH as the field fills, which reads as the terms being rewritten under the
+// fan; showing them makes it read as the card getting richer, which is what is
+// actually happening. The closed pill says what opens it — a target, not a
+// denial.
+//
+// AND THE PURSE CONCENTRATES. The percentages renormalize across the open bands,
+// so a five-entrant week pays its ENTIRE purse to the top score. There is no
+// smaller pot at a small field and this copy must never let one be inferred:
+// nothing is "split three ways" here, and the word "only" never attaches to the
+// money.
+// ----------------------------------------------------------------------------
 function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean }) {
+  const openBands = pot.bands.filter((b) => bandOpen(b, pot.entrants));
+  // The next band to open, and how many cards away it is. Only ever spoken about
+  // on an OPEN card: after kickoff the field is final, and "6 more cards" beside
+  // a locked card is an invitation nobody can accept.
+  const nextShut = pot.bands.find((b) => !bandOpen(b, pot.entrants));
+  const cardsAway = nextShut ? nextShut.minEntrants - pot.entrants : 0;
+
   return (
     <div className="call-pot">
       <div className="call-pot__head">
@@ -706,20 +846,54 @@ function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean }) {
           the SNAPSHOT once published, so a later edit to the constants cannot
           change what the fan was told they were playing for. */}
       <ul className="call-pot__bands">
-        {pot.bands.map((b) => (
-          <li key={b.band} className="call-pot__band">
-            <span className="call-pot__bandrank">{bandRank(b.band)}</span>
-            {/* THE ONE PLACE A PERCENTAGE BELONGS. Here it is the advertised
-                promise, made before anyone has played. It does not follow the
-                card into the settlement, where the occupied bands renormalize
-                and these numbers stop describing what was paid. */}
-            <span className="call-pot__bandpct">{b.pct}%</span>
-          </li>
-        ))}
+        {pot.bands.map((b) => {
+          const isOpen = bandOpen(b, pot.entrants);
+          return (
+            <li
+              key={b.band}
+              className={`call-pot__band${isOpen ? '' : ' call-pot__band--shut'}`}
+            >
+              <span className="call-pot__bandrank">{bandRank(b.band)}</span>
+              {/* THE PERCENTAGE IS THE PROMISE, AND ONLY AN OPEN BAND IS MAKING
+                  ONE. On a closed band the share is not what the fan needs (it
+                  is paying nothing today, and its slice is already inside the
+                  open bands above) — the threshold is. So the pill swaps the
+                  number for the target rather than showing a percentage that
+                  describes no payment. */}
+              {isOpen ? (
+                <span className="call-pot__bandpct">{b.pct}%</span>
+              ) : (
+                <span className="call-pot__bandgate">
+                  opens at {points(b.minEntrants)} entrants
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <p className="call-pot__split">
         Every fan tied at a score splits that band evenly.
       </p>
+      {/* WHERE THE CLOSED BANDS' SHARE IS: in the open ones. Stated in that
+          direction — what the purse IS doing, never what it is not — because the
+          fan's question at a small field is "is this worth less?" and the answer
+          is no, it is worth the same and lands on fewer people. */}
+      {openBands.length < pot.bands.length && (
+        <p className="call-pot__concentrate">
+          {openBands.length === 1
+            ? 'At this size the whole purse goes to the top score.'
+            : `At this size the whole purse pays out across the ${countWord(
+                openBands.length,
+              ).toLowerCase()} bands above.`}
+          {open && nextShut && (
+            <>
+              {' '}
+              {cardsAway === 1 ? 'One more card' : `${points(cardsAway)} more cards`}{' '}
+              and the {bandRank(nextShut.band).toLowerCase()} band opens too.
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -1104,9 +1278,22 @@ export function CallSheet({
                   A whole number from 0 to {points(CALL_TIEBREAKER_MAX)}.
                 </p>
               )}
+              {/* WHAT THE NUMBER IS FOR, STATED BEFORE IT IS ASKED FOR — and
+                  the answer changed. It used to be "so the correspondent can
+                  settle an argument", which was true when the tiebreaker decided
+                  nothing at all; it now decides Caller of the Week, and a fan
+                  typing a guess into a box is owed the reason.
+
+                  BOTH HALVES, IN THIS ORDER. What it wins (a title) and what it
+                  does not (move the pot). breaksTies is still false and this
+                  sentence is still that flag's copy — the flag's meaning has not
+                  moved an inch, it simply stopped being the whole story, and the
+                  half that must never be implied is that placing this guess is
+                  worth points. See CallerBlock for where the title is paid. */}
               <p className="call-tb__note">
-                Recorded with your card. It is not scored — it is there so the
-                correspondent can settle an argument.
+                Recorded with your card, and not scored — no points ride on it.
+                The closest guess takes Caller of the Week, a badge and the
+                bragging rights, and nothing off the pot.
               </p>
             </div>
           )}
@@ -1202,10 +1389,15 @@ export function CallSheet({
             results={myEntry?.results ?? null}
             pushesExplainedAbove={pushesExplainedAbove}
           />
+          {/* THE TITLE RIDES WITH THE TIEBREAKER, not with the settlement below
+              — it is decided by the guess sitting one line above it, and it pays
+              nothing. Null here is ordinary: a card nobody scored above zero on
+              has no Caller, and the block simply isn't drawn. */}
           <FiledTiebreaker
             prompt={tiebreakerPrompt}
             answer={myEntry?.tiebreakerAnswer ?? null}
             actual={call.tiebreaker?.actual ?? null}
+            caller={call.tiebreaker?.callerOfTheWeek ?? null}
           />
           {/* THE ROOM'S HALF, LAST — and a long way from the receipt. */}
           {settlement && !settlement.voided && (

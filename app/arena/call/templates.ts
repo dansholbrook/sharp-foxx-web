@@ -487,6 +487,87 @@ export function buildCallParams(
 }
 
 // ---------------------------------------------------------------------------
+// ADVICE THIS CLIENT NOTICES ON ITS OWN — the same shape as the server's
+// publishable.warnings and rendered in the same box, never as a blocker.
+//
+// WHY THIS ONE IS A CLIENT RULE AT ALL, when the publish checklist is the
+// server's job: it is a fact about THIS FILE. A template with no param fields
+// can only ever render one question, and the field list is what says so —
+// `fields: []` is derived here rather than restated as a list of five ids, so a
+// template that gains a param stops warning the moment its form does.
+//
+// AND IT IS ADVICE, NOT A PROBLEM. A duplicated parameterless template is a
+// mistake every time I can think of — two identical prompts on one card, five
+// slots of work spent on four questions — but "every time I can think of" is not
+// "always", and a correspondent with a reason gets to publish it. Same tone as
+// the tiebreaker warning: worth a second look, then get out of the way.
+//
+// PARAMETERISED DUPLICATES ARE NOT WARNED ON, deliberately. Two margin_buckets
+// with different edges are two real questions, and flagging them would train
+// the composer to ignore this box.
+// ---------------------------------------------------------------------------
+
+// "4 and 5", "1, 3 and 5" — slots as the composer sees them, 1-based.
+function slotList(indexes: number[]): string {
+  const n = indexes.map((i) => i + 1);
+  if (n.length === 2) return `${n[0]} and ${n[1]}`;
+  return `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`;
+}
+
+// One line per parameterless template picked more than once. `picked` is the
+// LIVE slot state (nulls and all), not what the server holds — this is advice
+// about what is on screen right now, and waiting for a save to surface it would
+// put it a round trip away from the moment it is useful.
+export function duplicateFixedTemplateWarnings(
+  picked: Array<CallTemplateId | null>,
+  // The picker's own label for a template ("T7 - Halftime lead"), so the warning
+  // names the thing the way the menu above it does. Falls back to the id.
+  labelFor: (id: CallTemplateId) => string,
+): string[] {
+  const slotsByTemplate = new Map<CallTemplateId, number[]>();
+  picked.forEach((id, index) => {
+    if (!id) return;
+    // The whole rule, in one condition: no fields means no way to differ.
+    if (CALL_TEMPLATE_FORMS[id].fields.length > 0) return;
+    const seen = slotsByTemplate.get(id);
+    if (seen) seen.push(index);
+    else slotsByTemplate.set(id, [index]);
+  });
+
+  const out: string[] = [];
+  for (const [id, indexes] of slotsByTemplate) {
+    if (indexes.length < 2) continue;
+    out.push(
+      `Questions ${slotList(indexes)} are the same question. “${labelFor(
+        id,
+      )}” takes no numbers, so every slot that picks it renders identical text.`,
+    );
+  }
+  return out;
+}
+
+// THE ANSWER TYPED INTO THE QUESTION FIELD. Not hypothetical: the first card
+// ever composed with this tool published with a tiebreaker prompt of "20", and
+// nothing anywhere objected — the column takes any 1..200 characters, publish
+// only checks that one exists, and the fan sheet duly rendered a bare number
+// above the input where the question belongs.
+//
+// DELIBERATELY THE NARROWEST POSSIBLE TEST: the whole trimmed prompt is digits.
+// A prompt that CONTAINS a number is usually a good prompt — "How many points in
+// the 2nd half?", "More or fewer than 120?" — and a rule that fired on those
+// would teach the composer to scroll past this box, which costs more than the
+// case it catches. Even "20?" is left alone; someone who typed a question mark
+// was writing a question, however briefly.
+//
+// Advice, like everything else in this box. A prompt is not wrong for being
+// terse, and the correspondent is the one in the gym.
+export function numericTiebreakerWarning(prompt: string): string | null {
+  const t = prompt.trim();
+  if (!/^\d+$/.test(t)) return null;
+  return `The tiebreaker reads “${t}” — that is an answer, not a question. Fans see this text and type the number themselves.`;
+}
+
+// ---------------------------------------------------------------------------
 // The tiebreaker.
 // ---------------------------------------------------------------------------
 
@@ -507,11 +588,34 @@ function scoringNoun(sport: string): string {
 // Kept generic rather than interpolating team names: a prompt naming the home
 // team reads oddly on a neutral-site game, and the card already names the
 // matchup two lines above.
+//
+// ----------------------------------------------------------------------------
+// EVERY CHIP MUST ASK FOR AN INTEGER >= 0, and that is a schema fact rather than
+// a style preference: tiebreaker_answer is 0..100000 on the column and on both
+// DTOs, there are live entries against it, and the grader's actual goes into the
+// same range. So "which team scores first?" is not a candidate however good a
+// tiebreaker it would make — a team is not an integer, and the column cannot be
+// widened under rows that already exist.
+//
+// THE COMBINED-POINTS CHIP IS GONE. It restated `combined_points`, the most
+// picked template on the card, which made the tiebreaker a sixth copy of a
+// question the fan had already answered — and it is now exactly what publish
+// warns about (CallPublishable.warnings). Its slot goes to the EXACT winning
+// margin, which absorbs the older, vaguer margin chip: a bucket template asks
+// which BAND the margin lands in, this asks for the number itself, and that
+// difference is the whole reason a tiebreaker beats a sixth question. Zero is a
+// legal answer to it (a tie), which is exactly why the floor is 0 and not 1
+// where margin_bucket's is 1.
+//
+// The two team-score chips are the same question from either end, deliberately:
+// they are the only shape here that stays a clean scoreboard read on a game
+// where the margin is lopsided and everyone guesses the same blowout number.
+// ----------------------------------------------------------------------------
 export function tiebreakerSuggestions(sport: string): string[] {
   const noun = scoringNoun(sport);
   return [
-    `How many total ${noun} are scored by both teams combined?`,
-    `What is the winning margin, in ${noun}?`,
+    `What is the exact winning margin, in ${noun}?`,
     `How many ${noun} does the home team score?`,
+    `How many ${noun} does the away team score?`,
   ];
 }

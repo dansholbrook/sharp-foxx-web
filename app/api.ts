@@ -5130,7 +5130,18 @@ export interface CallPotTerms {
   // off a snapshot that reads 50/30. These belong on the OPEN card, where they
   // are the promise being made; they are not rendered beside a settled one. See
   // CallSettlementBand.
-  bands: Array<{ band: number; pct: number }>;
+  //
+  // `minEntrants` IS THE FIELD SIZE THAT OPENS THE BAND (0 / 10 / 50 today): a
+  // band pays nothing until that many cards are filed, and its percentage
+  // renormalizes into the bands above it until then. So a five-entrant week is
+  // NOT a small purse cut three ways — it is the WHOLE purse on the top score.
+  //
+  // THE POT CONCENTRATES, IT DOES NOT SHRINK, and no copy anywhere may imply
+  // otherwise. A closed band is a band the card has not GROWN into yet, which is
+  // why the fan sheet renders closed bands rather than hiding them: the promise
+  // is that the card gets richer as the room fills, and a hidden band cannot
+  // make it.
+  bands: Array<{ band: number; pct: number; minEntrants: number }>;
 }
 
 // The weekly purse AS THE FAN READ SENDS IT — the terms plus the live counts.
@@ -5216,6 +5227,27 @@ export interface CallEventInfo {
   awayTeam: string | null;
 }
 
+// CALLER OF THE WEEK — the title the tiebreaker decides, and the whole of what
+// it decides. Closest guess to the actual takes it; the prize is a user_items
+// badge, so it shows in the winner's inventory after this card is history.
+//
+// AN ARRAY BECAUSE A TIE AWARDS EVERYONE TIED, and nothing breaks that tie
+// further — there is no submission-time fallback here and no "first correct"
+// rule. Copy reads "Callers of the Week" whenever this is longer than one.
+export interface CallCallerOfTheWeek {
+  winners: Array<{
+    userId: string;
+    displayName: string;
+    // The card's correct count, not a tiebreaker figure.
+    score: number;
+    // |guess − actual|. THE ONE PLACE A DISTANCE MAY BE RENDERED, and only
+    // beside the fan's own card where it explains a title. It stays out of the
+    // settlement block and off the band table — see breaksTies.
+    distance: number;
+  }>;
+  youWon: boolean;
+}
+
 export interface CallCard {
   id: string;
   weekStart: string;
@@ -5246,7 +5278,25 @@ export interface CallCard {
     // score is in the same band and paid the same, and the order within a band
     // is submission time. So: no "closest wins", no "you were 3 off" beside the
     // pot, and the band table is never sorted by distance from the actual.
+    //
+    // STILL FALSE, AND ITS MEANING IS UNCHANGED BY callerOfTheWeek BELOW. The
+    // title is recognition; this flag is about money. Do not read one off the
+    // other in either direction.
     breaksTies: boolean;
+    // CALLER OF THE WEEK — what the tiebreaker DOES decide, which is a name and
+    // not a payout. Closest guess to `actual` takes it; it is a user_items badge,
+    // so it also lands in the winner's inventory and outlives this card.
+    //
+    // PLURAL BY CONSTRUCTION. A tie on distance awards everyone tied — the array
+    // is the authority on how many, the copy reads "Callers of the Week" the
+    // moment there is more than one, and nothing here breaks that tie further.
+    //
+    // NULL IN FOUR STATES, all of them ordinary and none of them an error: the
+    // card is still open (nothing has been graded to be closest to), the card was
+    // voided (nothing was scored at all), nobody scored above zero (the same
+    // degenerate card the purse pays nothing on — there is no room to honour),
+    // and any card whose tiebreaker block itself is absent.
+    callerOfTheWeek: CallCallerOfTheWeek | null;
   } | null;
   pot: CallPot;
 }
@@ -5607,9 +5657,23 @@ export interface CallPreviewQuestion {
 // started") — RENDER IT VERBATIM. Rewriting it here would mean maintaining a
 // second copy of a list whose whole job is to name whatever the server will
 // refuse on, and the two would drift on the first new rule.
+//
+// `warnings` IS ADVICE AND MUST NEVER GATE THE BUTTON. Same verbatim-copy rule,
+// opposite consequence: a problem is something publish will REFUSE on, a warning
+// is something publish will happily accept and a correspondent may still want to
+// reconsider — today, a tiebreaker that reads like a restatement of one of the
+// five questions. `ready` does not account for it and neither does this client:
+// a card with warnings and no problems publishes on the first tap.
+//
+// TYPED REQUIRED, AND READ DEFENSIVELY IN EXACTLY ONE PLACE for the length of
+// the rollout only: the field shipped in its own push, so a client reaching an
+// older pod mid-deploy gets a payload without it. See the guard in
+// compose/[callId]/page.tsx — it carries the note saying to delete it, and this
+// type is what it gets deleted back to.
 export interface CallPublishable {
   ready: boolean;
   problems: string[];
+  warnings: string[];
 }
 
 // callView — the fields every staff response spreads. Identical to the fan

@@ -61,6 +61,8 @@ import { CallStaffShell, NotYourCall, formatKickoff, relativeTo } from '../../st
 import {
   CALL_TEMPLATE_FORMS,
   buildCallParams,
+  duplicateFixedTemplateWarnings,
+  numericTiebreakerWarning,
   tiebreakerSuggestions,
   validateCallParams,
   CallComposeContext,
@@ -506,6 +508,41 @@ export default function CallComposePage() {
   const readyToPublish =
     filled.length === SLOTS && slotProblems.length === 0 && tiebreaker.trim().length > 0;
 
+  // ---- THE ADVICE LIST. Two sources, one box, and NEITHER ONE GATES PUBLISH —
+  // readyToPublish above does not mention this and must not learn to.
+  //
+  // OURS FIRST, because ours are about slots the composer is looking at right
+  // now and update on every pick, while the server's describe the card as it was
+  // last SAVED. Same box for both: a correspondent should not have to work out
+  // which half of the stack noticed what in order to act on it.
+  //
+  // DEDUPED, because the two sources are allowed to overlap: nothing stops the
+  // backend growing a warning that says what ours says, and the correspondent
+  // should see one line rather than the same sentence twice under two authors.
+  // It also keeps the list keyable by its own text.
+  const numericPrompt = numericTiebreakerWarning(tiebreaker);
+  const advice = [
+    ...new Set([
+      ...duplicateFixedTemplateWarnings(
+        slots.map((s) => s.templateId),
+        (id) => card?.availableTemplates.find((t) => t.id === id)?.label ?? id,
+      ),
+      // Read off the LIVE field rather than the saved prompt, like the check
+      // above it: this one is worth catching before the save, not after. It
+      // appears and disappears as the field is typed into, which is the correct
+      // behaviour for advice about the field's current contents.
+      //
+      // Held in a const and wrapped in an array rather than spread straight from
+      // the function: a bare `...(maybeString ?? [])` spreads a STRING INTO ITS
+      // CHARACTERS, which typechecks perfectly and puts one letter per bullet on
+      // screen.
+      ...(numericPrompt ? [numericPrompt] : []),
+      // ROLLOUT WINDOW ONLY — see the note at the render site and on
+      // CallPublishable. Older pods send no `warnings` key at all.
+      ...(publishable?.warnings ?? []),
+    ]),
+  ];
+
   function foldSaveResult(
     questions: CallComposedQuestion[],
     nextPublishable: CallPublishable,
@@ -758,10 +795,18 @@ export default function CallComposePage() {
                       aria-label="Tiebreaker prompt"
                       onChange={(e) => setTiebreaker(e.target.value)}
                     />
+                    {/* THE COMPOSER IS TOLD WHAT THIS FIELD NOW DECIDES. It
+                        settles no money and never has, but it is no longer
+                        decorative either: the closest guess takes Caller of the
+                        Week, so the prompt has to be a number the whole room can
+                        estimate and you can read off a scoreboard without
+                        arguing about it. A QUESTION, NOT A NUMBER — this field
+                        takes any string the backend will accept, and a card has
+                        already gone out with "20" in it. */}
                     <p className="call-tb__hint">
-                      A number every fan can guess and you can read off the
-                      scoreboard. It settles nothing about the money — it is the
-                      record of how close the room got.
+                      Write it as a question. A number every fan can guess and
+                      you can read off the scoreboard — the closest guess takes
+                      Caller of the Week. It settles nothing about the money.
                     </p>
                   </div>
 
@@ -774,6 +819,51 @@ export default function CallComposePage() {
                           <li key={p}>{p}</li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+
+                  {/* ---- The advice. ALSO SERVER COPY AND VERBATIM, AND NOT A
+                       BLOCKER — this is the one distinction the block exists to
+                       make. `warnings` fires on a card that will publish
+                       perfectly happily (today: a tiebreaker that reads like a
+                       restatement of one of the five questions), so it is drawn
+                       OUTSIDE the ready check, never touches readyToPublish, and
+                       is styled away from the warn tokens the checklist uses.
+                       Rendering it in the red box would train a correspondent to
+                       hunt for a problem that isn't there, and rendering it not
+                       at all would waste the one moment they can still act on
+                       it. It shows on a ready card and an unready one alike:
+                       there is no state in which the note stops being true.
+
+                       TWO SOURCES FEED IT — the server's `warnings` and this
+                       client's own duplicate-template check (see `advice`
+                       above). They are not labelled by origin, because the
+                       correspondent is not fixing a system, they are fixing a
+                       card.
+
+                       ROLLOUT WINDOW ONLY — DELETE THE `?.` ON `warnings` ONCE
+                       THE API IS FULLY OUT. It is typed required and the type is
+                       right: every current pod sends it. But it shipped in a
+                       SEPARATE push from this client, so mid-deploy there is a
+                       real window where this screen talks to an older pod that
+                       has never heard of the field — and `.length` on that
+                       undefined takes down the whole compose screen, mid-edit,
+                       for a field whose entire job is to be optional advice.
+                       This is not the house rule loosening (required fields are
+                       read directly everywhere else in this file); it is one
+                       guard with an expiry date on it. ---- */}
+                  {advice.length > 0 && (
+                    <div className="compose-advice">
+                      <span className="console-label">Worth a second look</span>
+                      <ul className="compose-advice__list">
+                        {advice.map((w) => (
+                          <li key={w}>{w}</li>
+                        ))}
+                      </ul>
+                      <p className="compose-advice__note">
+                        Advice, not a blocker — this card can publish as it
+                        stands.
+                      </p>
                     </div>
                   )}
 
