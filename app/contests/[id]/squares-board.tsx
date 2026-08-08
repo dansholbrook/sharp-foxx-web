@@ -31,7 +31,9 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
+import { EntryAdvisoryNotice } from '../../entry-advisory';
 import {
+  entryRefusal,
   getSquaresGrid,
   claimSquare,
   releaseSquare,
@@ -283,9 +285,22 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
     return sum;
   }, [grid, user]);
 
+  // A squares board IS one game, so the conflict refusal closes the whole grid
+  // rather than any subset of it — there is no partial version of this on this
+  // surface the way there is on a parlay slate.
+  const covering = entryRefusal(grid?.entry);
+
   // Claims land on the FILLING board, whatever the switcher is showing. Tapping is
   // therefore allowed only when the shown board IS that board.
-  const claimable = grid?.status === 'open' && board?.isCurrent === true;
+  //
+  // FOLDED IN HERE, AT THE ONE SWITCH, rather than at the cell: `claimable` already
+  // drives `sqgrid--readonly`, every cell's `disabled`, and the "tap to claim" half
+  // of each cell's aria-label. Adding the term here means the grid greys, goes
+  // untappable and stops PROMISING a tap in its accessible names, all from one
+  // edit — and a fan on a screen reader isn't invited to do something the board
+  // will refuse.
+  const claimable =
+    grid?.status === 'open' && board?.isCurrent === true && covering === null;
 
   const cellKey = useCallback(
     (row: number, col: number) => `${board?.boardNumber ?? 0}:${key(row, col)}`,
@@ -601,6 +616,18 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
       {grid.status === 'canceled' && (
         <p className="sqgrid-note muted">This contest was canceled.</p>
       )}
+
+      {/* ---- The conflict refusal. Sits with the status notes, directly above
+              the grid it closes, and NOT in the `notice` state below — that one
+              is transient and action-driven (set by a claim, cleared by the next
+              one), so a standing fact parked in it would be wiped by the first
+              tap. The header, the switcher and the prize table above are all
+              untouched: someone working this game still wants to see what the
+              board pays and how much of it is gone. ---- */}
+      {covering && grid.status === 'open' && (
+        <EntryAdvisoryNotice refusal={covering} />
+      )}
+
       {claimable && (
         <p className="sqgrid-note muted">
           Digits randomize at game start. Tap an open square to claim it
@@ -609,8 +636,14 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
         </p>
       )}
       {/* Looking at a closed board while another is taking claims — say so, and
-          offer the one tap back to where a claim would actually land. */}
-      {!claimable && grid.status === 'open' && grid.currentBoardNumber != null && (
+          offer the one tap back to where a claim would actually land.
+
+          NOT WHEN COVERING. `claimable` now carries the conflict refusal too, so
+          without this guard a correspondent standing on the CURRENT board would
+          be told it was closed and offered a "Go there" jump to the board they
+          are already on. The redirect is only honest when the board itself is
+          the thing that's shut. */}
+      {!claimable && !covering && grid.status === 'open' && grid.currentBoardNumber != null && (
         <p className="sqgrid-note muted">
           Board {board.boardNumber} is {board.status === 'full' ? 'full' : 'closed'} — claims
           land on board {grid.currentBoardNumber}.{' '}

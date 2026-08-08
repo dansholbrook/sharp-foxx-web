@@ -27,6 +27,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  EntryRefusal,
   OracleChoice,
   OracleDay,
   OraclePickResult,
@@ -37,6 +38,7 @@ import {
   streakOutcomeCopy,
   etTime,
 } from '../../api';
+import { EntryAdvisoryNotice } from '../../entry-advisory';
 
 // The dial and the split bar both animate; both stop dead under reduced motion
 // (see globals.css). Nothing here branches on the preference — the CSS owns it,
@@ -151,6 +153,9 @@ export function TodayCard({
   onPick,
   picking,
   pickError,
+  // The conflict-of-interest refusal, or null on the normal case. A
+  // correspondent covering today's game reads this card; they don't call it.
+  covering,
 }: {
   day: OracleDay | null;
   date: string;
@@ -160,6 +165,7 @@ export function TodayCard({
   // the button the fan hit looks chosen before the response lands.
   picking: OracleChoice | null;
   pickError: string | null;
+  covering: EntryRefusal | null;
 }) {
   // The countdown ticker. One second, because the last minute before kickoff is
   // the one that matters and a minute-granularity clock would sit on "Locks in
@@ -196,12 +202,20 @@ export function TodayCard({
   // "Locked" as the card means it: kickoff has passed but the result hasn't
   // landed. A graded day is past locked and gets the reveal instead.
   const locked = day.locked && !graded;
-  const canPick = day.status === 'open' && !day.locked && !mine;
+  // COVERING GREYS THE CARD BUT IS NOT `locked`. That flag drives the foot's
+  // kickoff sentence ("Locked at kickoff — you sat this one out"), and a covered
+  // day is usually still counting down to a game that hasn't started. It borrows
+  // the locked card's dimming and nothing else.
+  // Held as the refusal itself rather than a boolean so the render below needs
+  // no non-null assertion. Dropped once graded: the result is the story then,
+  // and an advisory about entering a settled day is stale news.
+  const covered = graded ? null : covering;
+  const canPick = day.status === 'open' && !day.locked && !mine && !covered;
 
   return (
     <section
       className={`oracle-card${graded ? ' oracle-card--graded' : ''}${
-        locked ? ' oracle-card--locked' : ''
+        locked || covered !== null ? ' oracle-card--locked' : ''
       }`}
     >
       {/* ---- The Oracle's presence. Composed from two glyphs and a ring of
@@ -316,6 +330,13 @@ export function TodayCard({
           </button>
         </div>
       )}
+
+      {/* ---- COVERING: where the two buttons would have been. The dial, the
+          matchup and the split above are untouched — a correspondent working
+          tonight's game still wants to see what the room thinks of it; they
+          just aren't calling it. Rendered even when `mine` exists (they were
+          assigned after picking), where it explains the frozen card. ---- */}
+      {covered && <EntryAdvisoryNotice refusal={covered} />}
 
       {/* ---- PICKED (still open, or locked): the buttons collapse into the
           chosen state. The un-chosen side is stated too, so the fan can see

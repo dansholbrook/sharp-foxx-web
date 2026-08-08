@@ -52,11 +52,13 @@ import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { CallSheet } from './answer-sheet';
 import {
+  entryRefusal,
   getCallCurrent,
   submitCallEntry,
   CallCurrent,
   CallEntryInput,
   CallEntryResult,
+  CoveringThisGameError,
 } from '../../api';
 
 export default function CallPage() {
@@ -195,6 +197,23 @@ export default function CallPage() {
       const message =
         err instanceof Error ? err.message : 'Could not file your card';
       setSubmitError(message);
+      // ----------------------------------------------------------------------
+      // THE COVERING REFUSAL GETS NO RE-READ, AND THIS GUARD RUNS FIRST.
+      //
+      // It matters more here than on either daily game. `load()` replaces
+      // `current` wholesale, and on THIS surface the fan's five answers live
+      // only in React state with no partial save anywhere to recover them from
+      // (the same reason this page doesn't poll — see the header). A correspondent
+      // assigned to the game between the render and the tap would lose a filled-in
+      // card to a reload that told them nothing the error slot isn't already
+      // saying. They cannot file it either way; there is no reason to also take
+      // their work.
+      //
+      // Guarded on the TYPE, never on the message. The covering error carries no
+      // status prefix today, so a string test would pass by accident rather than
+      // by intent — and would start reloading the moment that formatting changed.
+      // ----------------------------------------------------------------------
+      if (err instanceof CoveringThisGameError) return;
       // A 409 or 404 means the SCREEN IS STALE, not that the fan did something
       // wrong: kickoff passed between the render and the tap, or the card was
       // graded/voided under them. Re-read so the card catches up instead of
@@ -263,6 +282,7 @@ export default function CallPage() {
             submitting={submitting}
             submitError={submitError}
             saved={saved}
+            covering={entryRefusal(current.entry)}
           />
 
           <p className="call-fineprint">

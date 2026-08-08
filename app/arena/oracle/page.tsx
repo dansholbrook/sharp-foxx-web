@@ -31,12 +31,14 @@ import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { TodayCard } from './today-card';
 import {
+  entryRefusal,
   getOracleHistory,
   getOracleLeaderboard,
   getOracleToday,
   oracleBadgeMeta,
   points,
   submitOraclePick,
+  CoveringThisGameError,
   OracleChoice,
   OracleHistory,
   OracleHistoryItem,
@@ -499,6 +501,12 @@ export default function OraclePage() {
       const message =
         err instanceof Error ? err.message : 'Could not record your call';
       setPickError(message);
+      // A COVERING refusal is not a stale screen and gets NO re-read. The fan is
+      // already reading the server's sentence in the slot below; spending a call
+      // to re-render the same sentence onto the card buys nothing, and the fact
+      // it states is one they cannot act on anyway. Guarded on the TYPE, never on
+      // the sentence, so it survives any change to how the message is formatted.
+      if (err instanceof CoveringThisGameError) return;
       // A 409 means the screen is STALE, not that the fan did something wrong:
       // either they already picked (another tab, their phone) or kickoff passed
       // between the render and the tap. Re-read so the card catches up to the
@@ -556,6 +564,7 @@ export default function OraclePage() {
             onPick={onPick}
             picking={picking}
             pickError={pickError}
+            covering={entryRefusal(today.entry)}
           />
 
           <StreaksRail streaks={today.streaks} badges={today.badges} />

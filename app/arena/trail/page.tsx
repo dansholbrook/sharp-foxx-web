@@ -37,6 +37,7 @@ import { canAccess } from '../../roles';
 import { TownCard } from './town-card';
 import { TrailMap } from './trail-map';
 import {
+  entryRefusal,
   getTrailLeaderboard,
   getTrailMap,
   getTrailPennants,
@@ -44,6 +45,7 @@ import {
   submitTrailPick,
   trailItemMeta,
   trailTrophyMeta,
+  CoveringThisGameError,
   TrailItem,
   TrailLeaderboards,
   TrailMap as TrailMapData,
@@ -508,6 +510,9 @@ export default function TrailPage() {
       const message =
         err instanceof Error ? err.message : 'Could not record your call';
       setPickError(message);
+      // A COVERING refusal is not a stale screen and gets NO re-read — see the
+      // Call page. Guarded on the TYPE, never on the sentence.
+      if (err instanceof CoveringThisGameError) return;
       // A 409/404 means the screen is STALE, not that the fan did something
       // wrong: they already called it in another tab, or first pitch passed
       // between the render and the tap. Re-read so the card catches up rather
@@ -572,6 +577,7 @@ export default function TrailPage() {
             onPick={onPick}
             picking={picking}
             pickError={pickError}
+            covering={entryRefusal(today.entry)}
           />
 
           <TrailRail today={today} />

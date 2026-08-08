@@ -24,7 +24,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
+import { EntryAdvisoryNotice } from '../../entry-advisory';
 import {
+  entryRefusal,
   getSurvivorPicks,
   submitSurvivorPick,
   getEvents,
@@ -236,6 +238,11 @@ function RoundCard({
   loadingEvents,
   eventsError,
   error,
+  // The board-level conflict refusal, flattened to a boolean. THE SENTENCE IS
+  // NOT PASSED DOWN ON PURPOSE: it is a fact about the board, so it is stated
+  // once above the timeline and never repeated per round. All a round needs to
+  // know is that its pick affordance is closed.
+  covered,
   onToggle,
   onPick,
 }: {
@@ -248,6 +255,7 @@ function RoundCard({
   loadingEvents: boolean;
   eventsError: string | null;
   error: string | null;
+  covered: boolean;
   onToggle: () => void;
   onPick: (eventId: string, teamId: string) => void;
 }) {
@@ -277,8 +285,15 @@ function RoundCard({
 
       {/* Pre-lock, a round is always changeable: offer the slate whether or not
           there's already a pick (tapping a different team replaces it — the PUT
-          upserts, so no confirm is needed pre-lock). */}
-      {!locked && (
+          upserts, so no confirm is needed pre-lock).
+
+          A COVERED BOARD DROPS THE TOGGLE ENTIRELY rather than disabling it. On
+          every other surface the greyed control is the point — it shows what
+          you'd otherwise be doing. Here the control opens a PANEL, and a dead
+          "Pick your team" button that refuses to expand is a worse answer than
+          no button: the readout above still shows any pick they made, so the
+          round is not left blank. */}
+      {!locked && !covered && (
         <div className="survivor-round__pickarea">
           <button
             type="button"
@@ -561,6 +576,7 @@ export function SurvivorBoard({
   const alive = picks.entryStatus === 'active';
   const elimRound = alive ? null : eliminationRound(picks.rounds);
   const canWithdraw = picks.contestStatus === 'open';
+  const covering = entryRefusal(picks.entry);
 
   return (
     <div className="contest-detail__body survivor">
@@ -585,6 +601,13 @@ export function SurvivorBoard({
         </div>
       </header>
 
+      {/* ---- The conflict refusal, ONCE, between the standing and the timeline.
+              A fact about the board, not about round 4: repeating it down every
+              round would turn one statement into a drumbeat, and the fan's
+              standing above it is still theirs — a correspondent assigned
+              mid-run stays alive on the picks they already made. ---- */}
+      {covering && <EntryAdvisoryNotice refusal={covering} />}
+
       {/* ---- The rounds timeline ---- */}
       <ol className="survivor-timeline">
         {picks.rounds.map((r) => (
@@ -599,6 +622,7 @@ export function SurvivorBoard({
             loadingEvents={loadingEvents}
             eventsError={eventsError}
             error={roundError?.round === r.round ? roundError.message : null}
+            covered={covering !== null}
             onToggle={() => onToggleRound(r.round)}
             onPick={(eventId, teamId) => void onPick(r.round, eventId, teamId)}
           />

@@ -28,7 +28,9 @@ import { SquaresBoard } from './squares-board';
 import { SurvivorBoard } from './survivor-board';
 import { ParlayBoard } from './parlay-board';
 import { canAccess } from '../../roles';
+import { EntryAdvisoryNotice } from '../../entry-advisory';
 import {
+  entryRefusal,
   getContest,
   getMyPicks,
   getPickSheet,
@@ -115,6 +117,9 @@ function EnterHero({
   const payouts = [...(contest.config.payouts ?? [])].sort((a, b) => a.rank - b.rank);
   const full =
     contest.maxEntries != null && contest.entrants >= contest.maxEntries;
+  // The conflict-of-interest refusal. Reads exactly like `full` does — a fact
+  // about this contest that closes the button — and takes the same shape below.
+  const covering = entryRefusal(contest.entry);
   // A soft pre-check so the button reads honestly; the backend's 409 is still
   // the authority (the chip can be stale), so we don't hard-block on it.
   const shortOnPoints =
@@ -182,13 +187,27 @@ function EnterHero({
 
         {error && <div className="error">{error}</div>}
 
+        {/* THE STATS AND THE PAYOUTS STAY ABOVE THIS. A correspondent covering a
+            game on the slate is still entitled to see what the contest is and
+            what it pays — they're just not in it. Only the button closes. */}
+        {covering && <EntryAdvisoryNotice refusal={covering} />}
+
         <button
           type="button"
           className="contest-enter__btn"
-          disabled={entering || full}
+          disabled={entering || full || covering !== null}
           onClick={onEnter}
         >
-          {full
+          {/* THE ONE PIECE OF LOCAL COPY IN THIS FEATURE, and it is a CONTROL
+              LABEL rather than the message: the server ships a sentence, not a
+              button caption, and leaving the entry price sitting on a dead
+              button would read as a bug. It renders the REASON CODE
+              ('covering_this_game') in the same register as its neighbour
+              'Contest full', and it is not a paraphrase of the notice above —
+              which stays the only place the explanation is given. */}
+          {covering
+            ? 'Covering this game'
+            : full
             ? 'Contest full'
             : entering
             ? 'Entering…'
@@ -196,7 +215,7 @@ function EnterHero({
             ? `Enter · ${contestCost(contest.entryCost)}`
             : 'Enter · Free'}
         </button>
-        {shortOnPoints && !full && (
+        {shortOnPoints && !full && !covering && (
           <p className="contest-enter__hint muted">
             You&apos;re holding {points(balance ?? 0)} pts — this contest costs{' '}
             {points(contest.entryCost)}.
@@ -249,6 +268,9 @@ function PickRow({
   saving,
   saved,
   error,
+  // Sheet-wide, not per-row: the backend gates the WRITE, so a refused sheet is
+  // read-only end to end rather than pickable around one game.
+  covered,
   onPick,
 }: {
   game: PickSheetGame;
@@ -256,9 +278,12 @@ function PickRow({
   saving: boolean;
   saved: boolean;
   error: string | null;
+  covered: boolean;
   onPick: (side: PickValue) => void;
 }) {
-  const locked = gameStarted(game);
+  // A covered row greys exactly like a started one, but keeps its own status
+  // chip empty rather than claiming 'Started' — the game hasn't.
+  const locked = gameStarted(game) || covered;
   // An over/under row with no snapshotted line can't be picked (nothing to pick
   // against); treat it like a started row so a tap can't 400.
   const noLine = ou && game.line == null;
@@ -266,9 +291,9 @@ function PickRow({
     <li className={`picksheet-row${locked ? ' picksheet-row--locked' : ''}`}>
       <div className="picksheet-row__head">
         <span className="picksheet-row__when">{formatWhen(game.scheduledAt)}</span>
-        {locked ? (
+        {gameStarted(game) ? (
           <span className="picksheet-row__status">Started</span>
-        ) : saving ? (
+        ) : covered ? null : saving ? (
           <span className="picksheet-row__status">Saving…</span>
         ) : saved ? (
           <span className="picksheet-row__status picksheet-row__status--saved">
@@ -467,9 +492,17 @@ function PickSheetView({
 
   const picked = sheet.games.filter((g) => g.pick).length;
   const totalGames = sheet.games.length;
+  const covering = entryRefusal(sheet.entry);
 
   return (
     <div className="contest-detail__body">
+      {/* ABOVE THE PROGRESS BAR, not below the list: this changes what the whole
+          sheet is (a record rather than a form), so it has to be read before the
+          first row rather than found after the last one. The picks the fan
+          already made stay visible and stay scored — being assigned to cover a
+          game doesn't retract a sheet they filled in beforehand. */}
+      {covering && <EntryAdvisoryNotice refusal={covering} />}
+
       <div className="picksheet-progress">
         <span className="picksheet-progress__count">
           {picked} of {totalGames} picked
@@ -486,9 +519,13 @@ function PickSheetView({
             style={{ width: `${totalGames ? (picked / totalGames) * 100 : 0}%` }}
           />
         </div>
-        <span className="picksheet-progress__hint muted">
-          Tap a side to save it — no submit button.
-        </span>
+        {/* The tap-to-save promise is dropped when nothing is tappable — an
+            instruction for a control that isn't there is just noise. */}
+        {!covering && (
+          <span className="picksheet-progress__hint muted">
+            Tap a side to save it — no submit button.
+          </span>
+        )}
       </div>
 
       <ul className="picksheet-list">
@@ -500,6 +537,7 @@ function PickSheetView({
             saving={savingId === g.eventId}
             saved={savedId === g.eventId}
             error={rowError?.eventId === g.eventId ? rowError.message : null}
+            covered={covering !== null}
             onPick={(side) => void onPick(g.eventId, side)}
           />
         ))}

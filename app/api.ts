@@ -777,6 +777,82 @@ export class AgeAttestationRequiredError extends Error {
   }
 }
 
+// ---- The conflict-of-interest gate: covering a game bars playing it ----
+//
+// A correspondent assigned to an event cannot hold a position on it. The backend
+// enforces this on all EIGHT write surfaces (403, code COVERING_THIS_GAME) and
+// ADVISES on the reads that lead to them, so the refusal arrives before the tap
+// rather than after it. This is the same two-layer shape the 18+ gate uses, with
+// one difference that decides everything about how it renders:
+//
+//   AN ATTESTATION IS SOMETHING THE FAN CAN RESOLVE. THIS IS NOT. There is no
+//   affirm-and-retry here and there must never be one -- the resolution is
+//   "don't cover the game", which is their job, not a dialog. So this advisory
+//   is never a modal and never a prompt: the card renders in place, greyed, with
+//   the reason on it, and the fan moves on.
+//
+// TONE, AND IT IS LOAD-BEARING. This goes to someone being PAID to attend that
+// game. The server's sentence reads as a fact about their assignment, not an
+// accusation -- and the advisory is rendered in `.notice` (gold: nothing went
+// wrong) rather than `.error` (red). The 403 backstop below is the one case that
+// DOES take `.error`, because there something did fail: they were assigned to
+// the game between the read and the tap, and the action they took did not land.
+//
+// THE MESSAGE IS SERVER-OWNED. Render `message` verbatim; never write a local
+// sentence for this and never pattern-match on one. `reason` is what a surface
+// branches on, so the copy can change without a deploy.
+export type EntryRefusalReason = 'covering_this_game';
+
+// A discriminated union on `allowed`, so `message` is UNREACHABLE on the normal
+// case -- a surface physically cannot render an empty advisory box on a fan who
+// is free to play. Every entry-surface read carries one.
+export type EntryAdvisory =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason: EntryRefusalReason;
+      message: string;
+      // The events the refusal is about. Load-bearing ONLY on the parlay board,
+      // where a slate references many games and the refusal is per-leg; every
+      // other surface is single-event and reads the message alone.
+      eventIds: string[];
+    };
+
+// The refusing branch, named so components can type a prop with it rather than
+// re-deriving the Extract at every surface.
+export type EntryRefusal = Extract<EntryAdvisory, { allowed: false }>;
+
+// The narrowing helper, so no surface writes `entry.allowed === false` inline and
+// none of them re-derive the union. Returns the refusing branch or null.
+//
+// TOLERATES `undefined` ON PURPOSE: these seven fields are new, and a client
+// running against an API that predates them would otherwise crash on a missing
+// key instead of simply not advising. No advisory means "allowed" here — the
+// 403 backstop is still behind it, which is the whole point of having two
+// layers rather than trusting either one alone.
+export function entryRefusal(entry: EntryAdvisory | undefined): EntryRefusal | null {
+  return entry && !entry.allowed ? entry : null;
+}
+
+// The refusal code on the conflict gate's 403. Routed on like the age gate's --
+// a role failure, an un-attested fan and a covering correspondent are all 403s
+// and must never be confused for one another.
+const COVERING_ERROR_CODE = 'COVERING_THIS_GAME';
+
+// Thrown by toAuthError when a write is refused because the caller covers the
+// game. THE BACKSTOP, NOT THE MAIN PATH: the seven advisory reads mean a fan
+// should almost never reach it. It exists for the race -- assigned between the
+// read and the tap -- and so that no call site regex-matches a message to find
+// out what happened. Carries the server's copy as the message.
+export class CoveringThisGameError extends Error {
+  eventIds: string[];
+  constructor(message: string, eventIds: string[]) {
+    super(message);
+    this.name = 'CoveringThisGameError';
+    this.eventIds = eventIds;
+  }
+}
+
 // ---- Central 401 handling ----
 //
 // JWTs expire (1h). A token that's restored-but-expired, or simply invalidated
@@ -805,9 +881,22 @@ async function toAuthError(res: Response): Promise<Error> {
   if (res.status === 403) {
     const body = await res.json().catch(() => null);
     const detail = messageFrom(body, res.statusText);
-    if ((body as { code?: string } | null)?.code === AGE_GATE_ERROR_CODE) {
+    const code = (body as { code?: string } | null)?.code;
+    if (code === AGE_GATE_ERROR_CODE) {
       const terms = (body as { attestation?: AgeAttestationTerms }).attestation;
       return new AgeAttestationRequiredError(terms ?? AGE_GATE_FALLBACK_TERMS, detail);
+    }
+    // The conflict gate. NOTE WHAT IS NOT PREFIXED: this one keeps the server's
+    // sentence bare, with no "403 " in front of it, because every call site
+    // renders err.message straight into its inline slot and a status code on a
+    // sentence about someone's job assignment reads as a system fault. The type
+    // carries the fact that it was a 403; the string doesn't have to.
+    if (code === COVERING_ERROR_CODE) {
+      const ids = (body as { eventIds?: unknown }).eventIds;
+      return new CoveringThisGameError(
+        detail,
+        Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [],
+      );
     }
     // Any other 403 keeps the exact "<status> <message>" string it had before.
     return new Error(`403 ${detail}`);
@@ -3238,6 +3327,9 @@ export interface ContestDetail extends Contest {
   playable: boolean;
   myEntry: ContestEntry | null;
   entrants: number;
+  // Refuses when the caller covers a game on this contest's slate — see
+  // EntryAdvisory. Gates ENTERING; the gameplay reads carry their own.
+  entry: EntryAdvisory;
 }
 
 // One leaderboard row. NOTE the snake_case: this read is raw SQL
@@ -3309,6 +3401,10 @@ export interface PickSheet {
   pointsPerCorrect: number;
   games: PickSheetGame[];
   summary: { picksMade: number; correct: number };
+  // Refuses when the caller covers a game on this sheet — see EntryAdvisory.
+  // Sheet-wide: the backend gates the WRITE, not the row, so a refused sheet is
+  // read-only end to end rather than picking-around-one-game.
+  entry: EntryAdvisory;
 }
 
 // PUT /contests/:id/picks body. A PARTIAL sheet is fine — the backend upserts
@@ -3623,6 +3719,9 @@ export interface SquaresGrid {
   // boundary. Each board's live table (winners / dedications) is on the board.
   prizeTable: { period: SquaresPeriod; points: number }[];
   boards: SquaresBoard[];
+  // A squares board IS one game, so a covering correspondent is refused the
+  // whole grid — see EntryAdvisory.
+  entry: EntryAdvisory;
 }
 
 // POST /contests/:id/squares/claim response. The request carries NO board — the
@@ -3740,6 +3839,10 @@ export interface SurvivorPicks {
   alive: number;
   eliminated: number;
   rounds: SurvivorRound[];
+  // Refuses when the caller covers a game they could still pick — see
+  // EntryAdvisory. A fact about the BOARD, not about one round: rendered once
+  // under the status header, never repeated down the timeline.
+  entry: EntryAdvisory;
 }
 
 // PUT /contests/:id/picks body on a survivor contest — pick teamId from eventId
@@ -3845,6 +3948,11 @@ export interface ParlaySlateGame {
   totalLine: string | null;
   spreadLine: string | null;
   spreadFavorite: { id: string; name: string | null } | null;
+  // True when the CALLER is assigned to cover this game. Per-game rather than
+  // per-board because a slate is a menu: this leg is closed to them, the rest
+  // of the board is not. The builder renders a covered row inert exactly the
+  // way it renders a started one. See ParlayBoardRead.entry.
+  covering: boolean;
 }
 
 // One leg of one of the caller's tickets. `matchup` is the pre-joined
@@ -3924,6 +4032,19 @@ export interface ParlayBoardRead {
   ticketCap: number;
   slate: ParlaySlateGame[];
   tickets: ParlayTicket[];
+  // ----------------------------------------------------------------------
+  // PARLAY IS THE ONE BOARD WHERE THE ADVISORY IS USUALLY `allowed: true`.
+  //
+  // A board referencing twenty games commits the fan to nothing — they choose
+  // which games to leg. So covering one of them bars that LEG, not the board,
+  // and the per-game `covering` flag on ParlaySlateGame is what the builder
+  // greys. This board-level advisory refuses ONLY when what's left after the
+  // covered games are removed can no longer reach rules.minLegs — i.e. when
+  // there is no legal ticket to build at all.
+  //
+  // Grey the legs, not the board, unless THIS says otherwise.
+  // ----------------------------------------------------------------------
+  entry: EntryAdvisory;
 }
 
 // POST /contests/:id/tickets body. Legs must name DISTINCT slate games (one leg per
@@ -4411,6 +4532,9 @@ export interface OracleToday {
   day: OracleDay | null;
   streaks: OracleStreaks;
   badges: OracleBadge[];
+  // Refuses when the fan covers today's game — see EntryAdvisory. The streak
+  // block and the Oracle's call still render; only the two buttons go.
+  entry: EntryAdvisory;
 }
 
 // POST /arena/oracle/pick response.
@@ -4756,6 +4880,9 @@ export interface TrailToday {
   streaks: ArenaStreaks;
   // Duplicates progress.scenicRoute when a season is live; null when none is.
   scenicRoute: TrailScenicRoute | null;
+  // Refuses when the fan covers the town's game — see EntryAdvisory. The town,
+  // the map and the streak rail are untouched; only the two buttons go.
+  entry: EntryAdvisory;
 }
 
 // POST /arena/trail/pick response. The chest fires inside the same transaction
@@ -5425,6 +5552,9 @@ export interface CallCurrent {
   // Always null — see the section header. Typed as the literal so a component
   // that tries to render a streak block here fails to compile.
   streaks: null;
+  // The conflict-of-interest advisory. A correspondent covering THIS week's game
+  // reads the card and grades it; they do not file one against it.
+  entry: EntryAdvisory;
 }
 
 // POST /arena/call/entry body. ALL FIVE answers or a 400 naming the slot.

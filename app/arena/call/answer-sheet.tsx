@@ -87,7 +87,9 @@ import {
   CallQuestion,
   CallResult,
   CallSettlement,
+  EntryRefusal,
 } from '../../api';
+import { EntryAdvisoryNotice } from '../../entry-advisory';
 
 // The tiebreaker, parsed. Held as a STRING in state and converted only here,
 // because 0 is a legal answer and `Number('')` is 0 — a numeric state would make
@@ -1013,6 +1015,10 @@ export function CallSheet({
   submitting,
   submitError,
   saved,
+  // The conflict-of-interest refusal, or null on the normal case. This is the
+  // correspondent covering THIS card's game — the one fan on the site who
+  // cannot file against it, because they are the one grading it.
+  covering,
 }: {
   // The CURRENT ET week, which is not necessarily the card's week — see below.
   weekStart: string;
@@ -1034,6 +1040,7 @@ export function CallSheet({
   // returning to a card they already filed — the moment has passed, and
   // re-announcing it would be a lie about when.
   saved: CallEntryResult | null;
+  covering: EntryRefusal | null;
 }) {
   // ---- THE DRAFT. Hydrated from the filed card when there is one, so a
   // returning fan edits their answers rather than re-entering them.
@@ -1092,7 +1099,14 @@ export function CallSheet({
   }, [myEntry, answers, tiebreakerText, answeredCount, tiebreakerTouched]);
 
   const phase = call ? callPhase(call) : null;
-  const editable = phase === 'open';
+  // COVERED ONLY MATTERS ON AN OPEN CARD. Past the lock there is nothing to
+  // refuse — the card is already read-only for everyone — and an advisory about
+  // entering a card that closed hours ago is stale news on a screen whose job by
+  // then is the answer key.
+  const covered = phase === 'open' ? covering : null;
+  // Not editable when covered, which also stands the beforeunload guard down:
+  // there is no draft to protect on a card that renders no inputs.
+  const editable = phase === 'open' && !covered;
 
   // WAS THIS CARD UNGRADEABLE RATHER THAN BADLY PLAYED, AND WHICH KIND? A
   // property of the CARD and not of any one fan — the resolutions are shared by
@@ -1217,8 +1231,53 @@ export function CallSheet({
         <PotBlock pot={call.pot} open={phase === 'open'} />
       )}
 
+      {/* ============ OPEN, BUT COVERED BY THIS READER ============
+          The correspondent working this game gets the card they always got —
+          the byline, the pot, the five prompts, the clock — through the SAME
+          read-only rendering a locked card uses. Only the inputs and the slip
+          are gone.
+
+          NO HEADLINE OF OUR OWN ABOVE IT. The server's sentence is the whole
+          explanation and it is already the right one; a local line over the top
+          would be a second voice saying the same thing slightly differently, and
+          the first time the backend retuned its wording the two would disagree.
+
+          `entry` IS STILL PASSED. A correspondent assigned AFTER they filed has
+          a card in there, and it is theirs to see. */}
+      {phase === 'open' && covered && (
+        <div className="call-frozen">
+          <EntryAdvisoryNotice refusal={covered} />
+          <FiledList
+            questions={questions}
+            entry={myEntry}
+            results={null}
+            pushesExplainedAbove={false}
+          />
+          <FiledTiebreaker
+            prompt={tiebreakerPrompt}
+            answer={myEntry?.tiebreakerAnswer ?? null}
+          />
+          {/* The clock stays. The card still locks at kickoff and they of all
+              people are going to be there for it. */}
+          <footer className="call-foot">
+            <p className="call-foot__clock">
+              <span className="call-foot__tick" aria-hidden="true">
+                ⏳
+              </span>
+              {call.locksAt
+                ? arenaLockCountdown(call.locksAt, now)
+                : 'Locks at kickoff'}
+              <span className="call-foot__at">
+                {' · '}
+                {kickoffLabel(call.locksAt)}
+              </span>
+            </p>
+          </footer>
+        </div>
+      )}
+
       {/* ================= OPEN: THE SHEET ================= */}
-      {phase === 'open' && (
+      {phase === 'open' && !covered && (
         <>
           <div className="call-sheet__head">
             <h3 className="call-sheet__title">

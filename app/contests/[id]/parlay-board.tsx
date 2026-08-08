@@ -44,7 +44,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
+import { EntryAdvisoryNotice } from '../../entry-advisory';
 import {
+  entryRefusal,
   getParlayBoard,
   buildParlayTicket,
   cancelParlayTicket,
@@ -214,7 +216,12 @@ function SlateRow({
 }) {
   const started = gameStarted(game);
   const hasScore = game.homeScore !== null && game.awayScore !== null;
-  const inert = disabled || started;
+  // THE COVERED LEG. `covering` is per-GAME on the slate read, because a parlay
+  // board is a menu rather than a commitment: the correspondent working this
+  // fixture can still build a ticket out of the other nineteen. It folds into
+  // the SAME `inert` a started game produces — one term, four chips, no second
+  // notion of "closed" to keep in sync.
+  const inert = disabled || started || game.covering;
 
   const hasTotal = game.totalLine !== null;
   // A spread needs both halves; the backend folds them into one object precisely so
@@ -225,7 +232,11 @@ function SlateRow({
     selection != null && sameSelection(selection, market, pick);
 
   return (
-    <li className={`parlay-game${started ? ' parlay-game--locked' : ''}`}>
+    <li
+      className={`parlay-game${
+        started || game.covering ? ' parlay-game--locked' : ''
+      }`}
+    >
       <div className="parlay-game__head">
         <span className="parlay-game__matchup">
           {game.awayTeam ?? 'TBD'} @ {game.homeTeam ?? 'TBD'}
@@ -243,7 +254,28 @@ function SlateRow({
             </span>
           )}
         </span>
-        {started && <span className="parlay-game__status">Started</span>}
+        {/* ---------------------------------------------------------------
+            THE ONE ROW-LEVEL LABEL, AND IT IS STRUCTURALLY FORCED.
+
+            Everywhere else the explanation is the server's sentence. There
+            ISN'T one here: the board-level advisory comes back `allowed: true`
+            in the ordinary covered-leg case (nineteen other games are still
+            buildable), so a greyed row among nineteen live ones would carry no
+            explanation at all — the worst outcome available.
+
+            So the row states its own condition, in the same register as its
+            neighbour 'Started', off the per-game `covering` flag. It is a state
+            label, not a message: when the BOARD is refused, the server's
+            sentence renders above the slate and this stays what it is.
+
+            'Started' wins the slot when both are true — the game being under
+            way is the fact that outranks everything about who's covering it.
+            --------------------------------------------------------------- */}
+        {started ? (
+          <span className="parlay-game__status">Started</span>
+        ) : game.covering ? (
+          <span className="parlay-game__status">Covering</span>
+        ) : null}
       </div>
 
       <div className="parlay-game__markets">
@@ -794,7 +826,19 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
   // Any started game closes the whole board (the v1 rule), so the builder goes
   // away the moment that's true even if the lazy lock hasn't landed yet.
   const slateStarted = board.slate.some(gameStarted);
-  const building = open && !slateStarted;
+  // ---------------------------------------------------------------------
+  // THE BOARD-LEVEL REFUSAL, WHICH IS THE RARE ONE.
+  //
+  // Usually `allowed: true` even for a correspondent covering a game on the
+  // slate — the per-game `covering` flags close those legs and the builder
+  // carries on. This only refuses when the backend has determined that what's
+  // LEFT can no longer reach rules.minLegs, i.e. there is no legal ticket to
+  // build. THAT ARITHMETIC IS NOT REDONE HERE: minLegs, which games count and
+  // how a leg is priced are the server's rules, and a second implementation on
+  // this side would be one refactor away from disagreeing with the 403.
+  // ---------------------------------------------------------------------
+  const covering = entryRefusal(board.entry);
+  const building = open && !slateStarted && !covering;
 
   const potential = multiplier !== null && stakeValid ? payoutFor(stake, multiplier) : null;
   const underMin = legCount < rules.minLegs;
@@ -838,17 +882,26 @@ export function ParlayBoard({ contest }: { contest: ContestDetail }) {
 
       {notice && <div className="parlay-notice">{notice}</div>}
 
-      {/* ---- Status notes for the non-building states ---- */}
-      {!building && (
-        <p className="parlay-note muted">
-          {board.status === 'canceled'
-            ? 'This board was canceled.'
-            : board.status === 'draft'
-            ? "This board isn't open yet."
-            : board.tickets.length > 0
-            ? 'The slate has started — no new tickets. Your tickets ride below.'
-            : 'The slate has started, so ticket building is closed on this board.'}
-        </p>
+      {/* ---- Status notes for the non-building states ----
+              The conflict refusal takes precedence over the slate-started
+              wording: when both are true the fan is owed the reason they can't
+              build one, not a second guess at which of two closures came
+              first. Any tickets they already hold still render below either
+              way — being assigned to cover a game doesn't tear up a stake. */}
+      {covering ? (
+        <EntryAdvisoryNotice refusal={covering} />
+      ) : (
+        !building && (
+          <p className="parlay-note muted">
+            {board.status === 'canceled'
+              ? 'This board was canceled.'
+              : board.status === 'draft'
+              ? "This board isn't open yet."
+              : board.tickets.length > 0
+              ? 'The slate has started — no new tickets. Your tickets ride below.'
+              : 'The slate has started, so ticket building is closed on this board.'}
+          </p>
+        )
       )}
 
       {/* ---- THE BUILDER ---- */}

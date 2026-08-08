@@ -38,12 +38,14 @@ import {
   trailSideTeam,
   trailStreakCopy,
   etTime,
+  EntryRefusal,
   TrailDay,
   TrailPickResult,
   TrailProgress,
   TrailSeason,
   TrailSide,
 } from '../../api';
+import { EntryAdvisoryNotice } from '../../entry-advisory';
 
 // The live split, home vs away. Renders at zero picks too — an empty bar that
 // says nobody has called it yet is the honest first state and the most inviting
@@ -124,6 +126,9 @@ export function TownCard({
   onPick,
   picking,
   pickError,
+  // The conflict-of-interest refusal, or null on the normal case. A
+  // correspondent covering the town's game rides along; they don't call it.
+  covering,
 }: {
   season: TrailSeason | null;
   day: TrailDay | null;
@@ -136,6 +141,7 @@ export function TownCard({
   onPick: (side: TrailSide) => void;
   picking: TrailSide | null;
   pickError: string | null;
+  covering: EntryRefusal | null;
 }) {
   // The countdown ticker. One second, because the last minute before first
   // pitch is the one that matters. Torn down the moment the day locks.
@@ -187,12 +193,18 @@ export function TownCard({
   // "Locked" as this card means it: first pitch has passed but nothing has
   // graded. A graded day is past locked and gets the reveal instead.
   const locked = day.locked && !graded;
-  const canPick = day.status === 'open' && !day.restStop && !day.locked && !mine;
+  // COVERING GREYS THE CARD BUT IS NOT `locked` — that flag drives the foot's
+  // first-pitch sentence, and a covered day is usually still counting down.
+  // Held as the refusal itself so the render needs no non-null assertion, and
+  // dropped once graded, where the result has replaced the question.
+  const covered = graded ? null : covering;
+  const canPick =
+    day.status === 'open' && !day.restStop && !day.locked && !mine && !covered;
 
   return (
     <section
       className={`trail-card${graded ? ' trail-card--graded' : ''}${
-        locked ? ' trail-card--locked' : ''
+        locked || covered !== null ? ' trail-card--locked' : ''
       }${day.restStop ? ' trail-card--rest' : ''}`}
     >
       {/* ---- THE TOWN. The headline of the whole surface. ---- */}
@@ -320,6 +332,11 @@ export function TownCard({
               </button>
             </div>
           )}
+
+          {/* ---- COVERING: where the two buttons would have been. The town,
+              the correspondent's line and the split all stay — someone working
+              tonight's game has more reason to read those than anyone. ---- */}
+          {covered && <EntryAdvisoryNotice refusal={covered} />}
 
           {/* ---- CALLED (still open, or locked): the frozen state. ---- */}
           {mine && !graded && (
