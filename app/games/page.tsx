@@ -12,6 +12,14 @@
 // most-recent-first), so pinning survives paging instead of being a client-side
 // sort of whatever page 1 happened to contain.
 //
+// Upcoming also sends upcomingOnly=true, which drops scheduled games whose
+// kickoff has passed. That bucket exists because a covered game nobody filed a
+// result for stays 'scheduled' forever, and the scheduled-ASC ordering above
+// sorts the stalest one FIRST — three-week-old games at the top of "what's on".
+// The feed carousel and two other surfaces fix this in the browser; /games pages
+// server-side and can't, since stale rows consume slots before we see them. The
+// backend scopes the constraint to scheduled rows only, so the live pin holds.
+//
 // Two deliberate calls about the honest state of the data — there are very few
 // games in the graph yet:
 //   * The date window defaults to ALL, not "this week". A default window would
@@ -275,6 +283,14 @@ function Games() {
   // Recent finals, loaded only when the unfiltered Upcoming tab is empty (see
   // the file header). null = not in fallback mode.
   const [fallback, setFallback] = useState<EventListItem[] | null>(null);
+  // The API answered an Upcoming request WITHOUT confirming upcomingOnly, which
+  // means it's a build that predates the parameter: the unknown query key was
+  // stripped and we were handed the wider list with a 200. The rows are real,
+  // but stale never-closed games are back in them (sorted first, at that), so
+  // the tab is lying about what it's showing unless we say so. Detection only --
+  // the client can't re-filter, because paging happened server-side and the
+  // stale rows already consumed slots in this page.
+  const [unfilteredUpcoming, setUnfilteredUpcoming] = useState(false);
 
   useEffect(() => {
     if (!token) router.replace('/');
@@ -311,15 +327,27 @@ function Games() {
       setError(null);
       try {
         const range = windowRange(win, tab);
+        // Upcoming only: Results wants finals, which have no stale bucket to
+        // trim. windowRange already floors Upcoming at the START of today so
+        // live games survive the date filter; upcomingOnly does the finer cut
+        // the date filter can't, scoped to scheduled rows alone.
+        const wantsUpcomingOnly = tab === 'upcoming';
         const page = await getGames(token, {
           status: tab === 'upcoming' ? 'scheduled,live' : 'final',
           sport: sport || undefined,
           state: stateCode || undefined,
           ...range,
+          upcomingOnly: wantsUpcomingOnly || undefined,
           limit: PAGE_SIZE,
           offset,
         });
         if (!current()) return;
+        // Only meaningful when we ASKED: on Results the key is legitimately
+        // absent and means nothing. Re-evaluated on every page, including Show
+        // more, so a mid-session rollout can only make the banner more accurate.
+        setUnfilteredUpcoming(
+          wantsUpcomingOnly && page.applied?.upcomingOnly !== true,
+        );
         setItems((prev) => (offset === 0 ? page.items : [...prev, ...page.items]));
         setTotal(page.total);
 
@@ -503,6 +531,19 @@ function Games() {
       </div>
 
       {error && <div className="error">{error}</div>}
+
+      {/* Not an error -- the request succeeded and these rows are real -- but the
+          list is wider than the tab asked for, which is exactly what .notice is
+          for. Says what's actually wrong with the list rather than blaming the
+          data ("no games scheduled" would be a lie in the other direction). */}
+      {unfilteredUpcoming && !error && (
+        <div className="notice">
+          Showing every scheduled game, including ones whose start time has
+          already passed — this API build doesn&apos;t support the upcoming-only
+          filter, so games that were never closed out may appear here, sorted
+          first. Refresh once the API finishes deploying.
+        </div>
+      )}
 
       {showSkeleton && !error && <div className="card muted">Loading games…</div>}
 

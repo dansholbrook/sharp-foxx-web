@@ -1233,8 +1233,28 @@ export interface GameFilters {
   dateFrom?: string;
   dateTo?: string;
   teamId?: string;
+  // Drops scheduled games whose kickoff has already passed -- a covered game
+  // nobody ever filed a result for stays 'scheduled' forever, and since the
+  // backend sorts scheduled ASC the stalest one sorts FIRST. It constrains the
+  // scheduled bucket ONLY, so live games (whose kickoff is in the past by
+  // definition) still pin at the top. That scoping is why dateFrom can't do this
+  // job: dateFrom applies to the whole query and would delete the Live row.
+  // Omitted by default -- the server's default is off too.
+  upcomingOnly?: boolean;
   limit?: number;
   offset?: number;
+}
+
+// GET /events envelope as /games reads it. `applied` echoes the skew-sensitive
+// filters the server actually understood, and is OPTIONAL FOR A REASON: an API
+// build older than upcomingOnly strips the unknown query key silently and
+// answers 200 with the WIDER list, so a caller that just trusts the request was
+// honored renders stale games as upcoming with nothing saying otherwise. The
+// key is absent exactly when the server didn't understand the parameter, which
+// is the only way the client can tell the two apart. Check it (see /games) --
+// unchecked, the marker buys nothing.
+export interface GamesPage extends Page<EventListItem> {
+  applied?: { upcomingOnly?: boolean };
 }
 
 // The paged schedule read behind /games -- same endpoint as getEvents, kept
@@ -1247,10 +1267,15 @@ export const getGames = (token: string, params: GameFilters = {}) => {
   if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
   if (params.dateTo) qs.set('dateTo', params.dateTo);
   if (params.teamId) qs.set('teamId', params.teamId);
+  // Sent only when true. The backend parses this as an explicit 'true'/'false'
+  // enum, so an always-sent 'false' would be read correctly -- but omitting it
+  // keeps the query string identical to today's for every caller that doesn't
+  // want the filter, which is what makes this additive.
+  if (params.upcomingOnly) qs.set('upcomingOnly', 'true');
   if (params.limit !== undefined) qs.set('limit', String(params.limit));
   if (params.offset) qs.set('offset', String(params.offset));
   const s = qs.toString();
-  return authGet<Page<EventListItem>>(`/events${s ? `?${s}` : ''}`, token);
+  return authGet<GamesPage>(`/events${s ? `?${s}` : ''}`, token);
 };
 
 // Any content already attached to a game. With no status filter (the default) a
