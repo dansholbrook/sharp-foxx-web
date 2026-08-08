@@ -801,7 +801,20 @@ export class AgeAttestationRequiredError extends Error {
 // THE MESSAGE IS SERVER-OWNED. Render `message` verbatim; never write a local
 // sentence for this and never pattern-match on one. `reason` is what a surface
 // branches on, so the copy can change without a deploy.
-export type EntryRefusalReason = 'covering_this_game';
+//
+// BOTH OF THE BACKEND'S TWO SHAPES ARE LISTED, and the second one is not
+// hypothetical: `covering_a_slate_game` is what every multi-game surface sends
+// -- the contest detail read, the parlay board, and now the pick sheet, whose
+// slates run to 50 games. This union said only 'covering_this_game' while the
+// wire had been sending the other value for as long as those surfaces have
+// existed. Nothing broke, because nothing branches on `reason` yet and the
+// `message` that rides alongside it is already the slate wording. It was still
+// a type describing a payload it had never seen.
+//
+// The distinction, when a surface does come to branch: "this game" is a
+// single-event refusal, "a game on this slate" means the refusal is about one
+// of many and the fan needs `eventIds` to know which.
+export type EntryRefusalReason = 'covering_this_game' | 'covering_a_slate_game';
 
 // A discriminated union on `allowed`, so `message` is UNREACHABLE on the normal
 // case -- a surface physically cannot render an empty advisory box on a fan who
@@ -2752,9 +2765,26 @@ export interface PredictionBase {
 }
 
 // GET /events/:id/predictions — one game's board, newest question first.
-// eventId is the one field this board adds.
+// eventId and entry are the two fields this board adds.
 export interface Prediction extends PredictionBase {
   eventId: string;
+  // The conflict-of-interest advisory — see EntryAdvisory.
+  //
+  // PER ROW, NOT PER RESPONSE, and that is the server's deliberate choice
+  // (PredictionsService.listForEvent): this read is an ARRAY, every question on
+  // it belongs to the same game, so one verdict is computed and stamped onto
+  // all of them. Read it off any row; they cannot disagree.
+  //
+  // Which is also why wrapping this read in an envelope to carry a shared
+  // `entry` would be a mistake rather than a tidy-up. The field riding on the
+  // ROW is what lets usePickBoard keep `fetchRows: () => Promise<T[]>` — the
+  // hook is shared with the National Board, and an envelope here would force
+  // that board to wrap too or fork the hook.
+  //
+  // Game scope only. NationalPrediction has no `entry` and must not grow one:
+  // a national question is tied to no event, so there is nothing to have a role
+  // in and the gate cannot apply.
+  entry: EntryAdvisory;
 }
 
 // GET /predictions/national — the fan-facing National Board. Open+locked first,

@@ -12,8 +12,8 @@
 //   • usePickBoard — the pick STATE MACHINE (optimistic taps, per-card errors,
 //     the balance push, the re-read). Takes a `load` and knows nothing about
 //     where rows come from.
-//   • PredictionsSection — the game page's board: event read + live poll, built
-//     on the two above.
+//   • PredictionsSection — the game page's board: event read + live poll + the
+//     covering advisory, built on the two above.
 // The National Board on the feed (feed-picks.tsx) reuses the first two with its
 // own `load`. Nothing about picking is duplicated there.
 
@@ -21,7 +21,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePoints } from './points-context';
 import { useAgeGate } from './age-gate';
+import { EntryAdvisoryNotice } from './entry-advisory';
 import {
+  entryRefusal,
   getEventPredictions,
   makePick,
   points,
@@ -187,6 +189,7 @@ export function PickCard({
   optimisticKey,
   error,
   onPick,
+  covering,
   collapsed,
   onToggleCollapse,
 }: {
@@ -199,6 +202,20 @@ export function PickCard({
   optimisticKey: string | null;
   error: string | null;
   onPick: (pickKey: string) => void;
+  // Set by a board whose caller is covering this game. Every option goes inert
+  // and the board's notice carries the reason — the card itself says nothing,
+  // because the refusal is a fact about the GAME and repeating it on all six
+  // questions would read as six separate problems.
+  //
+  // THE CARD STILL RENDERS IN FULL. A correspondent should see their game's
+  // questions and the crowd's split; hiding them would answer a question they
+  // still have and make the advisory look like an outage. Same rule
+  // EntryAdvisoryNotice states for every other surface.
+  //
+  // Never set by the National Board: a national question is tied to no event,
+  // so there is nothing to be covering. Undefined there, which is why this is
+  // optional rather than a required boolean the feed would have to pass false to.
+  covering?: boolean;
   // ---- Rail accordion variant (National Board only) ----
   // Passing `onToggleCollapse` turns the card collapsible: the head becomes a
   // toggle button with a chevron, and while `collapsed` the stake/options/notes
@@ -214,8 +231,10 @@ export function PickCard({
   const open = isOpen(prediction);
   // Once picked, the buttons stop being buttons: a pick is one-shot per fan
   // (the backend 409s a second one), so leaving them tappable would only ever
-  // produce an error.
-  const canPick = open && myKey === null;
+  // produce an error. `covering` joins the same test for the same reason: the
+  // backend 403s a covered pick, so a tappable option is a promise we know we
+  // cannot keep.
+  const canPick = open && myKey === null && !covering;
   const inFlight = optimisticKey !== null && !my;
 
   const collapsible = onToggleCollapse != null;
@@ -548,6 +567,21 @@ export function PredictionsSection({
   // would be noise on the page's most-live real estate.
   if (!rows || rows.length === 0) return null;
 
+  // The conflict-of-interest refusal, read off ANY row — the server computes one
+  // verdict for the game and stamps it on every question (see Prediction.entry),
+  // so row zero is as authoritative as row five.
+  //
+  // `rows[0]` and NOT `rows[0]?.`: the guard directly above already establishes
+  // there is a row, and an optional chain here would flatten "no board yet" into
+  // the same undefined as "the server sent no advisory" — which is precisely the
+  // conflation that let this gate's last silent failure run for a week. See the
+  // block above entryRefusal.
+  //
+  // Computed after the empty-board return for the same reason: a board with no
+  // questions carries no advisory (the server returns a bare []), and there is
+  // nothing to refuse someone on a game with nothing to pick.
+  const covering = entryRefusal(rows[0].entry, 'GET /events/:eventId/predictions');
+
   return (
     <section className="predict-section">
       <div className="predict-section__head">
@@ -562,6 +596,12 @@ export function PredictionsSection({
       <p className="predict-section__standfirst">
         Pick with points. No money, ever — just bragging rights.
       </p>
+      {/* ONCE, ABOVE THE LIST, not on each card: the refusal is a fact about
+          this GAME, and every question on the board carries the same verdict.
+          Repeated six times it would read as six problems. Sits under the
+          standfirst so it's the last thing read before the questions it
+          closes. */}
+      {covering && <EntryAdvisoryNotice refusal={covering} />}
       <div className="predict-list">
         {rows.map((p) => (
           <PickCard
@@ -570,6 +610,7 @@ export function PredictionsSection({
             optimisticKey={optimistic[p.id] ?? null}
             error={errors[p.id] ?? null}
             onPick={(key) => void onPick(p.id, key)}
+            covering={covering !== null}
           />
         ))}
       </div>
