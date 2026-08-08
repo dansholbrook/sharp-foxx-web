@@ -6,7 +6,7 @@
 // the game so it appears in their list, then hands control back via onCreated.
 // For managers/admins it just confirms success and clears the form.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   createTeam,
   createEvent,
@@ -104,6 +104,25 @@ export function AddGameForm({
   // inactive by the backend. Kept separate from newTeamError so it can't be
   // styled or read as a failure.
   const [newTeamNotice, setNewTeamNotice] = useState<string | null>(null);
+
+  // Lock the page behind the modal from scrolling while it's open. Mounting
+  // this component means it's open, so there's no condition to guard on.
+  //
+  // Adding a game is the FIRST thing a correspondent does, and on a phone the
+  // page underneath scrolled freely behind the sheet: tapping a team field,
+  // dismissing the keyboard, or flicking a picker that had reached its end all
+  // moved the schedule behind the modal instead. The same few lines already
+  // guard SlideOver (see queue-table.tsx) -- this modal simply never got them.
+  //
+  // Restores the PREVIOUS value rather than clearing it, so closing this modal
+  // can't unlock a page some other overlay still wants locked.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   // Changing sport resets both sides: a team from another sport must not leak
   // through. (TeamPicker clears its own query/results on the same change.)

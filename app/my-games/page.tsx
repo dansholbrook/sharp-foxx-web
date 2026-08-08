@@ -26,6 +26,9 @@ import {
 // already loads) and falls back to the status on the assignment.
 type EventStatus = EventListItem['status'];
 
+// How far along the rep's own write-up for a game is.
+type ArticleStatus = 'draft' | 'submitted' | 'published';
+
 // Format the timestamptz string the API returns, in ET; fall back to the raw
 // value if it somehow doesn't parse. Labelled — this is the kickoff a rep plans
 // their night around.
@@ -121,6 +124,210 @@ function actionLabel(status: EventStatus, scheduledAt: string): string | null {
   return 'Go live →';
 }
 
+// ---------------------------------------------------------------------------
+// The two status marks, as components rather than inline cell bodies.
+//
+// SAME REASON owesResult IS A NAMED FUNCTION (see above): the schedule now
+// renders in TWO shapes -- the desktop table and the phone cards below it --
+// and a game must not be able to read "Result due" in one and "Scheduled" in
+// the other. Two copies of a ternary is how that happens. One component, two
+// callers, no way to disagree.
+// ---------------------------------------------------------------------------
+
+// Live / Result due / plain status, for the Game column and the card's top row.
+function GameStatusMark({
+  status,
+  scheduledAt,
+}: {
+  status: EventStatus;
+  scheduledAt: string;
+}) {
+  if (status === 'live') return <LiveBadge />;
+  // THE OVERDUE FLAG. Everything about an overdue game's PLACEMENT is unchanged
+  // and that is on purpose -- see the note above the Upcoming/Past split. It
+  // stays in the Upcoming table, and the ascending sort keeps the most overdue
+  // game at the top, which is right here even though the same sort was the bug
+  // on every fan surface: this is the one audience that can act on it, so the
+  // staleness should lead their list.
+  //
+  // What was missing was only that it LOOKED like every other scheduled game.
+  // The action cell has said "Report result →" all along, but that is the last
+  // column on the row; a correspondent scanning this column saw a neutral
+  // "Scheduled" pill and nothing to catch on.
+  //
+  // "Result due", not "Overdue"/"Missing"/"Error": this is a job on the
+  // correspondent's list, not a fault. The --warn trio (already promoted for
+  // the NIL health table and the date echo) is used because gold reads as
+  // "this is your money" everywhere else on this surface, so a nudge painted
+  // gold does not register as one.
+  if (owesResult(status, scheduledAt)) {
+    return <span className="pill mygames-pill--owed">Result due</span>;
+  }
+  return <span className="pill">{eventStatusLabel(status)}</span>;
+}
+
+// How far along the write-up is. Only rendered where it can be anything but a
+// dash: the table always shows it, the cards only on a finished game.
+function ArticleMark({ status }: { status: ArticleStatus }) {
+  return (
+    <span className={`pill${status === 'submitted' ? ' pill--review' : ''}`}>
+      {status === 'published'
+        ? 'Published'
+        : status === 'submitted'
+          ? 'In review'
+          : 'Draft'}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ONE GAME, AS A CARD. The phone shape of a schedule row.
+//
+// The table carries NINE columns. That is a fine density for a desk and a poor
+// one for a car park -- below 767px it becomes a horizontal scroller, which is
+// usable and is still the wrong home base for the screen a correspondent opens
+// first. So the same rows render as cards instead, and the card carries four
+// things in the order the job needs them:
+//
+//   1. STATUS      -- the triage cue, so it leads. Live, Result due, or plain.
+//   2. MATCHUP     -- which game this is.
+//   3. WHEN + WHERE -- kickoff and venue on one line. The venue earns its place
+//                     over every column dropped below: it answers "which gym am
+//                     I driving to", which is the most car-park-relevant fact
+//                     on the row.
+//   4. THE ACTION  -- actionLabel, the same string the table's last column
+//                     shows. On a card it stops being a hint at the end of a
+//                     scroller and becomes the card's whole affordance.
+//
+// WHAT WAS DROPPED, AND WHY IT IS SAFE. Every one of these is still in the
+// desktop table, and every one is on the workspace a single tap away:
+//   * SPORT      -- the matchup implies it, and the workspace header states it.
+//   * MY STATUS  -- assigned/accepted/submitted is internal bookkeeping. Nothing
+//                   a correspondent decides in a gym; it's the first field in
+//                   the workspace's Status & notes.
+//   * SPONSOR    -- matters INSIDE the console ("Run X spot"), not when choosing
+//                   which game to open. It is also the flakiest cell on the row
+//                   (one best-effort fetch per game, no batch endpoint).
+//   * ARTICLE    -- only meaningful once a game is over, so it rides the PAST
+//                   cards only. On an upcoming card it is always a dash, and a
+//                   column of dashes is not information.
+// ---------------------------------------------------------------------------
+function GameCard({
+  game,
+  status,
+  article,
+  onOpen,
+}: {
+  game: MyAssignment;
+  status: EventStatus;
+  // Given only where it can say something -- past games. Undefined elsewhere.
+  article?: ArticleStatus;
+  onOpen: (g: MyAssignment) => void;
+}) {
+  const label = actionLabel(status, game.event.scheduledAt);
+  return (
+    <button
+      type="button"
+      className="mygames-card"
+      onClick={() => onOpen(game)}
+    >
+      <span className="mygames-card__top">
+        <GameStatusMark status={status} scheduledAt={game.event.scheduledAt} />
+        {article && <ArticleMark status={article} />}
+      </span>
+      <span className="mygames-card__matchup">
+        {matchup(game) ?? game.event.sport}
+      </span>
+      <span className="mygames-card__meta">
+        {formatWhen(game.event.scheduledAt)}
+        {game.event.venue ? ` · ${game.event.venue}` : ''}
+      </span>
+      {/* Null for a canceled game -- it did not happen, so there is nothing to
+          do on it and the card must not invent an action. Same rule as the
+          table's action cell; both read it from actionLabel. */}
+      {label && <span className="mygames-action mygames-card__action">{label}</span>}
+    </button>
+  );
+}
+
+// Both shapes of one schedule section. Exactly one is ever in the DOM's flow --
+// the CSS hides the table below 767px and the cards above it -- and both render
+// from the same rows through the same helpers.
+//
+// THE TABLE IS RENDERED BY THE SHARED QueueTable, UNTOUCHED. That component
+// backs /applicants, /review, /nil-review, /discover, /reps and /field-reps;
+// teaching it a card mode for one caller would put five unrelated queues behind
+// a flag they don't use. The cost of staying out of it is the pager below --
+// QueueTable keeps its `visible` count internal, so the card list needs its own
+// dozen lines. That is the cheaper side of the trade by a distance.
+function ScheduleShapes({
+  rows,
+  columns,
+  ariaLabel,
+  statusOf,
+  articleByEvent,
+  showArticle = false,
+  onOpen,
+}: {
+  rows: MyAssignment[];
+  columns: Column<MyAssignment>[];
+  ariaLabel: string;
+  statusOf: (g: MyAssignment) => EventStatus;
+  articleByEvent: Record<string, ArticleStatus>;
+  showArticle?: boolean;
+  onOpen: (g: MyAssignment) => void;
+}) {
+  const PAGE = 10;
+  const [visible, setVisible] = useState(PAGE);
+  const shown = rows.slice(0, visible);
+
+  return (
+    <>
+      <div className="mygames-table">
+        <QueueTable
+          columns={columns}
+          rows={rows}
+          rowKey={(g) => g.id}
+          onRowActivate={onOpen}
+          pageSize={PAGE}
+          ariaLabel={ariaLabel}
+        />
+      </div>
+
+      <ul className="mygames-cards" aria-label={ariaLabel}>
+        {shown.map((g) => (
+          <li key={g.id}>
+            <GameCard
+              game={g}
+              status={statusOf(g)}
+              article={showArticle ? articleByEvent[g.event.id] : undefined}
+              onOpen={onOpen}
+            />
+          </li>
+        ))}
+      </ul>
+
+      {/* The cards' own pager, hidden above 767px where QueueTable shows its
+          own. Same markup and same copy as .queue-more so the two shapes page
+          identically. */}
+      {visible < rows.length && (
+        <div className="queue-more mygames-cards__more">
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setVisible((v) => v + PAGE)}
+          >
+            Show more
+          </button>
+          <span className="muted queue-more__note">
+            Showing {shown.length} of {rows.length.toLocaleString()}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function MyGamesPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -140,7 +347,7 @@ export default function MyGamesPage() {
   // draft). Fetched in ONE request via GET /content?authorId= (the rep's own
   // content across all games) rather than one lookup per row.
   const [articleByEvent, setArticleByEvent] = useState<
-    Record<string, 'draft' | 'submitted' | 'published'>
+    Record<string, ArticleStatus>
   >({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -196,7 +403,7 @@ export default function MyGamesPage() {
         // Precedence published > submitted > draft, so the "furthest along"
         // article wins a game's cell when a rep has more than one.
         const rank = { draft: 0, submitted: 1, published: 2 } as const;
-        const map: Record<string, 'draft' | 'submitted' | 'published'> = {};
+        const map: Record<string, ArticleStatus> = {};
         for (const c of content) {
           if (!c.eventId) continue;
           if (c.status !== 'draft' && c.status !== 'submitted' && c.status !== 'published') {
@@ -305,31 +512,9 @@ export default function MyGamesPage() {
     {
       key: 'game',
       header: 'Game',
-      cell: (g) => {
-        const status = statusOf(g);
-        if (status === 'live') return <LiveBadge />;
-        // THE OVERDUE FLAG. Everything about this game's PLACEMENT is unchanged
-        // and that is on purpose -- see the note above the Upcoming/Past split.
-        // It stays in the Upcoming table, and the ascending sort keeps the most
-        // overdue game at the top, which is right here even though the same sort
-        // was the bug on every fan surface: this is the one audience that can
-        // act on it, so the staleness should lead their list.
-        //
-        // What was missing was only that it LOOKED like every other scheduled
-        // game. The action cell has said "Report result →" all along, but that
-        // is the last column on the row; a correspondent scanning this column
-        // saw a neutral "Scheduled" pill and nothing to catch on.
-        //
-        // "Result due", not "Overdue"/"Missing"/"Error": this is a job on the
-        // correspondent's list, not a fault. The --warn trio (already promoted
-        // for the NIL health table and the date echo) is used because gold reads
-        // as "this is your money" everywhere else on this surface, so a nudge
-        // painted gold does not register as one.
-        if (owesResult(status, g.event.scheduledAt)) {
-          return <span className="pill mygames-pill--owed">Result due</span>;
-        }
-        return <span className="pill">{eventStatusLabel(status)}</span>;
-      },
+      cell: (g) => (
+        <GameStatusMark status={statusOf(g)} scheduledAt={g.event.scheduledAt} />
+      ),
     },
     {
       key: 'mine',
@@ -347,15 +532,7 @@ export default function MyGamesPage() {
       cell: (g) => {
         const article = articleByEvent[g.event.id];
         if (!article) return <span className="muted">—</span>;
-        return (
-          <span className={`pill${article === 'submitted' ? ' pill--review' : ''}`}>
-            {article === 'published'
-              ? 'Published'
-              : article === 'submitted'
-                ? 'In review'
-                : 'Draft'}
-          </span>
-        );
+        return <ArticleMark status={article} />;
       },
     },
     {
@@ -488,13 +665,13 @@ export default function MyGamesPage() {
             <span className="game-kicker">Schedule</span>
             <h2>Upcoming</h2>
             {upcoming.length > 0 ? (
-              <QueueTable
-                columns={columns}
+              <ScheduleShapes
                 rows={upcoming}
-                rowKey={(g) => g.id}
-                onRowActivate={openGame}
-                pageSize={10}
+                columns={columns}
                 ariaLabel="Upcoming games"
+                statusOf={statusOf}
+                articleByEvent={articleByEvent}
+                onOpen={openGame}
               />
             ) : (
               <div className="results-empty">
@@ -515,13 +692,16 @@ export default function MyGamesPage() {
             <section className="card game">
               <span className="game-kicker">Schedule</span>
               <h2>Past games</h2>
-              <QueueTable
-                columns={columns}
+              {/* showArticle: a finished game is the only one where "how far
+                  along is the write-up" is a real answer rather than a dash. */}
+              <ScheduleShapes
                 rows={past}
-                rowKey={(g) => g.id}
-                onRowActivate={openGame}
-                pageSize={10}
+                columns={columns}
                 ariaLabel="Past games"
+                statusOf={statusOf}
+                articleByEvent={articleByEvent}
+                showArticle
+                onOpen={openGame}
               />
             </section>
           )}

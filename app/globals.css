@@ -2707,6 +2707,52 @@ tfoot td {
   color: #f6c6bf;
 }
 
+/* ---- The End Game row. Plain at desktop widths: a flex row carrying the
+   button and, on an unscored board, the reason it's disabled. ---- */
+.console-endgame-dock {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* ---- Phone: the row docks -----------------------------------------------
+   A correspondent's last act on a live game is ending it, and on a phone that
+   button sits under the whole predictions tool and the night's feed. It stays
+   in reach from any scroll position instead.
+
+   Sticky is bounded by the containing block, so this only works because the row
+   is a direct child of the console section -- everything below it inside that
+   section (predictions, the feed) is the run it travels over. Moving it back
+   inside .console-actions would silently reduce that run to nothing while the
+   CSS still looked correct.
+
+   An UNSCORED board un-sticks it: the button is disabled until a score exists
+   (see scoreEntered), and a permanent band carrying a permanently disabled
+   button plus its hint is worse than no band on a 390px screen. Same rule as
+   .call-slip--empty and .parlay-stub--empty.
+   ------------------------------------------------------------------------ */
+@media (max-width: 767px) {
+  .console-endgame-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    /* Matches the .call-slip / .parlay-stub bleed so the band reads as a band
+       and not as a floating button. */
+    margin-left: -4px;
+    margin-right: -4px;
+    padding: 10px 4px calc(10px + env(safe-area-inset-bottom));
+    background: var(--panel-raised);
+  }
+
+  .console-endgame-dock--idle {
+    position: static;
+    padding: 0;
+    background: none;
+  }
+}
+
 /* Feed "Show all (N)" / "Show less" toggle under the capped list. */
 .console-feed__more {
   margin-top: 12px;
@@ -3834,6 +3880,49 @@ a.btn-inline:hover {
 .photos-pick:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+
+/* ---- The camera door (workspace Photos only) ----------------------------
+   Hidden by default and revealed only on a coarse pointer: `capture` does
+   nothing on a desktop browser, so this button would open the same file dialog
+   as the one beside it and read as a bug. `pointer: coarse` rather than a width
+   query on purpose -- this is about what the input device can do, not how wide
+   the window is, and a narrow desktop window has no camera either.
+
+   Written at .photos-pick.photos-capture (0,2,0) rather than .photos-capture
+   alone. The camera label carries BOTH classes, and the phone block far below
+   sets `.photos-pick { display: inline-flex }` for the 44px floor -- at equal
+   specificity that later rule would win and reveal the camera button in a
+   narrow desktop window, which is the one case this whole query exists to
+   prevent. The extra class makes the order irrelevant.
+   ------------------------------------------------------------------------ */
+.photos-pick.photos-capture {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .photos-pick.photos-capture {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* With a camera in the row the camera leads, so the gallery becomes the
+     second door and sheds the gold fill -- two filled pills side by side would
+     leave a thumb no primary. Scoped to --gallery, NOT to .photos-pick: that
+     class also dresses the athlete profile and NIL proof uploaders, which have
+     no camera control and must keep their single gold button. Borrowed from
+     .btn-ghost rather than invented. */
+  .photos-pick--gallery {
+    background: none;
+    color: var(--muted);
+    border-color: var(--border-strong);
+  }
+
+  .photos-pick--gallery:hover {
+    background: rgba(201, 163, 78, 0.08);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
 }
 
 .photos-file-input {
@@ -9234,10 +9323,29 @@ a.follow-sugcard__name:hover {
   .rep-form {
     grid-template-columns: 1fr;
   }
+
+  /* ---- 16px, AND IT HAS TO BE 16px. -------------------------------------
+     iOS Safari auto-zooms the page on focus for any form control under 16px,
+     and it does NOT zoom back out on blur -- it leaves the correspondent on a
+     zoomed, sideways-scrolled page they have to pinch their way out of. The
+     base size is 0.95rem = 15.2px, which is under the threshold by 0.8px, so
+     every text field on this surface trips it: the venue box in Add Game, the
+     score inputs, the notes field, the article title and body, the big-play
+     box, the prediction question.
+
+     Stated in px on purpose. This is a fixed browser threshold, not a
+     typographic choice, so it must not move if the root font-size ever does.
+
+     Nothing that already sets its own size is touched -- a class selector
+     outranks these element selectors -- which is why the courtside board's
+     huge clamp()-sized scores (.console-board__score) are unaffected. They
+     were already well above the threshold, and that is exactly why the console
+     has never had this bug while everything around it has. ---- */
   input,
   textarea,
   select {
     min-width: 0;
+    font-size: 16px;
   }
 
   /* ---- Touch targets: real action buttons at least 44px tall. Text-style
@@ -9247,6 +9355,29 @@ a.follow-sugcard__name:hover {
     min-height: 44px;
   }
   .chip {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* A SQUARE icon button declares an explicit width AND height, and the floor
+     above beats the height while leaving the width alone -- so the photo tile's
+     26px round delete and the console's 30px retract each became a lozenge
+     (26x44, 30x44) that was still UNDER the floor on its narrow axis. Both
+     failures come from the rule above, so the correction belongs beside it
+     rather than inside the console. Named individually because there is no
+     selector for "this button is an icon". */
+  .photos-tile__delete,
+  .console-retract {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* The photo pickers are <label>s wrapping a visually-hidden file input (the
+     `button` rules have never reached them, same as a.btn-inline), so the floor
+     above skips them and they sit at ~39px. On the workspace that is the one
+     control a correspondent uses with a phone in one hand. */
+  .photos-pick {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
@@ -9311,9 +9442,22 @@ a.follow-sugcard__name:hover {
   }
 
   /* ---- Kill horizontal overflow: media never pushes past the viewport, and
-     the body clips any stray wide child. Safe here because the only sticky
-     element (.frail) is display:contents below 1024px, so nothing relies on
-     body being the scroll container. ---- */
+     the body clips any stray wide child.
+
+     THIS MASKS RATHER THAN FIXES, and that is a known, filed debt -- a future
+     too-wide child gets silently clipped instead of scrolling, which also means
+     a code read can't tell a clipped child from an absent one. Removing it is
+     its own pass with a device sweep across every route, not a rider on a
+     surface-scoped change; see docs/correspondent-mobile-followups.md.
+
+     It does NOT break the sticky elements at this width (.call-slip,
+     .parlay-stub, .console-endgame-dock). With html's overflow left visible,
+     the spec propagates body's overflow to the VIEWPORT and treats body itself
+     as visible -- so body never becomes the scrollport and sticky descendants
+     still resolve against the viewport. (The older note here claimed .frail was
+     the only sticky element on the page; that stopped being true once the slip
+     and the stub docked, so the reasoning is restated rather than the count.)
+     ---- */
   body {
     overflow-x: hidden;
   }
@@ -17459,8 +17603,117 @@ a.arena-tile:active {
   color: var(--accent);
 }
 
-.queue-row:hover .mygames-action {
+.queue-row:hover .mygames-action,
+.mygames-card:hover .mygames-action {
   color: var(--accent-hover);
+}
+
+/* ---- THE SCHEDULE'S TWO SHAPES -------------------------------------------
+   Above 767px the schedule is the nine-column table. Below it, the same rows
+   are cards and the table is gone. Exactly one is in the flow at any width;
+   the hidden one leaves the accessibility tree with it, so nothing is
+   announced twice.
+
+   The switch is CSS, not a JS width check, on purpose: no resize listener, no
+   hydration mismatch, and the correct shape is painted on the first frame
+   rather than after a measure.
+
+   WHY CARDS AT ALL. The table below 767px was a horizontal scroller -- usable,
+   never broken, and the wrong home base for the one screen a correspondent
+   opens first, standing up, in a gym. Nine columns is also too many for a
+   card; see the note on GameCard for what survived the cut and why.
+   ------------------------------------------------------------------------ */
+.mygames-cards,
+.mygames-cards__more {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .mygames-table {
+    display: none;
+  }
+
+  .mygames-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .mygames-cards__more {
+    display: flex;
+  }
+}
+
+/* The card is a <button>, so it sheds the global gold-fill/uppercase chrome and
+   reads as a panel you can tap -- the same move .wsx-head makes for the
+   workspace section headers. */
+.mygames-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  margin: 0;
+  padding: 15px 16px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.mygames-card:hover:not(:disabled) {
+  background: var(--panel-raised);
+  border-color: var(--accent-dim);
+}
+
+.mygames-card:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 163, 78, 0.16);
+}
+
+/* Status leads the card, with the article pill beside it on a past game. */
+.mygames-card__top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mygames-card__matchup {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1.2;
+  color: var(--accent);
+  text-transform: capitalize;
+}
+
+/* Kickoff · venue, in the same wide-tracked small caps .game-meta uses so a
+   card's meta line reads identically to the workspace header's. */
+.mygames-card__meta {
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* The action is the card's affordance, so it gets air above it rather than
+   sitting flush against the meta line. */
+.mygames-card__action {
+  margin-top: 3px;
 }
 
 /* ---- "Result due": a game whose kickoff has passed and whose result nobody

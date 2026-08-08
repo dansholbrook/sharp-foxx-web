@@ -1013,7 +1013,7 @@ function LiveConsole({
         </div>
       </div>
 
-      {/* (d) Timeout + (e) Sponsor spot + (g) End game */}
+      {/* (d) Timeout + (e) Sponsor spot */}
       <div className="console-group console-actions">
         <button
           type="button"
@@ -1023,24 +1023,6 @@ function LiveConsole({
         >
           Timeout
         </button>
-        <button
-          type="button"
-          className="btn-inline btn-ghost console-endgame"
-          disabled={emitting || ending || !scoreEntered}
-          title={
-            scoreEntered ? undefined : 'Enter a score before ending the game'
-          }
-          onClick={handleEndGame}
-        >
-          {ending ? 'Ending…' : 'End Game (Final)'}
-        </button>
-        {/* Reads as a precondition rather than a broken button. An entered
-            0 - 0 clears this; a never-entered board does not. */}
-        {!scoreEntered && (
-          <span className="console-endgame-hint">
-            Enter a score before ending the game
-          </span>
-        )}
         {sponsorship && (
           <div className="console-sponsor">
             <button
@@ -1058,6 +1040,52 @@ function LiveConsole({
               </span>
             )}
           </div>
+        )}
+      </div>
+
+      {/* ---- (g) END GAME, ON ITS OWN DOCKED ROW ---------------------------
+           It used to sit inside the row above, one flex item along from
+           Timeout. Two reasons it moved, and only one of them is the phone:
+
+           * COURTSIDE. Below the console lies the predictions tool and the
+             night's feed, so on a phone this button is a long way down a very
+             tall card and it scrolls away exactly when the game ends. The dock
+             is sticky at <=767px, and sticky is bounded by the containing
+             block -- which is why the row had to become a direct child of the
+             console section rather than stay inside .console-actions. Stuck to
+             a two-line flex row it would have had almost no scroll run to
+             travel over, which is the trap this shape avoids.
+           * It was never meant to read as Timeout's neighbour anyway (see the
+             note on .console-endgame). Its own row says that louder than a
+             tint does, at every width.
+
+           The --idle class un-sticks it on a board nobody has scored: the
+           button is disabled in that state, so docking it would nail a
+           permanently disabled button and its hint across the bottom of a
+           390px screen. Same argument, same shape, as .call-slip--empty and
+           .parlay-stub--empty. ------------------------------------------- */}
+      <div
+        className={`console-endgame-dock${
+          scoreEntered ? '' : ' console-endgame-dock--idle'
+        }`}
+      >
+        <button
+          type="button"
+          className="btn-inline btn-ghost console-endgame"
+          disabled={emitting || ending || !scoreEntered}
+          title={
+            scoreEntered ? undefined : 'Enter a score before ending the game'
+          }
+          onClick={handleEndGame}
+        >
+          {ending ? 'Ending…' : 'End Game (Final)'}
+        </button>
+        {/* Reads as a precondition rather than a broken button. An entered
+            0 - 0 clears this; a never-entered board does not. */}
+        {!scoreEntered && (
+          <span className="console-endgame-hint">
+            Enter a score before ending the game
+          </span>
         )}
       </div>
 
@@ -1151,6 +1179,9 @@ function PhotosSection({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The camera input is a SECOND control with its own ref, never `capture` bolted
+  // onto the gallery one -- see the comment on the pick row below.
+  const captureInputRef = useRef<HTMLInputElement>(null);
   // A monotonic counter for unique upload keys (Date.now/random are fine in the
   // browser, but a counter keeps keys stable and collision-free across a batch).
   const keySeq = useRef(0);
@@ -1228,8 +1259,11 @@ function PhotosSection({
       setUploads((u) => [...u, { key, file, status: 'uploading' }]);
       void runUpload(key, file);
     }
-    // Reset the input so re-picking the same file fires onChange again.
+    // Reset BOTH inputs so re-picking the same file fires onChange again. The
+    // camera one matters most: two shots of the same play come back with the
+    // same generated name, and a stale value would swallow the second.
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (captureInputRef.current) captureInputRef.current.value = '';
   }
 
   async function removePhoto(photo: GamePhoto) {
@@ -1250,8 +1284,43 @@ function PhotosSection({
 
   return (
     <>
+      {/* ---- TWO CONTROLS, NOT ONE INPUT WITH A CAPTURE HINT. ---------------
+           The common case courtside is a photo taken thirty seconds ago, and
+           the gallery-only picker charges it two extra taps. The fix is NOT to
+           add `capture` to the input below: `capture` and `multiple` are
+           mutually exclusive in practice, so that one attribute would silently
+           kill the bulk upload -- the post-game flow where a correspondent
+           sends thirty frames at once. It would have shipped looking done.
+
+           So: a camera door and a gallery door, each with its own input and its
+           own ref. Both run the same onPick, so the type/size guards, the
+           per-file tiles and the retry path are shared.
+
+           The camera control is hidden unless the pointer is coarse. `capture`
+           is a no-op on a desktop browser -- it opens the same file dialog --
+           so "Take a photo" on a laptop would be a button that lies.
+
+           UNVERIFIED WITHOUT A PHYSICAL DEVICE: that iOS honours the `accept`
+           list on a camera capture. It normally hands back JPEG, but HEIC has
+           been reported leaking through on some iOS/Safari combinations. The
+           failure is graceful either way -- onPick rejects an unknown type
+           before presigning and shows "Use a JPEG, PNG, or WebP image." on the
+           tile rather than burning a round trip -- but nobody has held a phone
+           and watched it, and this comment is here so that isn't assumed.
+           ------------------------------------------------------------------ */}
       <div className="photos-upload">
-        <label className="photos-pick">
+        <label className="photos-pick photos-capture">
+          Take a photo
+          <input
+            ref={captureInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            className="photos-file-input"
+            onChange={(e) => onPick(e.target.files)}
+          />
+        </label>
+        <label className="photos-pick photos-pick--gallery">
           Add photos
           <input
             ref={fileInputRef}
