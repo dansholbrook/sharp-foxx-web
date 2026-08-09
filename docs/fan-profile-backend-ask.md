@@ -3,13 +3,32 @@
 Written from `sharp-foxx-web` after building `/profile` (the fan's own page:
 standing on both boards, Arena streaks, badge shelf, points ledger, follows).
 
-**The profile shipped without these.** Nothing here is blocking; each one is a
-place where the frontend is currently either lying by omission or paying for the
-absence with a fan-out. Paste the section you want to work on into the API repo.
+> **BOTH ASKS ARE SHIPPED AND WIRED UP.** `GET /me/items` and
+> `GET /contests/mine` are live, and this client reads them
+> (`app/api.ts` → `getMyItems` / `getMyContests`). The asks are kept below
+> because the argument for each is the reason the endpoint has the shape it has,
+> and the "not asked for, deliberately" list at the bottom is still live
+> guidance. **Nothing here is outstanding.** Each ask now opens with what
+> actually landed and where it differs from what was asked for.
 
 ---
 
 ## Ask 1 — a fan's collected items. `GET /me/items` (preferred) or a Call badge read
+
+> **SHIPPED** as `GET /me/items[?game=oracle|trail|call|unclassified]`, the
+> preferred form. `sharp-foxx-api/src/modules/me/me.service.ts`; mirrored here as
+> `MyItems` / `MyItem` / `itemMeta`. Caller of the Week is visible on `/profile`
+> after its week, which was the point.
+>
+> **One difference from the shape below, and it is an improvement.** `game` is
+> **nullable**, not a plain string: it is derived from the item's type and key
+> shape (`gameForItem`), not stored, so a key that ships without its mapping
+> comes back as `null` rather than being bucketed into a plausible default. The
+> shelf renders those in an *unclassified* group, and `?game=unclassified`
+> selects them — which is how an orphaned key gets found by someone looking for
+> it instead of only by a fan scrolling their shelf. A wrong guess would be
+> invisible on screen; `null` is not. The `game` column that would make the
+> grouping structural rather than derived is the API's ticket I1.
 
 ### The bug that surfaced it
 
@@ -69,6 +88,13 @@ Two further oddities that a unified read also cleans up:
   request the profile makes purely for badges.
 - **The pennant *count* has two sources** (`trail/today.progress.pennants` and
   `trail/pennants.totals.pennants`) and the profile has to prefer one.
+  *Post-ship: it now has **three**, and the client picks per surface with the
+  reason stated in a comment at each one. `/me/items.totals.pennant` is the
+  lifetime shelf count (`/profile`); the book's own totals caption the list they
+  are counting (`/arena/trail`); `trail_progress.pennant_count` is denormalized
+  **and per-season**, so it is used only where everything around it is also this
+  season's — the Arena hub strip and the Trail tile's position bar, whose copy
+  now says "this season" so it can't be read as the lifetime figure.*
 
 ### Suggested shape
 
@@ -109,6 +135,23 @@ incomplete for game #4.
 ---
 
 ## Ask 2 — `GET /contests/mine`
+
+> **SHIPPED**, as the slimmer row and with the parlay tally included — so both
+> fan-outs are gone and `/picks` is one call.
+> `ContestsService.mine()`; mirrored here as `MyContest` / `getMyContests`.
+>
+> **Read the row's narrowness as deliberate.** It carries `id`, `title`, `type`,
+> `status`, `entryCost`, `createdAt`, `playable`, `entrants`, `myEntry` and
+> `parlay` — and **no `config`**. That has one visible consequence, documented at
+> the call site: squares and parlay boards enter free and their real price lives
+> in `config` (`squareCost`, `minStake`/`maxStake`), so the My contests row shows
+> **no cost cell** for those two types rather than printing "Free" beside a
+> contest that costs points, or letting `parlayStakeRangeLabel` invent its 25–500
+> default from an empty bag. The contest's own page has the full terms. Don't
+> "fix" this by widening the row; the detail read is where config belongs.
+>
+> `parlay` is `null` on every non-parlay type — which is **not** the same as a
+> zeroed tally, and the client guards on the field rather than on the type.
 
 ### The problem
 

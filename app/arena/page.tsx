@@ -71,6 +71,21 @@ function ArenaStrip({
   trail: TrailToday | null;
   badges: OracleBadge[];
 }) {
+  // THE PENNANT COUNT, SOURCE #3 OF THREE: trail_progress.pennant_count, off the
+  // Trail's today read. It is the odd one out of the three — a DENORMALIZED
+  // counter (the other two count the item rows themselves) and, more importantly
+  // here, a PER-SEASON one: trail_progress is keyed (user_id, season_id), so a
+  // fan who collected forty pennants last season and none this one reads 0.
+  //
+  // CHOSEN ANYWAY, because this strip sits on the "play today" hub directly
+  // above the Trail tile's season progress bar, and every other number in that
+  // column is this season's. A lifetime count here would be the one figure on
+  // the page not describing the trip the fan is on. It costs nothing extra: the
+  // today read is already loaded for the streak chips.
+  //
+  // THE COPY CARRIES THE SCOPE. Without "this season" the medallion reads as the
+  // lifetime shelf — which is /profile's, off GET /me/items — and a fan who sees
+  // 3 here, 40 there and 40 in the book has no way to tell which is wrong.
   const pennants = trail?.progress?.pennants ?? 0;
 
   // Is there anything true to say? A brand-new fan gets the invitation instead
@@ -103,7 +118,9 @@ function ArenaStrip({
                 <Link
                   href="/arena/trail"
                   className="arena-medallion"
-                  title={`${pennants} pennant${pennants === 1 ? '' : 's'} collected`}
+                  title={`${pennants} pennant${
+                    pennants === 1 ? '' : 's'
+                  } this season — open the pennant book`}
                 >
                   <span className="arena-medallion__icon" aria-hidden="true">
                     🏁

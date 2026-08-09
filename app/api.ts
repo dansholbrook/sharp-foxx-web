@@ -3606,6 +3606,86 @@ export const getContests = (token: string, params: ContestFilters = {}) => {
   return authGet<Page<Contest>>(`/contests${s ? `?${s}` : ''}`, token);
 };
 
+// ---------------------------------------------------------------------------
+// GET /contests/mine — "which contests have I entered", in ONE query.
+//
+// IT DRIVES FROM THE FAN'S ENTRIES, which is why it can be one query at all.
+// /picks used to derive this client-side: list a bounded page of the LOBBY, read
+// every contest's detail to see whether `myEntry` was set, then read each parlay
+// board for its ticket tally — 1 + N + M requests to answer a question the
+// fan's own entries answer directly. It was also quietly WRONG for the fans
+// who'd played most: an entry older than the lobby scan simply didn't appear, no
+// error and no marker. This read has no such horizon; it pages over the entries
+// themselves.
+//
+// A ROW IS NOT A `Contest`, and don't widen it into one. It carries what a list
+// of a fan's entries needs and stops: no `config`, no description, no lifecycle
+// timestamps, no EntryAdvisory. Anything that needs those wants the detail read
+// on the contest's own page — see the cost cell in picks/page.tsx for the one
+// place the difference is visible.
+//
+// Ordering is list()'s verbatim (open + live first, then newest within each), so
+// a fan's contests arrive in the order the lobby taught them to expect and this
+// client does no sorting of its own.
+// ---------------------------------------------------------------------------
+
+// The caller's entry, inlined. Narrower than ContestEntry on purpose: contestId
+// and userId are both implied by the read, so the server doesn't repeat them.
+export interface MyContestEntry {
+  id: string;
+  status: ContestEntry['status'];
+  // `numeric` -> a STRING at rest, same discipline as everywhere else the score
+  // is read. Format at the render boundary.
+  score: string;
+  rank: number | null;
+  enteredAt: string;
+}
+
+// The parlay tally that used to cost a GET /contests/:id/tickets per board.
+// `staked` is the caller's OWN stake summed across their tickets — not the
+// board's, which is what a client summing the board read would have to be
+// careful not to produce.
+export interface MyContestParlay {
+  myTicketCount: number;
+  staked: number;
+}
+
+export interface MyContest {
+  id: string;
+  title: string;
+  type: ContestType;
+  status: ContestStatus;
+  entryCost: number;
+  createdAt: string;
+  playable: boolean;
+  entrants: number;
+  // NEVER NULL on this read — every row IS an entry of the caller's. That's the
+  // whole difference from ContestDetail.myEntry, and it's why the rows need no
+  // filtering here.
+  myEntry: MyContestEntry;
+  // NULL ON EVERY NON-PARLAY TYPE, which is NOT the same as a zeroed tally: the
+  // backend gates the join on the type, so null reads "not a parlay board" while
+  // { myTicketCount: 0 } would read "a board you hold no tickets on".
+  parlay: MyContestParlay | null;
+}
+
+// No `type` filter — a fan's own contests are few enough to scan, and narrowing
+// them by type is a thing nobody has asked for.
+export interface MyContestFilters {
+  status?: ContestStatus;
+  limit?: number;
+  offset?: number;
+}
+
+export const getMyContests = (token: string, params: MyContestFilters = {}) => {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set('status', params.status);
+  if (params.limit !== undefined) qs.set('limit', String(params.limit));
+  if (params.offset) qs.set('offset', String(params.offset));
+  const s = qs.toString();
+  return authGet<Page<MyContest>>(`/contests/mine${s ? `?${s}` : ''}`, token);
+};
+
 // The contest page's read — carries myEntry + entrants + playable, and lazy
 // auto-locks on load so the status the page branches on is honest.
 export const getContest = (token: string, id: string) =>
@@ -6445,6 +6525,126 @@ export function callStaffRoute(call: { id: string; status: CallStatus }): string
   return call.status === 'draft'
     ? `/arena/call/compose/${call.id}`
     : `/arena/call/grade/${call.id}`;
+}
+
+// ============================================================================
+// THE FAN'S OWN INVENTORY — GET /me/items. Every badge, pennant and trophy the
+// caller owns, from every game, in one read.
+//
+// Mirrors sharp-foxx-api/src/modules/me/me.service.ts.
+//
+// IT REPLACED THREE PER-GAME READS, and the bug that justified it was never
+// that three calls are slow. A shelf ASSEMBLED PER GAME shows only the games
+// somebody remembered to wire in, and it shows the gap as an ordinary empty row:
+// Caller of the Week was minted into user_items and then reachable by no read on
+// the platform, so a fan was notified of a title and, once the week turned,
+// could find no trace of it anywhere in the product. The Call was the first game
+// to prove the shape; game #4 would have proved it again. This read is
+// unfiltered, so a new game's items appear the day it starts minting, whether or
+// not anyone has touched this file.
+//
+// NO NAMES AND NO ART ON THE WIRE, unchanged from the reads it replaces — what
+// a fan EARNED must not change with a redesign. The copy lives below, keyed off
+// `key`, and an unknown key still renders a medallion rather than nothing.
+//
+// NOT THE PENNANT BOOK'S REPLACEMENT. /arena/trail still reads
+// GET /arena/trail/pennants, because the book renders each pennant's earn-time
+// snapshot as a card and wants the Trail's items alone. This read is the SHELF:
+// counts and medallions across every game.
+// ============================================================================
+
+// The three games that mint today. Same three names NotificationGame uses, but a
+// different contract: this one is DERIVED server-side from the item's type and
+// key shape (arena-items.service.ts's gameForItem), not stored on the row and
+// not a coalesce hint.
+export type ItemGame = 'oracle' | 'trail' | 'call';
+
+// 'unclassified' IS A REAL FILTER VALUE, not a client-side idea: it selects the
+// rows gameForItem() could not place, which is how an orphaned key gets found by
+// whoever goes looking for it instead of only by a fan scrolling their shelf.
+export type ItemGameFilter = ItemGame | 'unclassified';
+
+export interface MyItem {
+  key: string;
+  // 'badge' | 'pennant' | 'trophy' today, and left open deliberately: user_items
+  // is generic ("a future cosmetic, title, or consumable lands here"), so a
+  // renderer should treat an unrecognised type as a thing to SHOW, not to drop.
+  type: string;
+  // NULL MEANS A KEY SHIPPED WITHOUT ITS MAPPING. Render it in an unclassified
+  // group; do NOT bucket it into a plausible default. An item shown in the wrong
+  // group is indistinguishable on screen from one shown correctly — which is the
+  // exact class of bug this read exists to kill. null is visible; a guess isn't.
+  game: ItemGame | null;
+  earnedAt: string;
+  // The snapshot captured at earn time. DISPLAY ONLY, by contract — nothing here
+  // or on the backend branches on it.
+  metadata: Record<string, unknown> | null;
+}
+
+export interface MyItems {
+  items: MyItem[];
+  // KEYED BY ITEM TYPE, NOT BY GAME: { badge: 3, pennant: 12, trophy: 1 }.
+  // Counted off the returned rows, so a narrowed read's totals describe what
+  // came back rather than the whole shelf. A type the fan owns none of is
+  // ABSENT, not zero — read it as `totals.pennant ?? 0`.
+  totals: Record<string, number>;
+}
+
+// Not paginated, and that's a sizing judgement rather than an omission: an
+// inventory is bounded by what the games mint (a few career badges, one pennant
+// per town, a trophy per leg), and a shelf is read whole anyway.
+export const getMyItems = (token: string, game?: ItemGameFilter) =>
+  authGet<MyItems>(`/me/items${game ? `?game=${game}` : ''}`, token);
+
+// ---- Inventory display helpers ---------------------------------------------
+
+// A Caller of the Week key is SCOPED TO THE CALL it was won on
+// (`call_caller_of_the_week_<callEventId>`), because user_items is
+// UNIQUE (user_id, item_type, item_key) and a bare key would let a fan win the
+// title exactly once ever and silently no-op every week after. So this is a
+// PREFIX test and must never become an equality one.
+const CALLER_OF_THE_WEEK_PREFIX = 'call_caller_of_the_week_';
+
+// One medallion's copy, for an item from any game.
+//
+// FOR MEDALLION-SHAPED ITEMS — badges, and anything of a type this build doesn't
+// know. Pennants ride as a single count (a fan mid-season holds dozens) and
+// trophies have their own two-line block; see trailTrophyMeta.
+//
+// THE ORACLE'S KEYS DEFER TO oracleBadgeMeta rather than being restated here.
+// The Oracle screen renders the same badges off its own day read, and one copy
+// table means the two surfaces cannot drift. The Call's title is named HERE
+// because this shelf is the only surface that outlives its card.
+export function itemMeta(item: MyItem): {
+  icon: string;
+  name: string;
+  hint: string;
+} {
+  if (item.key.startsWith(CALLER_OF_THE_WEEK_PREFIX)) {
+    const m = item.metadata ?? {};
+    const week = typeof m.weekStart === 'string' ? callWeekLabel(m.weekStart) : null;
+    // A tie awards everyone tied and nothing breaks it further, so the snapshot
+    // records how many it was shared with. Honouring it here is the difference
+    // between a true hint and a quiet overclaim.
+    const shared = typeof m.sharedWith === 'number' && m.sharedWith > 0
+      ? ` · shared with ${m.sharedWith === 1 ? '1 other' : `${m.sharedWith} others`}`
+      : '';
+    return {
+      icon: '🎙️',
+      name: 'Caller of the Week',
+      hint: `${week ?? "The Correspondent's Call"} — closest on the tiebreaker${shared}`,
+    };
+  }
+  if (item.game === 'oracle') return oracleBadgeMeta(item.key);
+  // Everything else — an unclassified key, or a type minted by a game newer than
+  // this build. A generic medallion, because a fan who EARNED something must
+  // always see it, and the key de-underscored is the most honest name available
+  // without guessing.
+  return {
+    icon: '🎖️',
+    name: item.key.replace(/_/g, ' '),
+    hint: item.game ? 'Arena badge' : 'Collected — this build has no name for it yet',
+  };
 }
 
 // ============================================================================

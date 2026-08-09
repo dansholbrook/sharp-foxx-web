@@ -35,9 +35,10 @@
 //   • WAYS TO EARN stays on /picks, directly above Recent activity, where the
 //     reading order (here's how points arrive → here's the record of them
 //     arriving) is deliberate. Splitting it would break the pair.
-//   • MY CONTESTS stays on /picks: it costs a 24-contest scan plus a detail
-//     fan-out plus a parlay read per board, and propagating that to a second
-//     page doubles the bill for the same rows. See the note in picks/page.tsx.
+//   • MY CONTESTS stays on /picks. It is one call now (GET /contests/mine)
+//     rather than the 1 + 24 + N fan-out it used to be, so the reason is no
+//     longer the bill — it is that the contest entries belong beside the pick
+//     list and the ledger, which is what /picks is.
 //   • THE PENNANT BOOK stays on /arena/trail. This page shows the COUNT and the
 //     trophies; a fan mid-season holds dozens of pennants and the book is a
 //     surface of its own.
@@ -49,10 +50,11 @@
 //
 // ----------------------------------------------------------------------------
 // FIVE READS, EACH FAILING ALONE. Only the wallet gates the page (it is the
-// page's subject); the summary, the two Arena today-endpoints and the pennant
-// book are best-effort and each section self-hides on a failed or empty read —
-// same discipline as the feed's bands and /picks' own sections. A fan whose
-// Trail read dies still sees their Oracle streak.
+// page's subject); the summary, the two Arena today-endpoints (streaks) and the
+// inventory (the shelf) are best-effort and each section self-hides on a failed
+// or empty read — same discipline as the feed's bands and /picks' own sections.
+// A fan whose Trail read dies still sees their Oracle streak, and a fan whose
+// inventory read dies still sees both.
 //
 // THE EMPTY PAGE IS THE FIRST-RUN GUIDE. A fan with no picks, no streaks and no
 // badges gets four sections that each say what would fill them and where to go.
@@ -74,24 +76,23 @@ import { CarouselItem } from '../follow-carousel';
 import { canAccess } from '../roles';
 import {
   getFanPointsSummary,
+  getMyItems,
   getMyPicks,
   getOracleToday,
   getPointsLedger,
-  getTrailPennants,
   getTrailToday,
   followTargetId,
+  itemMeta,
   ledgerActionLabel,
-  oracleBadgeMeta,
-  trailItemMeta,
   trailTrophyMeta,
   points,
   signedPoints,
   etDateTime,
   FanPointsSummary,
+  MyItems,
   MyPicksReport,
   OracleToday,
   PointEvent,
-  TrailPennants,
   TrailToday,
 } from '../api';
 
@@ -226,44 +227,63 @@ function Standing({
 // is shared with the Arena hub's strip so the two can't disagree.
 //
 // ----------------------------------------------------------------------------
-// THE SHELF IS INCOMPLETE, AND HERE IS EXACTLY WHAT'S MISSING AND WHY.
+// THE SHELF IS ONE READ: GET /me/items, every item the fan owns from every game.
 //
-// It shows Oracle badges (off GET /arena/oracle/today), Trail trophies and the
-// Trail pennant count (off GET /arena/trail/pennants). It does NOT show CALLER
-// OF THE WEEK, and that is not an oversight or a thing to get to later — there
-// is no read for it.
+// It used to assemble the inventory from three GAME-SPECIFIC reads — Oracle
+// badges off /arena/oracle/today, Trail trophies and pennants off
+// /arena/trail/pennants — and it silently missed every game those two didn't
+// name. CALLER OF THE WEEK was the proof: minted into user_items by the
+// Correspondent's Call, carried only by /arena/call/current, which serves THIS
+// week's card. Once the week turned, a fan who'd won the title could see it
+// nowhere in the product. The platform notified them about an honour and then
+// had no screen on which it was true.
 //
-// The title is awarded by the Correspondent's Call and minted as a user_items
-// badge (see CallCallerOfTheWeek in api.ts). The only endpoint that carries it
-// is GET /arena/call/current, which serves THIS WEEK'S card and nothing else.
-// There is no /arena/call/history and no per-fan Call item read. So the moment
-// the week rolls over, a fan who won Caller of the Week can no longer see
-// anywhere in this product that they won it — the platform notifies them about a
-// title and then takes it away. This shelf is where it would be visible, and it
-// cannot be.
+// It is visible here now, and so is whatever game #4 mints, because the read is
+// unfiltered rather than a list of games this file knows about.
 //
-// THE FIX IS A BACKEND READ, and the durable one is not a Call-shaped endpoint.
-// This shelf assembles a fan's inventory from three GAME-SPECIFIC reads, which
-// means it silently misses every future game that mints items — the Call is
-// simply the first game to prove it. A unified GET /me/items over user_items
-// would fix the Call and close the shape of the bug at once. See
-// docs/fan-profile-backend-ask.md.
+// STREAKS STILL COME OFF THE TWO TODAY-READS, and correctly: a streak is a live
+// counter on the fan's play, not an item they own. Only the SHELF consolidated.
+//
+// GROUPING IS BY WHAT AN ITEM LOOKS LIKE, not by an allowlist of types — a type
+// this build has never heard of lands in the medallion row rather than being
+// dropped, for the same reason an unknown key still gets copy: a fan who EARNED
+// something must always see it.
 // ---------------------------------------------------------------------------
 function ArenaSection({
   oracle,
   trail,
-  book,
+  inventory,
 }: {
   oracle: OracleToday | null;
   trail: TrailToday | null;
-  book: TrailPennants | null;
+  inventory: MyItems | null;
 }) {
-  const badges = oracle?.badges ?? [];
-  const trophies = book?.trophies ?? [];
-  const pennants = book?.totals.pennants ?? trail?.progress?.pennants ?? 0;
+  const items = inventory?.items ?? [];
+  // UNCLASSIFIED FIRST, and held apart from everything below. `game: null` means
+  // the backend could not place the key — it does NOT mean the item is a badge,
+  // so it must not fall into the medallion row on a guess.
+  const unclassified = items.filter((i) => i.game === null);
+  const trophies = items.filter((i) => i.game !== null && i.type === 'trophy');
+  // Every remaining classified item that isn't counted as a pennant. Stated as
+  // an exclusion rather than as `type === 'badge'` so a future cosmetic or title
+  // renders instead of vanishing.
+  const medallions = items.filter(
+    (i) => i.game !== null && i.type !== 'trophy' && i.type !== 'pennant',
+  );
+  // THE PENNANT COUNT, SOURCE #1 OF THREE: /me/items totals, counted off the
+  // item rows themselves. Chosen here because this shelf is a LIFETIME brag and
+  // this is the only lifetime count of the three — the pennant book's totals are
+  // the same number but cost a second read for items this page doesn't render,
+  // and trail_progress.pennant_count is PER SEASON, so a fan holding last
+  // season's pennants would see their shelf undercount them. Absent key = none.
+  const pennants = inventory?.totals.pennant ?? 0;
   const anyStreak = anyStreakActive([oracle?.streaks, trail?.streaks]);
   const anything =
-    anyStreak || badges.length > 0 || trophies.length > 0 || pennants > 0;
+    anyStreak ||
+    medallions.length > 0 ||
+    trophies.length > 0 ||
+    unclassified.length > 0 ||
+    pennants > 0;
 
   return (
     <section className="points-history profile-arena">
@@ -298,7 +318,10 @@ function ArenaSection({
           )}
 
           {/* Trophies first — a leg or season trophy is rarer than any badge,
-              and there are usually none, so the block self-hides. */}
+              and there are usually none, so the block self-hides. Rendered from
+              the earn-time SNAPSHOT (trailTrophyMeta), which is the same copy
+              the pennant book uses and the reason an archived season still
+              reads correctly here. */}
           {trophies.length > 0 && (
             <ul className="trail-trophies profile-trophies">
               {trophies.map((t) => {
@@ -320,7 +343,7 @@ function ArenaSection({
             </ul>
           )}
 
-          {(badges.length > 0 || pennants > 0) && (
+          {(medallions.length > 0 || pennants > 0) && (
             <div className="arena-strip__row profile-medallions">
               {/* The pennant count rides as ONE medallion linking to the book,
                   not as N flags: a fan mid-season holds dozens, and the book is
@@ -341,10 +364,17 @@ function ArenaSection({
                   </span>
                 </Link>
               )}
-              {badges.map((b) => {
-                const meta = oracleBadgeMeta(b.key);
+              {/* Every game's badges in one row, Caller of the Week included.
+                  Keyed on type:key because the key alone is only unique WITHIN a
+                  namespace. */}
+              {medallions.map((b) => {
+                const meta = itemMeta(b);
                 return (
-                  <span key={b.key} className="arena-medallion" title={meta.hint}>
+                  <span
+                    key={`${b.type}:${b.key}`}
+                    className="arena-medallion"
+                    title={meta.hint}
+                  >
                     <span className="arena-medallion__icon" aria-hidden="true">
                       {meta.icon}
                     </span>
@@ -353,6 +383,40 @@ function ArenaSection({
                 );
               })}
             </div>
+          )}
+
+          {/* UNCLASSIFIED — its own row, never merged into the one above.
+              These are items the backend could not place: a key shape shipped
+              without its mapping in gameForItem(). Showing them apart is the
+              whole point — the fan keeps what they earned, and the orphan is
+              visible to anyone looking at the screen instead of being silently
+              filed under a plausible game. If this row ever renders, the fix is
+              a case in arena-items.service.ts's gameForItem. */}
+          {unclassified.length > 0 && (
+            <>
+              <div className="arena-strip__row profile-medallions">
+                {unclassified.map((b) => {
+                  const meta = itemMeta(b);
+                  return (
+                    <span
+                      key={`${b.type}:${b.key}`}
+                      className="arena-medallion"
+                      title={meta.hint}
+                    >
+                      <span className="arena-medallion__icon" aria-hidden="true">
+                        {meta.icon}
+                      </span>
+                      <span className="arena-medallion__name">{meta.name}</span>
+                    </span>
+                  );
+                })}
+              </div>
+              <p className="muted profile-note">
+                {unclassified.length === 1 ? 'This one is' : 'These are'} yours —
+                this version of the app just doesn&apos;t have a name for{' '}
+                {unclassified.length === 1 ? 'it' : 'them'} yet.
+              </p>
+            </>
           )}
         </>
       )}
@@ -539,7 +603,7 @@ export default function ProfilePage() {
   const [summary, setSummary] = useState<FanPointsSummary | null>(null);
   const [oracle, setOracle] = useState<OracleToday | null>(null);
   const [trail, setTrail] = useState<TrailToday | null>(null);
-  const [book, setBook] = useState<TrailPennants | null>(null);
+  const [inventory, setInventory] = useState<MyItems | null>(null);
 
   const userId = user?.id;
 
@@ -593,8 +657,13 @@ export default function ProfilePage() {
     };
   }, [token, allowed, userId]);
 
-  // The Arena's three reads, fired together and settled independently: a dead
-  // Trail must not cost the fan their Oracle streak, and vice versa.
+  // The Arena's reads, fired together and settled independently: a dead Trail
+  // must not cost the fan their Oracle streak, and vice versa.
+  //
+  // THE TWO TODAY-READS ARE HERE FOR THE STREAKS ONLY. The shelf they used to
+  // feed is now one call — GET /me/items — which is why the pennant book read
+  // that used to sit alongside them is gone: this page never rendered a pennant
+  // CARD, only the count and the trophies, and both come off the inventory now.
   useEffect(() => {
     if (!token || !allowed) return;
     let cancelled = false;
@@ -612,12 +681,12 @@ export default function ProfilePage() {
       .catch(() => {
         /* best-effort */
       });
-    getTrailPennants(token)
+    getMyItems(token)
       .then((next) => {
-        if (!cancelled) setBook(next);
+        if (!cancelled) setInventory(next);
       })
       .catch(() => {
-        /* best-effort */
+        /* best-effort: the shelf falls back to the streaks it can still show */
       });
     return () => {
       cancelled = true;
@@ -707,7 +776,7 @@ export default function ProfilePage() {
             </p>
           )}
 
-          <ArenaSection oracle={oracle} trail={trail} book={book} />
+          <ArenaSection oracle={oracle} trail={trail} inventory={inventory} />
           <ActivitySection token={token} />
           <FollowingSection />
         </>

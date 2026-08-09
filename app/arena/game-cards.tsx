@@ -315,7 +315,16 @@ export function TrailGameCard({
           <TrailState day={day} />
 
           {/* The position bar. Rendered even at zero — an empty road ahead is
-              the honest first state and reads as an invitation. */}
+              the honest first state and reads as an invitation.
+
+              THE PENNANT COUNT IN THE LABEL IS trail_progress.pennant_count —
+              the denormalized, PER-SEASON counter, and the one place of three
+              where it is unambiguously the right source. Everything in this
+              block is scoped to the current season (position, townCount, the
+              server-rendered progress.label), so the count beside them must be
+              too; a lifetime total off GET /me/items would describe a different
+              trip and make the bar's own fraction read as a lie. The lifetime
+              shelf lives on /profile. */}
           {progress && progress.townCount > 0 && (
             <div className="arena-progress">
               <div

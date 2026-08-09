@@ -175,6 +175,14 @@ function TrailRail({ today }: { today: TrailToday }) {
 // Trophies sit above the pennants, and there are usually none — a leg trophy is
 // a whole region of towns. The section self-hides when the fan holds neither,
 // replaced by an invitation that names the first leg they'll be driving.
+//
+// THE PENNANT COUNT, SOURCE #2 OF THREE: this book's own `totals`, off
+// GET /arena/trail/pennants. Non-negotiable here, for a reason the other two
+// surfaces don't have — the number is a CAPTION ON THE LIST BENEATH IT. It must
+// be counted from the same rows it is describing, or a fan reads "12 pennants"
+// above eleven cards. /me/items totals would be the same lifetime figure from a
+// second request and could still disagree under a slow render;
+// trail_progress.pennant_count is per-season and would disagree by design.
 // ---------------------------------------------------------------------------
 function PennantBook({
   book,

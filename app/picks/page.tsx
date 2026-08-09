@@ -18,21 +18,17 @@ import { WaysToEarn } from '../ways-to-earn';
 import { canAccess } from '../roles';
 import {
   getMyPicks,
-  getContests,
-  getContest,
-  getParlayBoard,
+  getMyContests,
   getPointsLedger,
   contestCost,
   contestTypeLabel,
-  squaresPerSquareLabel,
-  parlayStakeRangeLabel,
   ledgerActionLabel,
   points,
   signedPoints,
   etDateTime,
   MyPick,
   MyPicksReport,
-  ContestDetail,
+  MyContest,
   ContestStatus,
   PointEvent,
 } from '../api';
@@ -107,15 +103,24 @@ function PickRow({ pick }: { pick: MyPick }) {
 // ---------------------------------------------------------------------------
 // MY CONTESTS — the fan's contest entries, with status/score/rank, linking in.
 //
-// There is no /contests/mine endpoint (the contests module has list + detail
-// only), so "which have I entered?" is DERIVED: list a bounded page of contests
-// (the backend orders open + live first, then newest) and read each one's
-// detail to see if myEntry is set. That's a small detail fan-out, capped and
-// best-effort — a dedicated mine endpoint would replace it. Older finals past
-// the cap won't appear; the contest lobby is the full record.
+// ONE CALL: GET /contests/mine. It used to be 1 + 24 + N — list a bounded page
+// of the LOBBY, read all 24 details to find the ones where myEntry was set, then
+// read each parlay board again for its ticket tally. That was expensive, and it
+// was also quietly incomplete for exactly the fans who'd played most: an entry
+// older than the 24-contest scan simply never appeared, with no error and no
+// marker. The scan is gone and the horizon with it — this pages over the fan's
+// OWN entries, so the only rows missing are the ones past the page below.
+//
+// THE PARLAY TALLY CAME DOWN WITH IT. `parlay` rides on the row (null on every
+// non-parlay type, which is not the same as a zeroed tally), so the second
+// fan-out that existed purely to say "3 tickets · 150 staked" is gone too.
 // ---------------------------------------------------------------------------
 
-const MY_CONTESTS_SCAN = 24;
+// One page, generous enough that no real fan reaches it (the backend caps at
+// 100). Ordered open + live first, then newest — so a fan past this many has
+// their live contests at the top and their oldest finals cut, which is the right
+// end to lose and is said out loud below rather than being hidden.
+const MY_CONTESTS_LIMIT = 50;
 
 function contestStatusLabel(status: ContestStatus): string {
   switch (status) {
@@ -134,63 +139,23 @@ function contestStatusLabel(status: ContestStatus): string {
   }
 }
 
-// A parlay entry's own line: how many tickets the fan holds and what they've
-// staked. Neither is on the contest detail (the chassis entry carries only the
-// score, which for a board is gross payout WON), so it comes off the board read —
-// the cheapest source, and one that already returns both numbers in one call.
-interface ParlayTally {
-  tickets: number;
-  staked: number;
-}
-
 function MyContestsSection({ token }: { token: string }) {
-  const [entries, setEntries] = useState<ContestDetail[] | null>(null);
-  // contestId -> tally, filled in a second best-effort pass over the PARLAY
-  // entries only. A fan holds entries in a handful of contests at most and only
-  // some are boards, so this is a small bounded fan-out on top of the detail one
-  // — and the rows render without it, so a failed read just omits the line.
-  const [parlay, setParlay] = useState<Map<string, ParlayTally>>(new Map());
+  const [entries, setEntries] = useState<MyContest[] | null>(null);
+  // What the fan has entered in total, so a page that cuts can say so instead of
+  // ending in silence the way the old lobby scan did.
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const page = await getContests(token, { limit: MY_CONTESTS_SCAN });
-        // Resolve each contest's detail to find the caller's entry. Per-item
-        // best-effort so one failed read doesn't blank the section.
-        const details = await Promise.all(
-          page.items.map((c) => getContest(token, c.id).catch(() => null)),
-        );
+    getMyContests(token, { limit: MY_CONTESTS_LIMIT })
+      .then((page) => {
         if (cancelled) return;
-        const mine = details.filter(
-          (d): d is ContestDetail => d !== null && d.myEntry !== null,
-        );
-        setEntries(mine);
-
-        const boards = mine.filter((c) => c.type === 'parlay_board');
-        if (boards.length === 0) return;
-        const tallies = await Promise.all(
-          boards.map((c) =>
-            getParlayBoard(token, c.id)
-              .then((b) => [c.id, b] as const)
-              .catch(() => null),
-          ),
-        );
-        if (cancelled) return;
-        const next = new Map<string, ParlayTally>();
-        for (const row of tallies) {
-          if (!row) continue;
-          const [id, board] = row;
-          next.set(id, {
-            tickets: board.myTicketCount,
-            staked: board.tickets.reduce((sum, t) => sum + t.stake, 0),
-          });
-        }
-        setParlay(next);
-      } catch {
+        setEntries(page.items);
+        setTotal(page.total);
+      })
+      .catch(() => {
         // Best-effort: the section just doesn't render.
-      }
-    })();
+      });
     return () => {
       cancelled = true;
     };
@@ -205,7 +170,8 @@ function MyContestsSection({ token }: { token: string }) {
       <h2 className="game-articles__head">My contests</h2>
       <ul className="mycontests-list">
         {entries.map((c) => {
-          const entry = c.myEntry!;
+          // Never null on this read — every row IS one of the caller's entries.
+          const entry = c.myEntry;
           const score = Math.round(Number(entry.score));
           return (
             <li key={c.id} className="mycontests-row">
@@ -218,15 +184,25 @@ function MyContestsSection({ token }: { token: string }) {
                   <span className="mycontests-row__type">
                     {contestTypeLabel(c.type)}
                   </span>
-                  {/* Squares and parlay boards enter free — show the per-square
-                      price / the ticket stake range, not "Free". */}
-                  <span className="mycontests-row__cost">
-                    {c.type === 'squares'
-                      ? squaresPerSquareLabel(c.config)
-                      : c.type === 'parlay_board'
-                      ? parlayStakeRangeLabel(c.config)
-                      : contestCost(c.entryCost)}
-                  </span>
+                  {/* THE COST CELL IS OMITTED ON SQUARES AND PARLAY BOARDS, and
+                      that is a consequence of the one-call read, stated rather
+                      than papered over. Both types enter FREE — the square and
+                      the ticket are the buy — so their real price lives in
+                      `config` (squareCost, minStake/maxStake), and
+                      /contests/mine deliberately doesn't carry config. Rendering
+                      contestCost(0) here would print "Free" beside a contest
+                      that costs points to play, and squaresPerSquareLabel /
+                      parlayStakeRangeLabel fed an empty config would INVENT a
+                      figure (the stake range defaults to 25–500). Saying nothing
+                      is the only honest option, and it costs least on the one
+                      surface where the fan has already paid: a board's own row
+                      carries the tickets and points they actually staked, and
+                      the contest page has the full terms. */}
+                  {c.type !== 'squares' && c.type !== 'parlay_board' && (
+                    <span className="mycontests-row__cost">
+                      {contestCost(c.entryCost)}
+                    </span>
+                  )}
                 </span>
               </Link>
               <div className="mycontests-row__side">
@@ -244,15 +220,17 @@ function MyContestsSection({ token }: { token: string }) {
                 )}
                 {/* A parlay board's score is gross payout WON, which says nothing
                     about how much of the board a fan is actually playing — so the
-                    tickets held and the points staked ride alongside it. */}
-                {c.type === 'parlay_board' && parlay.has(c.id) && (
+                    tickets held and the points staked ride alongside it. Off the
+                    row itself now; the guard is on `parlay` rather than on the
+                    type, because null IS the server's "not a parlay board". */}
+                {c.parlay && (
                   <span className="parlay-tag">
-                    {parlay.get(c.id)!.tickets}{' '}
-                    {parlay.get(c.id)!.tickets === 1 ? 'ticket' : 'tickets'}
-                    {parlay.get(c.id)!.staked > 0 && (
+                    {c.parlay.myTicketCount}{' '}
+                    {c.parlay.myTicketCount === 1 ? 'ticket' : 'tickets'}
+                    {c.parlay.staked > 0 && (
                       <span className="parlay-tag__staked">
                         {' '}
-                        · {points(parlay.get(c.id)!.staked)} staked
+                        · {points(c.parlay.staked)} staked
                       </span>
                     )}
                   </span>
@@ -269,6 +247,14 @@ function MyContestsSection({ token }: { token: string }) {
           );
         })}
       </ul>
+      {/* The cut, said out loud. The old scan lost rows silently; if this page
+          ever fills, the fan is told what's below it and where the rest live. */}
+      {entries.length < total && (
+        <p className="muted">
+          Showing your {entries.length} most recent of {total} — older entries are
+          in the <Link href="/contests">contest lobby</Link>.
+        </p>
+      )}
     </section>
   );
 }
