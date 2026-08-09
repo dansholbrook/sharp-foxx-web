@@ -19,6 +19,15 @@
 //
 // Everything on screen here is already visible on the board, or is an aggregate
 // of it. That's the test for anything added later.
+//
+// ONE CARD, TWO BOARDS. /leaderboard now serves two global measurements —
+// "Most earned" (lifetime_earned, engagement included) and "Most won"
+// (winnings only). The card must show the pair belonging to the board the name
+// was clicked from, which is what the required `board` prop selects: earned →
+// globalRank + lifetimeEarned, won → skillRank + lifetimeWon. The prop has no
+// default on purpose. A fan sitting at #3 for winnings and #47 for earned is
+// ordinary, so a card that quietly picked one would be wrong half the time
+// without ever looking wrong.
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -121,11 +130,15 @@ export function FanCard({
   // title while the summary is still in flight and keeps one if it 404s.
   fallbackName,
   isMe,
+  board,
   onClose,
 }: {
   userId: string;
   fallbackName: string | null;
   isMe: boolean;
+  // Which board this card was opened from — see the note at the top of the
+  // file. Required, so every call site has to answer it.
+  board: 'earned' | 'won';
   onClose: () => void;
 }) {
   const { token } = useAuth();
@@ -167,7 +180,17 @@ export function FanCard({
   }, [token, userId]);
 
   const since = formatSince(summary?.firstPickAt ?? null);
-  const medal = summary ? rankMedal(summary.globalRank) : null;
+  // The hero pair, chosen by the board this card was opened from. On the
+  // winnings board both are null for a fan who has never won — that's "off the
+  // board", so it reads as such rather than as rank 0 with 0 points.
+  const onWon = board === 'won';
+  const rank = summary ? (onWon ? summary.skillRank : summary.globalRank) : null;
+  const total = summary
+    ? onWon
+      ? summary.lifetimeWon
+      : summary.lifetimeEarned
+    : null;
+  const medal = rank === null ? null : rankMedal(rank);
 
   return (
     <SlideOver
@@ -206,21 +229,40 @@ export function FanCard({
               Rank leads — it's the thing the board just showed them. */}
           <div className="fancard-hero">
             <div className="fancard-hero__stat">
-              <span className="fancard-hero__label">Global rank</span>
-              <span className="fancard-hero__value">
-                {medal && <span className="fancard-hero__medal">{medal}</span>}#
-                {summary.globalRank}
+              <span className="fancard-hero__label">
+                {onWon ? 'Skill rank' : 'Global rank'}
               </span>
+              {rank === null ? (
+                <span className="fancard-hero__value fancard-hero__value--none">
+                  No wins yet
+                </span>
+              ) : (
+                <span className="fancard-hero__value">
+                  {medal && <span className="fancard-hero__medal">{medal}</span>}
+                  #{rank}
+                </span>
+              )}
             </div>
             <div className="fancard-hero__stat">
-              <span className="fancard-hero__label">Lifetime earned</span>
-              <span className="fancard-hero__value">
-                {points(summary.lifetimeEarned)}
-                <span className="fancard-hero__unit">pts</span>
+              <span className="fancard-hero__label">
+                {onWon ? 'Lifetime won' : 'Lifetime earned'}
               </span>
+              {total === null ? (
+                <span className="fancard-hero__value fancard-hero__value--none">
+                  —
+                </span>
+              ) : (
+                <span className="fancard-hero__value">
+                  {points(total)}
+                  <span className="fancard-hero__unit">pts</span>
+                </span>
+              )}
             </div>
           </div>
 
+          {/* Predictions only — see the P6 note on FanPointsSummary.record. On
+              the winnings board this can look thin beside a large lifetimeWon,
+              because Arena, contest and parlay wins aren't counted in it. */}
           <FanRecordLine
             record={{ ...summary.record, winRate: summary.winRate }}
           />

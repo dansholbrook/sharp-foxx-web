@@ -12,24 +12,33 @@
 // with an eventId defaults to that game's board; without one, global is all
 // there is.
 //
-// The two boards deliberately measure DIFFERENT things, which is why they can't
-// be one list: global ranks lifetime_earned (everything EARNED, never
-// subtracts), event ranks net points on that game (payout − stake, so it can go
-// negative).
+// The boards deliberately measure DIFFERENT things, which is why they can't be
+// one list: global/earned ranks lifetime_earned (everything EARNED, never
+// subtracts), global/won ranks winnings only, event ranks net points on that
+// game (payout − stake, so it can go negative).
 //
-// "EARNED", NOT "WON" — and the difference is the whole reason the global
+// "EARNED", NOT "WON" — and the difference is the whole reason the earned
 // board's standfirst reads the way it does. lifetime_earned is raised by every
 // positive ledger earn, which includes the engagement verbs (daily_checkin,
 // national_pick, article_read, ...) alongside real winnings. A fan's first 35
-// points can be a check-in plus making one pick, no game won. This board is a
+// points can be a check-in plus making one pick, no game won. That board is a
 // legitimate "who's biggest on the platform" ranking; it is NOT a skill
-// ranking, and no copy on this page may imply that it is. See the long note
-// above globalLeaderboard() in the API's predictions.service.ts for why the
-// board can't currently be split.
+// ranking, and no copy attached to it may imply that it is.
 //
-// The EVENT board is different and its copy is correct as-is: it reads
+// METRIC is the second axis, and the split the note above used to say was
+// impossible: ?metric=won ranks the same population by winnings alone
+// (predictions, contests, parlays, Arena — engagement verbs excluded). It is
+// GROSS: it counts what a fan has won and never subtracts what they lost, so a
+// fan can top it while being down overall. The standfirst has to say so, and
+// that clause is load-bearing copy, not padding.
+//
+// The two global boards are different MEASUREMENTS, not competing versions of
+// one number, so both tabs are always on screen — never render one alone.
+//
+// The EVENT board is different again and its copy is correct as-is: it reads
 // prediction_picks directly (payout − stake on one game) and genuinely is net
-// winnings.
+// winnings. metric doesn't apply to it, and scope=event & metric=won is a
+// backend 400 — the tab wiring below makes that pair unreachable.
 
 import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -58,6 +67,7 @@ function Row({
   entry,
   scope,
   me,
+  fallbackName,
   pinned,
   onOpen,
 }: {
@@ -65,6 +75,10 @@ function Row({
   scope: 'global' | 'event';
   // Highlight the caller's own row wherever it lands in the top 20.
   me: boolean;
+  // Used when the row carries no name of its own. The backend sends
+  // displayName: null on `me` when the caller is unranked, so the caller's own
+  // session name goes here rather than letting the row render blank.
+  fallbackName?: string | null;
   // This is the pinned copy below the cut, not a row of the board itself.
   pinned?: boolean;
   // Opens this fan's card. Every row on both boards gets one, including the
@@ -88,13 +102,14 @@ function Row({
           aria-haspopup="dialog"
           onClick={onOpen}
         >
-          {entry.displayName ?? 'You'}
+          {entry.displayName ?? fallbackName ?? 'You'}
         </button>
         {me && <span className="points-lb__you">You</span>}
       </span>
-      {/* An event board is net points and can be negative, so it's signed; the
-          global board is lifetime EARNED (winnings + engagement — see the file
-          header) and only ever climbs. */}
+      {/* An event board is net points and can be negative, so it's signed. Both
+          global boards are gross — earned never subtracts, and won counts
+          winnings without netting off losses — so neither can go below zero and
+          neither wants a sign. */}
       <span className="points-lb__score">
         {scope === 'event' ? signedPoints(entry.score) : points(entry.score)}
         <span className="points-lb__unit">pts</span>
@@ -120,6 +135,9 @@ function Leaderboard() {
   const [scope, setScope] = useState<'global' | 'event'>(
     eventId ? 'event' : 'global',
   );
+  // 'earned' is the board this page has always opened on; the split is an
+  // addition, not a change of default.
+  const [metric, setMetric] = useState<'earned' | 'won'>('earned');
   const [board, setBoard] = useState<PointsLeaderboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -145,6 +163,7 @@ function Leaderboard() {
           token,
           effective,
           effective === 'event' ? eventId ?? undefined : undefined,
+          metric,
         );
         if (!cancelled) setBoard(data);
       } catch (err) {
@@ -160,7 +179,7 @@ function Leaderboard() {
     return () => {
       cancelled = true;
     };
-  }, [token, router, allowed, scope, eventId]);
+  }, [token, router, allowed, scope, eventId, metric]);
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
@@ -170,6 +189,17 @@ function Leaderboard() {
   // should still see exactly where they stand instead of guessing.
   const inTop = board?.top.some((t) => t.userId === board.me.userId) ?? false;
   const showPinned = board !== null && !inTop;
+
+  // Describe the numbers ON SCREEN, not the tab that was pressed: during a
+  // switch the tab has already moved and the fetch hasn't landed. Falling back
+  // to the intent only covers the first load, when there's no board to read.
+  const shownScope = board?.scope ?? scope;
+  const shownMetric = board?.metric ?? metric;
+  const onWonBoard = shownScope === 'global' && shownMetric === 'won';
+  // The winnings board's empty state, which about half of all fans see: no wins
+  // means absent from `top`, score 0 and rank null. Not a last place, not a #0.
+  const noWinsYet = onWonBoard && board?.me.rank === null;
+  const myName = user?.displayName ?? null;
 
   return (
     <main className="feed-home">
@@ -189,14 +219,17 @@ function Leaderboard() {
         <div>
           <span className="masthead-kicker">Points</span>
           <h1 className="masthead-title">Leaderboard</h1>
-          {/* Reads the LOADED board's scope, not the tab intent: the two
-              boards measure different things, so this line must describe the
-              numbers actually on screen — including mid-switch, when the tab
-              has moved but the fetch hasn't landed. */}
+          {/* Reads the LOADED board's scope and metric, not the tab intent —
+              see shownScope/shownMetric. The winnings line's last clause is
+              required copy: the board is gross, so a fan can lead it while
+              being down overall, and the page has to say that out loud. Do not
+              cut it for length. */}
           <p className="masthead-standfirst">
-            {(board?.scope ?? scope) === 'event'
+            {shownScope === 'event'
               ? 'Net points won on this game. Still-live picks count as staked until they settle.'
-              : 'Total points earned — from games, contests and everyday activity. It only ever climbs; a loss never drags you down.'}
+              : onWonBoard
+                ? "Points won from games — predictions, contests, parlays and the Arena. Check-ins, reads and follows don't count here. This counts what you've won, not what you've lost — it's your winnings, not your profit."
+                : 'Total points earned — from games, contests and everyday activity. It only ever climbs; a loss never drags you down.'}
           </p>
         </div>
         <div className="masthead-actions">
@@ -206,28 +239,61 @@ function Leaderboard() {
         </div>
       </div>
 
-      {/* The scope tabs only exist when there's a game in context to scope TO. */}
-      {eventId && (
-        <div className="points-tabs">
-          <button
-            type="button"
-            className={`points-tab${scope === 'event' ? ' points-tab--on' : ''}`}
-            onClick={() => setScope('event')}
-          >
-            This game
-          </button>
-          <button
-            type="button"
-            className={`points-tab${scope === 'global' ? ' points-tab--on' : ''}`}
-            onClick={() => setScope('global')}
-          >
-            Global
-          </button>
+      {/* Two axes in one row, separated. SCOPE tabs only exist when there's a
+          game in context to scope TO. METRIC tabs always mount — they're the
+          whole point of the split, and a fan who arrived without an eventId is
+          the common case, so nesting them inside the eventId guard would hide
+          the winnings board from nearly everyone.
+
+          The metric tabs read as off while scope is 'event', because no metric
+          is being applied there; pressing one moves to the global board with
+          that metric. That's what keeps scope=event & metric=won — the pair the
+          backend 400s — unreachable from the UI. */}
+      <div className="points-tabs">
+        {eventId && (
+          <>
+            <button
+              type="button"
+              className={`points-tab${
+                scope === 'event' ? ' points-tab--on' : ''
+              }`}
+              onClick={() => setScope('event')}
+            >
+              This game
+            </button>
+            <span className="points-tabs__sep" aria-hidden="true" />
+          </>
+        )}
+        <button
+          type="button"
+          className={`points-tab${
+            scope === 'global' && metric === 'earned' ? ' points-tab--on' : ''
+          }`}
+          onClick={() => {
+            setScope('global');
+            setMetric('earned');
+          }}
+        >
+          Most earned
+        </button>
+        <button
+          type="button"
+          className={`points-tab${
+            scope === 'global' && metric === 'won' ? ' points-tab--on' : ''
+          }`}
+          onClick={() => {
+            setScope('global');
+            setMetric('won');
+          }}
+        >
+          Most won
+        </button>
+        {eventId && (
           <Link href={`/games/${eventId}`} className="points-tabs__back">
             Back to the game →
           </Link>
-        </div>
-      )}
+        )}
+      </div>
 
       {loading && <div className="card muted">Loading leaderboard…</div>}
       {error && <div className="error">{error}</div>}
@@ -243,18 +309,25 @@ function Leaderboard() {
                     entry={entry}
                     scope={board.scope}
                     me={entry.userId === board.me.userId}
+                    fallbackName={entry.userId === board.me.userId ? myName : null}
                     onOpen={() => setOpenFan(entry)}
                   />
                 ))}
               </ul>
               {showPinned && (
                 <div className="points-lb__pin">
-                  <span className="points-lb__pin-label">Your rank</span>
+                  {/* "No wins yet" is the honest label for an unranked row on
+                      the winnings board — "Your rank" over a dash implies the
+                      fan has one and it's bad. */}
+                  <span className="points-lb__pin-label">
+                    {noWinsYet ? 'No wins yet' : 'Your rank'}
+                  </span>
                   <ul className="points-lb__list">
                     <Row
                       entry={board.me}
                       scope={board.scope}
                       me
+                      fallbackName={myName}
                       pinned
                       onOpen={() => setOpenFan(board.me)}
                     />
@@ -263,7 +336,9 @@ function Leaderboard() {
                     <p className="muted points-lb__hint">
                       {board.scope === 'event'
                         ? "You haven't picked on this game yet."
-                        : "You haven't earned any points yet — make a pick or check in daily to get on the board."}
+                        : onWonBoard
+                          ? "You haven't won anything yet — win a pick, a contest or an Arena call and you're on this board. Your earned total is unaffected."
+                          : "You haven't earned any points yet — make a pick or check in daily to get on the board."}
                     </p>
                   )}
                 </div>
@@ -277,6 +352,19 @@ function Leaderboard() {
                   ? 'No picks have been made on this game yet. Be the first.'
                   : 'No points have been won yet. Open a live game and call it.'}
               </p>
+              {onWonBoard && (
+                <p className="results-empty__hint">
+                  The{' '}
+                  <button
+                    type="button"
+                    className="fancard-open"
+                    onClick={() => setMetric('earned')}
+                  >
+                    Most earned
+                  </button>{' '}
+                  board counts check-ins and reads too, so it fills up first.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -289,8 +377,15 @@ function Leaderboard() {
         <FanCard
           key={openFan.userId}
           userId={openFan.userId}
-          fallbackName={openFan.displayName}
+          fallbackName={
+            openFan.displayName ??
+            (openFan.userId === board?.me.userId ? myName : null)
+          }
           isMe={openFan.userId === board?.me.userId}
+          // The card shows the rank of the board it was opened FROM. Off the
+          // winnings board that's skillRank; off either other board it's
+          // globalRank. Showing the wrong one is the bug this prop prevents.
+          board={onWonBoard ? 'won' : 'earned'}
           onClose={() => setOpenFan(null)}
         />
       )}

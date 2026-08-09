@@ -2967,8 +2967,17 @@ export interface LeaderboardEntry {
 
 // `top` is the top 20 by row_number; `me` is the caller's own row, pulled
 // alongside so a fan outside the cut still sees where they stand.
+//
+// SCOPE and METRIC are separate axes, not one union — don't collapse them.
+// `scope` picks the population (everyone / one game); `metric` picks what is
+// measured about them (everything earned / only what was won). The one combo
+// the backend refuses is scope='event' + metric='won', which 400s: the event
+// board is already net winnings on that game, so "won" has nothing to add.
 export interface PointsLeaderboard {
   scope: 'global' | 'event';
+  // Echoed back so the page can caption the numbers actually on screen rather
+  // than the tab the fan just pressed. Event scope always echoes 'earned'.
+  metric: 'earned' | 'won';
   eventId?: string;
   top: LeaderboardEntry[];
   me: LeaderboardEntry;
@@ -2993,9 +3002,20 @@ export interface FanPointsSummary {
   balanceHidden: true;
   // rank(), so ties share a number — a fan can legitimately be one of three #2s.
   globalRank: number;
+  // The winnings board's pair, built from the same SQL fragment that board
+  // embeds so the card and the row can't drift. NULL TOGETHER for a fan who has
+  // never won — that's "off the board", not last place, and never 0/#0.
+  // A card opened from the winnings board must show these two; one opened from
+  // the earned board shows globalRank/lifetimeEarned. See FanCard's `board`.
+  lifetimeWon: number | null;
+  skillRank: number | null;
   // `refunded` is reported but excluded from totalResolved: a void has no
   // outcome, so a question staff pulled must not dent a fan's win rate.
   // totalResolved === won + lost.
+  //
+  // KNOWN GAP (backend P6): this counts PREDICTIONS ONLY, so on the winnings
+  // board it under-reports a fan whose points came from the Arena, contests or
+  // parlays — lifetimeWon can be large beside a thin W-L-R. Not fixable here.
   record: {
     won: number;
     lost: number;
@@ -3076,15 +3096,23 @@ export const voidPrediction = (token: string, predictionId: string) =>
 export const getMyPicks = (token: string) =>
   authGet<MyPicksReport>('/predictions/my-picks', token);
 
+// `metric` defaults to 'earned', which is the board this endpoint has always
+// served — an existing 2-arg call is byte-identical on the wire apart from the
+// explicit param, and gets the same numbers back.
+//
+// NEVER pass metric='won' with scope='event': the backend 400s that pair on
+// purpose (see PointsLeaderboard). The metric is dropped for event scope here
+// rather than trusted to callers, so the invalid request can't be constructed.
 export const getPointsLeaderboard = (
   token: string,
   scope: 'global' | 'event' = 'global',
   eventId?: string,
+  metric: 'earned' | 'won' = 'earned',
 ) =>
   authGet<PointsLeaderboard>(
     `/leaderboards/points?scope=${scope}${
       eventId ? `&eventId=${encodeURIComponent(eventId)}` : ''
-    }`,
+    }${scope === 'event' ? '' : `&metric=${metric}`}`,
     token,
   );
 

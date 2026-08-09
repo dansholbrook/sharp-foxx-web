@@ -7806,6 +7806,15 @@ a.follow-sugcard__name:hover {
   border-color: var(--accent);
 }
 
+/* Divides the two axes in the tab row: scope on the left, metric on the right.
+   Decorative only — the grouping is stated in the tab labels themselves. */
+.points-tabs__sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--border);
+}
+
 .points-tabs__back {
   margin-left: auto;
   font-size: 0.7rem;
@@ -8006,6 +8015,14 @@ a.follow-sugcard__name:hover {
 
 .fancard-hero__medal {
   font-size: 1.3rem;
+}
+
+/* "No wins yet" where a rank would be. Words, not a number, so it drops to the
+   body scale and off the accent colour — it isn't a score. */
+.fancard-hero__value--none {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .fancard-hero__unit {

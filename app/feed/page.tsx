@@ -961,6 +961,8 @@ export default function FeedPage() {
           userId={openFan.userId}
           fallbackName={openFan.displayName}
           isMe={openFan.userId === board?.me.userId}
+          // This band is the earned board, so the card shows the earned pair.
+          board="earned"
           onClose={() => setOpenFan(null)}
         />
       )}

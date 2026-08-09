@@ -832,6 +832,9 @@ function ContestLeaderboardView({
           userId={openFan.user_id}
           fallbackName={openFan.display_name}
           isMe={openFan.user_id === meId}
+          // Contest standings aren't the winnings board, so the card keeps the
+          // platform-wide earned pair it has always shown here.
+          board="earned"
           onClose={() => setOpenFan(null)}
         />
       )}
