@@ -591,13 +591,54 @@ function PickSheetView({
 // STATE c: the scorecard + leaderboard (locked / live / final)
 // ---------------------------------------------------------------------------
 
-// The crowd's split, revealed only once locked. Two proportional bars. The
-// distribution shape tells us which contest it is — {over,under} for an O/U slate,
-// {home,away} for a pick'em — so the row doesn't have to thread the type down.
+// ---------------------------------------------------------------------------
+// The crowd's split, revealed only once locked: a proportional bar over a
+// SENTENCE THAT NAMES THE FANS.
+//
+// WHY IT IS A SENTENCE AND NOT A LEGEND. This rendered a bare two-column legend
+// — "Away 67%" / "Home 33%" — and an unlabelled percentage beside a final score
+// reads as a price whether or not it is one. The Arena spec bans "odds",
+// "lines" and "props" from UI copy, and this platform's whole position is that
+// it is not a sportsbook; a number that has to be EXPLAINED to be innocent is
+// the wrong number to ship. So the percentage says whose it is, inline.
+//
+// This block is gated on `revealed`, which the backend only sets at
+// locked/live/final — so it is STRUCTURALLY GUARANTEED to render next to a
+// score. There is no state in which the innocent reading comes for free.
+//
+// ----------------------------------------------------------------------------
+// DO NOT SHORTEN THE SECOND HALF TO "· 33% Portland". It reads as redundant and
+// it is not: it is the entire fix.
+//
+// At 0.7rem this line WRAPS on a phone, and it wraps at the separator — so the
+// two halves become two lines, and either can be cropped into a screenshot
+// alone. That is the test this copy has to pass, because the row is what gets
+// screenshotted, and a legend elsewhere on the page does not travel with it.
+// "33% of fans picked Portland" survives being cropped out on its own.
+// "33% Portland" beside a final score is precisely the artifact this replaced.
+// The repetition is not clutter; it is the guarantee, on both lines.
+// ----------------------------------------------------------------------------
+//
+// "PICKED", NOT "TOOK". You take a side, you take the points — "took" is
+// bettor's register. `picked` is this product's own verb, already two lines
+// above in the same row ("Your pick: Washington"), and it cannot be misread as
+// a transaction.
+//
+// The distribution shape tells us which contest it is — {over,under} for an O/U
+// slate, {home,away} for a pick'em — so the row doesn't thread the type down.
+// The team NAMES do have to be threaded: a side needs its name to be picked.
+// ---------------------------------------------------------------------------
 function DistributionBars({
   distribution,
+  homeTeam,
+  awayTeam,
 }: {
   distribution: { home: number; away: number } | { over: number; under: number };
+  // RAW and nullable — deliberately NOT the row's 'TBD'-substituted locals. An
+  // unnamed side reads as "the home side" below, because "33% of fans picked
+  // TBD" is not a sentence. Unused on an O/U slate, which names its own sides.
+  homeTeam: string | null;
+  awayTeam: string | null;
 }) {
   const ou = 'over' in distribution;
   // left segment / right segment: Away|Home for pick'em, Under|Over for O/U.
@@ -607,16 +648,31 @@ function DistributionBars({
   const total = left + right;
   if (total === 0) return null;
   const rightPct = Math.round((right / total) * 100);
+  // Derived by subtraction, not rounded independently, so the two always sum to
+  // 100 — "67% … 34%" in one sentence would read as a mistake in the count.
   const leftPct = 100 - rightPct;
+  // An O/U slate names its own two sides; a pick'em names the teams and falls
+  // back to the side word. Capitalised Over/Under matches the option labels the
+  // fan tapped and the "Your pick: Over" line directly above.
+  const leftName = ou ? 'Under' : awayTeam ?? 'the away side';
+  const rightName = ou ? 'Over' : homeTeam ?? 'the home side';
+  const line =
+    `${leftPct}% of fans picked ${leftName}` +
+    ` · ${rightPct}% of fans picked ${rightName}`;
   return (
-    <div className="picksheet-dist" aria-label="Crowd pick distribution">
-      <div className="picksheet-dist__bar">
+    <div className="picksheet-dist">
+      {/* The bar duplicates the sentence, so it is decoration: hidden rather
+          than given its own aria-label, which would announce the same split
+          twice. The visible copy IS the accessible copy — the same property
+          that makes it survive a screenshot makes it the better label. */}
+      <div className="picksheet-dist__bar" aria-hidden="true">
         <span className="picksheet-dist__seg picksheet-dist__seg--away" style={{ width: `${leftPct}%` }} />
         <span className="picksheet-dist__seg picksheet-dist__seg--home" style={{ width: `${rightPct}%` }} />
       </div>
+      {/* One child, so the legend's `justify-content: space-between` is a no-op
+          and the sentence wraps inside its own box. No CSS change needed. */}
       <div className="picksheet-dist__legend">
-        <span>{ou ? 'Under' : 'Away'} {leftPct}%</span>
-        <span>{ou ? 'Over' : 'Home'} {rightPct}%</span>
+        <span>{line}</span>
       </div>
     </div>
   );
@@ -669,7 +725,11 @@ function ScoreRow({
           )}
         </div>
         {revealed && game.distribution && (
-          <DistributionBars distribution={game.distribution} />
+          <DistributionBars
+            distribution={game.distribution}
+            homeTeam={game.homeTeam}
+            awayTeam={game.awayTeam}
+          />
         )}
       </li>
     );
@@ -707,7 +767,11 @@ function ScoreRow({
         )}
       </div>
       {revealed && game.distribution && (
-        <DistributionBars distribution={game.distribution} />
+        <DistributionBars
+          distribution={game.distribution}
+          homeTeam={game.homeTeam}
+          awayTeam={game.awayTeam}
+        />
       )}
     </li>
   );

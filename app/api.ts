@@ -6809,8 +6809,16 @@ export const updateNotificationPreferences = (
 // second, silent definition of a contract that already has an owner: the
 // moment it exists, a wrong path from the backend stops being visible as a 404
 // and starts being invisible as a repair. The contract lives in
-// sharp-foxx-api/src/modules/notifications/deep-links.ts, and the six shapes it
-// emits are checked against this app's route files in
+// sharp-foxx-api/src/modules/notifications/deep-links.ts, and the seven shapes
+// it emits are checked against this app's route files in
 // docs/notification-deep-links.md. If a link 404s, the fix is in that file,
 // not here.
+//
+// THE SEVENTH IS /profile, and it is worth knowing why it exists: a deep link
+// can be perfectly resolvable and still wrong. call_caller_of_week pointed at
+// /arena/call, which resolves every time and shows the title only while that
+// card is current — so the link rotted on a schedule rather than 404ing. It now
+// points at /profile, whose badge shelf reads GET /me/items and keeps the badge
+// forever. A notification about a permanent thing goes to the surface that
+// keeps it; a this-week result goes to this week's card.
 // ----------------------------------------------------------------------------

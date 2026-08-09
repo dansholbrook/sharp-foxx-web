@@ -36,7 +36,7 @@ Neither a type system nor a build catches this class of bug. Both sides of the
 mismatch are `string`. The only thing that catches it is checking the emitted
 path against a route file, which is what the table below is.
 
-## The contract — all six shapes
+## The contract — all seven shapes
 
 | Builder | Emitted path | Route file in this app |
 | --- | --- | --- |
@@ -46,9 +46,32 @@ path against a route file, which is what the table below is.
 | `linkCallGrade(id)` | `/arena/call/grade/<callId>` | `app/arena/call/grade/[callId]/page.tsx` |
 | `linkCallCompose(id)` | `/arena/call/compose/<callId>` | `app/arena/call/compose/[callId]/page.tsx` |
 | `linkMyGame(id)` | `/my-games/<eventId>` | `app/my-games/[eventId]/page.tsx` |
+| `linkProfile()` | `/profile` | `app/profile/page.tsx` |
 
-The last two rows are the corrected ones. The other four were audited at the
-same time and were already right.
+The `linkCallGrade` / `linkCallCompose` rows are the ones corrected in the
+original audit; the four above them were checked at the same time and were
+already right.
+
+`linkProfile()` was added later, and for a different class of mistake than the
+transposed paths this document was written about. **It resolved fine — it was
+just pointed at the wrong screen.** `call_caller_of_week` deep-linked to
+`linkCall()`, which serves the *current* card, so a fan who won the title could
+tap the notification that week and see it, and tap the same notification the
+following Monday and land on somebody else's card with no trace of their own.
+The badge shelf on `/profile` reads `GET /me/items` and holds it permanently.
+
+The rule that came out of it: **a notification about a permanent thing points at
+the surface that keeps it; a notification about this week's result points at this
+week's card.** `call_graded` correctly keeps `linkCall()` on that basis — the
+score, the pot share and the answer key are all on the card and none of them
+outlive the week.
+
+The other two item-bearing notifications were checked against the same rule and
+need no change: `oracle_result` → `/arena/oracle`, whose day read returns every
+Oracle badge the fan owns regardless of the day, and `trail_result` (which also
+announces leg and season trophies) → `/arena/trail`, which carries the pennant
+book. The Call was uniquely broken because it is the one Arena game whose page
+is scoped to a period and has no collection view of its own.
 
 `callStaffRoute()` in `app/api.ts` builds the same two Call staff paths for the
 desk's own row clicks. It was correct throughout — it is the local proof of what
