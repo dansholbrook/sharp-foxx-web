@@ -16449,8 +16449,22 @@ a.arena-tile:active {
    The Oracle's reveal treatment, and for its reason: on a settled card the
    result is the only thing the fan came for. The one difference is that this
    figure is ALWAYS present — filing pays whatever else happened — which is what
-   stops the 0-for-5 card reading as a punishment. */
-.call-verdict {
+   stops the 0-for-5 card reading as a punishment.
+
+   SHARED WITH .contest-verdict, the settled pick'em / over-under scorecard —
+   same block, same job, same argument (see the comment above SettledVerdict in
+   app/contests/[id]/page.tsx). Paired in the selectors rather than duplicated so
+   the two payoff moments on this platform cannot drift into looking different.
+
+   THE ONE PLACE THEY DIVERGE, and it is behaviour rather than style: the Call
+   always renders its figure and a contest does not. A contest that paid this fan
+   nothing renders NO __points element at all, so the block opens on the headline
+   — whose 10px top margin exists to clear the figure and would otherwise sit
+   there as a stray gap. The :first-child rule below reclaims it. That is the
+   whole cost of the non-winner case, and it is why the figure is omitted rather
+   than rendered as "+0": see the SettledVerdict comment for that argument. */
+.call-verdict,
+.contest-verdict {
   margin: 0 0 18px;
   padding: 18px 16px 16px;
   border: 1px solid var(--accent-dim);
@@ -16458,7 +16472,8 @@ a.arena-tile:active {
   background: linear-gradient(180deg, rgba(201, 163, 78, 0.14), transparent);
 }
 
-.call-verdict__points {
+.call-verdict__points,
+.contest-verdict__points {
   display: block;
   font-family: var(--font-serif);
   font-size: clamp(2rem, 9vw, 2.6rem);
@@ -16469,7 +16484,8 @@ a.arena-tile:active {
   text-shadow: 0 0 26px rgba(201, 163, 78, 0.35);
 }
 
-.call-verdict__headline {
+.call-verdict__headline,
+.contest-verdict__headline {
   margin: 10px 0 0;
   font-family: var(--font-serif);
   font-size: clamp(1.2rem, 4.5vw, 1.6rem);
@@ -16478,7 +16494,13 @@ a.arena-tile:active {
   color: var(--text);
 }
 
-.call-verdict__counts {
+/* The non-winner's block opens here, with no figure above it to clear. */
+.contest-verdict__headline:first-child {
+  margin-top: 0;
+}
+
+.call-verdict__counts,
+.contest-verdict__counts {
   margin: 6px 0 0;
   font-size: 0.8rem;
   font-weight: 600;
@@ -16487,7 +16509,8 @@ a.arena-tile:active {
   font-variant-numeric: tabular-nums;
 }
 
-.call-verdict__sub {
+.call-verdict__sub,
+.contest-verdict__sub {
   margin: 8px 0 0;
   font-size: 0.88rem;
   line-height: 1.5;

@@ -46,6 +46,7 @@ import {
   PickSheet,
   PickSheetGame,
   PickValue,
+  PayoutRow,
   ContestLeaderboard,
   ContestLeaderboardRow,
 } from '../../api';
@@ -777,6 +778,175 @@ function ScoreRow({
   );
 }
 
+// ---------------------------------------------------------------------------
+// THE SETTLED VERDICT — what the contest actually PAID. Above the scorecard,
+// because it is the subject of this screen and the scorecard is the evidence.
+//
+// The whole settlement pipeline exists to produce this block. Without it the
+// screen is a report card: "3 correct · 6 picks" and a row in a list, identical
+// for the fan who won 250 points and the fan who won nothing.
+//
+// ---------------------------------------------------------------------------
+// NO ANIMATION HERE, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.
+//
+// `oracle-rise` (globals.css) and the Trail's chest exist one directory over and
+// look like the obvious thing to reach for. They are the wrong pattern, and the
+// difference is not taste:
+//
+//   THOSE FIRE ON A TRANSITION THE FAN JUST CAUSED. Both are gated on a
+//   `justPicked` response held in page state, and both DELIBERATELY do not
+//   survive a reload — today-card.tsx says it outright: "the moment has passed."
+//   The animation is the app reacting to a tap.
+//
+//   THIS SCREEN IS LOADED COLD. A final contest is a URL. There is no moment to
+//   react to, and the same flourish would replay on the fan's twentieth visit to
+//   a contest they lost last week — which reads as decoration, not celebration.
+//
+// The celebration here is the FIGURE: gold, serif, and first. That treatment is
+// already carried by the shared .call-verdict/.contest-verdict rule and needs no
+// new token and no keyframe. If you are here to add motion, the only version
+// that would be honest is one gated on a live→final transition observed in-page,
+// and LockedView does not poll `contest` — only `board` and `sheet` — so that
+// moment is not detectable today anyway.
+// ---------------------------------------------------------------------------
+
+// "Second of three." / "Ninth of 217." Words to tenth, digits above — and the
+// two halves cross that threshold INDEPENDENTLY, because "Ninth of 217" is a
+// sentence a fan reads and "Ninth of two hundred and seventeen" is not.
+const ORDINAL_WORDS = [
+  '', 'First', 'Second', 'Third', 'Fourth', 'Fifth',
+  'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth',
+];
+const CARDINAL_WORDS = [
+  'none', 'one', 'two', 'three', 'four', 'five',
+  'six', 'seven', 'eight', 'nine', 'ten',
+];
+
+function ordinalWord(n: number): string {
+  return ORDINAL_WORDS[n] || ordinal(n);
+}
+
+function cardinalWord(n: number): string {
+  return CARDINAL_WORDS[n] ?? points(n);
+}
+
+// WHAT THIS CONTEST PAID THIS ENTRY — DERIVED, NOT READ. Read this before
+// trusting the number, and before copying the function to another contest type.
+//
+// contest_entries carries `score` and `rank` and NOTHING ELSE about settlement:
+// finalize pays through the LEDGER (a 'contest_payout' point_events row) and
+// never writes the amount back to the entry. GET /points/ledger takes only
+// limit/offset — no referenceId filter, no actionType filter — so reaching that
+// row from this screen would mean paging the fan's entire statement and matching
+// client-side. That is the unbounded scan this codebase has already deleted once.
+//
+// So the amount is re-derived from the two things the detail read ALREADY
+// carries: config.payouts and myEntry.rank. It is exact rather than an estimate,
+// because it is the same lookup finalize performed —
+// sharp-foxx-api/src/modules/contests/contests.service.ts:378, the `else` arm:
+//
+//     for (const e of ranked) {
+//       const points = e.rank == null ? undefined : payoutByRank.get(e.rank);
+//       if (points && points > 0) amountByEntry.set(e.id, points);
+//     }
+//
+// THE CAVEAT, and it is why this comment is longer than the function. That arm
+// is the DUPLICATE tie regime, taken only when the contest type does NOT set
+// `splitTies`. Pick'em and over/under don't, and that is this function's entire
+// licence. The other arm (splitTies: true — survivor) divides a rank's pool
+// evenly among everyone tied at it, and the tie group's SIZE is not on this read
+// at all. So THE DAY PICK'EM GAINS splitTies, THIS SILENTLY OVERPAYS: it would
+// print a figure nobody was credited, with nothing to make it fail loudly. There
+// is no test that catches it either, because both sides would still typecheck.
+//
+// That is the risk docs/contest-payout-column.md exists to remove — a
+// payout_points column written at finalize turns this back into a read, and
+// unblocks survivor (which today shows no payout at all) in the same change.
+//
+// RANK COMES FROM myEntry, not from the leaderboard's `me` row. The two agree —
+// both are rank() OVER (ORDER BY score DESC) over the same entries — but only
+// myEntry.rank is the column finalize actually read when it paid.
+function payoutForRank(payouts: PayoutRow[], rank: number | null): number {
+  if (rank == null) return 0;
+  return payouts.find((p) => p.rank === rank)?.points ?? 0;
+}
+
+function SettledVerdict({
+  contest,
+  sheet,
+}: {
+  contest: ContestDetail;
+  sheet: PickSheet;
+}) {
+  const rank = contest.myEntry?.rank ?? null;
+  // finalize sets rank for every entry of the contest in one UPDATE before it
+  // flips the status, so a 'final' contest always has one. Guarded anyway: no
+  // rank means no honest sentence, and silence beats a wrong placement.
+  if (rank == null) return null;
+
+  const payouts = contest.config.payouts ?? [];
+  const paid = payoutForRank(payouts, rank);
+
+  // Only ranks that actually pay. A row of { rank: 4, points: 0 } is legal
+  // config and credits nobody, so it must not be counted as a prize this fan
+  // missed — and a fan sitting ON that rank is a non-winner, not a winner of
+  // zero. Both of those cases fall out of this one filter.
+  const payingRanks = payouts
+    .filter((p) => p.points > 0)
+    .map((p) => p.rank)
+    .sort((a, b) => a - b);
+  // Contiguous from 1 is the shape every contest ships today ("top three"); a
+  // gapped table cannot be described that way, so it doesn't try to.
+  const contiguous =
+    payingRanks.length > 0 && payingRanks.every((r, i) => r === i + 1);
+
+  // Denominator is the SLATE, not picksMade — it matches the rows immediately
+  // below, which render every game including the ones that say "No pick". A fan
+  // reading "3 of 4 correct" over six rows would be reading a contradiction.
+  const total = sheet.games.length;
+
+  return (
+    <div className="contest-verdict">
+      {/* Never "+0" — see the .call-verdict note in globals.css. A zero figure
+          turns a neutral screen into a scolding one, and the non-winner branch
+          below already says plainly where the points went. */}
+      {paid > 0 && (
+        <span className="contest-verdict__points">+{points(paid)}</span>
+      )}
+      <p className="contest-verdict__headline">
+        {ordinalWord(rank)} of {cardinalWord(contest.entrants)}.
+      </p>
+      <p className="contest-verdict__counts">
+        {points(sheet.summary.correct)} of {points(total)} correct
+      </p>
+      {paid > 0 ? (
+        <p className="contest-verdict__sub">
+          {points(paid)} pts are in your balance.
+        </p>
+      ) : payingRanks.length === 0 ? (
+        // NO PRIZES ON THE BOARD. config.payouts is optional (it defaults to []
+        // in assertPayoutsValid), so a contest can legitimately pay nobody —
+        // and every sentence about "the winners" would be a lie on this one.
+        <p className="contest-verdict__sub">
+          This one was played for the standings — no points on the board.
+        </p>
+      ) : (
+        // THE COMMON CASE, and the one the copy is built around. Flat and
+        // factual: where they landed, where the points went, where to go next.
+        // No consolation, no "so close" — a fan who came 90th is not close.
+        <p className="contest-verdict__sub">
+          {contiguous
+            ? payingRanks.length === 1
+              ? 'First place took the points.'
+              : `Top ${cardinalWord(payingRanks.length)} took the points.`
+            : 'The paid ranks took the points.'}{' '}
+          Next slate&apos;s in the <Link href="/contests">lobby</Link>.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Scorecard({ sheet, ou }: { sheet: PickSheet; ou: boolean }) {
   return (
     <section className="contest-scorecard">
@@ -784,8 +954,19 @@ function Scorecard({ sheet, ou }: { sheet: PickSheet; ou: boolean }) {
         <h2 className="game-articles__head">Your scorecard</h2>
         <span className="contest-scorecard__tally">
           {sheet.summary.correct} correct · {sheet.summary.picksMade} picks
+          {/* NOT "pts". pointsPerCorrect is the SCOREBOARD's unit — pickem.type.ts
+              says so in as many words ("the per-correct-pick payout in points on
+              the scoreboard, NOT the ledger") — and scoreEntry turns it into the
+              ranking score, which nothing ever credits. Calling it "2 pts each"
+              invited a fan with 3 correct to conclude they had earned 6 points,
+              and now that the verdict block above states a REAL credited figure,
+              the two would be two point numbers meaning different things on one
+              screen. Only one number on this page is points; it is upstairs. */}
           {sheet.pointsPerCorrect !== 1 && (
-            <span className="muted"> · {sheet.pointsPerCorrect} pts each</span>
+            <span className="muted">
+              {' '}
+              · {sheet.pointsPerCorrect} toward your score each
+            </span>
           )}
         </span>
       </div>
@@ -957,7 +1138,16 @@ function LockedView({ contest }: { contest: ContestDetail }) {
     <div className="contest-detail__body">
       {error && <div className="error">{error}</div>}
       {entered && sheet ? (
-        <Scorecard sheet={sheet} ou={contest.type === 'overunder'} />
+        <>
+          {/* ONLY AT 'final'. A locked or live contest has no settlement yet —
+              ranks move every time a game posts, and myEntry.rank is null until
+              finalize writes it — so there is nothing true to say about what the
+              fan won. The leaderboard below already carries the running story. */}
+          {contest.status === 'final' && (
+            <SettledVerdict contest={contest} sheet={sheet} />
+          )}
+          <Scorecard sheet={sheet} ou={contest.type === 'overunder'} />
+        </>
       ) : !entered ? (
         <div className="results-empty">
           <p className="results-empty__title">You didn&apos;t enter this one</p>
