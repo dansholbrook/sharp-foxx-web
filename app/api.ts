@@ -5693,6 +5693,16 @@ export interface CallCard {
   // the fan's phone, the API container and the database must not be able to
   // disagree about whether the game has started.
   locked: boolean;
+  // WHICH VOID THIS WAS — true only on a card the 24h sweep washed, false on
+  // every other card including every live one. Read it through callVoidCopy()
+  // rather than branching on it directly: it is one of THREE causes and it is
+  // not the first one to test (see that helper for the order and why).
+  //
+  // SENT, NEVER DERIVED. `now > locksAt + 24h` is necessary for the sweep but
+  // not sufficient — a staff void on day three satisfies it too — so a client
+  // computing this itself would tell a fan the correspondent never filed on a
+  // card a human deliberately pulled.
+  autoVoided: boolean;
   createdAt: string;
   correspondent: { repId: string; displayName: string | null };
   event: CallEventInfo;
@@ -5956,6 +5966,55 @@ export function callPhase(call: CallCard): CallPhase {
   if (call.status === 'voided') return 'voided';
   if (call.status === 'graded') return 'graded';
   return call.locked ? 'locked' : 'open';
+}
+
+// WHY THE WEEK WAS WASHED, in the fan's terms. The Oracle's oracleOutcomeCopy
+// pattern: one helper owns the branching so no component re-derives a cause from
+// two fields, and every branch is written next to the others where they can be
+// read against each other.
+//
+// THREE CAUSES, AND ONLY ONE OF THEM IS ANYBODY'S FAULT. A fan told only that
+// their answers stopped mattering assumes the product broke; people forgive a
+// reason. The three:
+//
+//   CALLED OFF     — the game never happened. Nobody's fault, and the most
+//                    common non-sweep void: the staff void button is literally
+//                    labelled "The game didn't happen".
+//   NEVER FILED    — the 24h sweep. The common one, and the only one where
+//                    something went wrong on our side.
+//   PULLED         — a human washed a card on a game that did happen. Rare, and
+//                    the honest thing to say is that we don't say more.
+//
+// ---------------------------------------------------------------------------
+// THE ORDER IS LOAD-BEARING, and it is not the order of the union.
+//
+// event.status is a POSITIVE-ONLY signal. Nothing forces anyone to PATCH a
+// called-off game to 'postponed', so 'postponed'/'canceled' PROVES the game
+// didn't happen while 'scheduled' proves nothing at all. So it is tested FIRST
+// (when it speaks, it is right and it outranks how the void was written) and
+// its absence falls through rather than concluding the game was played.
+//
+// autoVoided is tested SECOND: by then we know of no called-off game, so "the
+// answers never came back" is the truthful reading of a sweep.
+//
+// The fallback is LAST and says the least, because it is the branch where we
+// genuinely do not know why a human ended the week.
+// ---------------------------------------------------------------------------
+//
+// NO BLAME AND NO CLOCK IN ANY BRANCH. The correspondent is not named — "the
+// answers never came back from the stands" is the same fact without a byline on
+// somebody the fan may know locally — and the 24-hour figure stays out, because
+// it is the correspondent's deadline and it invites "so what happens at hour
+// 23?" It is already in their own notification, where it belongs.
+export function callVoidCopy(call: CallCard): string {
+  const tail = 'There is a new game on Thursday.';
+  if (call.event.status === 'postponed' || call.event.status === 'canceled') {
+    return `The game was called off, so there was nothing to grade — nothing counted against you. ${tail}`;
+  }
+  if (call.autoVoided) {
+    return `The answers never came back from the stands, so the week was voided — nothing counted against you. ${tail}`;
+  }
+  return `The card was pulled before it could be graded — nothing counted against you. ${tail}`;
 }
 
 // ============================================================================

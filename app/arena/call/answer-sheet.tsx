@@ -20,7 +20,9 @@
 //              existing card hydrates the draft and the slip changes verb.
 //   LOCKED   — kickoff passed. The card freezes as filed; nothing actionable.
 //   GRADED   — the results view: the receipt, the answer key, the settlement.
-//   VOIDED   — the 24h sweep fired: nobody graded it, and it was washed.
+//   VOIDED   — the week was washed and nothing was scored. THREE CAUSES, and
+//              the card says which: the game was called off, the answers never
+//              came back from the stands, or staff pulled it. See callVoidCopy.
 //
 // ----------------------------------------------------------------------------
 // THE GRADED READING, TOP TO BOTTOM, AND WHY IT IS IN THAT ORDER.
@@ -73,6 +75,7 @@ import {
   arenaLockCountdown,
   callErrorSlot,
   callPhase,
+  callVoidCopy,
   callWeekLabel,
   points,
   etDateTime,
@@ -1470,17 +1473,20 @@ export function CallSheet({
         </div>
       )}
 
-      {/* ================= VOIDED — the 24h sweep fired ================= */}
+      {/* ================= VOIDED — the week was washed =================
+          THREE CAUSES, ONE BLOCK. callVoidCopy owns which sentence this is;
+          nothing about the layout changes with it. The headline does not branch
+          — "washed" is what happened in all three, and only the reason differs.
+          Nothing here goes warn-coloured either: a void is routine, and
+          .call-frozen--voided greys the headline on purpose. */}
       {phase === 'voided' && (
         <div className="call-frozen call-frozen--voided">
           <p className="call-frozen__headline">This one was washed.</p>
-          <p className="call-frozen__sub">
-            The card went ungraded and the week was voided — nothing counted
-            against you. There is a new game on Thursday.
-          </p>
+          <p className="call-frozen__sub">{callVoidCopy(call)}</p>
           {/* THE WASH PAID SOMETHING, AND THE FAN IS TOLD SO — QUIETLY.
               points_awarded is the one grading column a voided entry carries:
-              the sweep pays participation and scores nothing. It does not lead
+              every void pays participation and scores nothing, whichever of the
+              three causes ended the week. It does not lead
               (there is no verdict to celebrate) and it is not the hero figure a
               graded card gets, but a fan whose balance moved is owed the
               sentence that explains why. */}
