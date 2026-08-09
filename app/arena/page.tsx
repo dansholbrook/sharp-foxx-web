@@ -43,86 +43,25 @@ import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import { CallGameCard, OracleGameCard, TrailGameCard } from './game-cards';
+import { StreakChip, anyStreakActive } from '../arena-streaks';
 import {
   getCallCurrent,
   getOracleToday,
   getTrailToday,
   oracleBadgeMeta,
-  ArenaStreaks,
   CallCurrent,
   OracleBadge,
   OracleToday,
   TrailToday,
 } from '../api';
 
-// The freeze cap, mirroring MAX_FREEZES in arena-streak.service.ts. Only used to
-// draw the empty ❄️ slot — the earned count always comes from the server.
-const MAX_FREEZES = 2;
-
 // ---------------------------------------------------------------------------
 // THE SHARED STRIP — every game's streak, the freezes, the medallions, one row.
 //
-// PER-GAME, NOT SUMMED. The backend keeps one streak row per (user, game) and a
-// combined "🔥 7" would be a number that exists nowhere and that no game would
-// ever agree with. Two chips that each say which game they belong to is both
-// honest and better copy: "🔥 4 Oracle · 🔥 2 Trail" is a fan with two habits.
-//
-// FREEZES RIDE ON THEIR OWN GAME'S CHIP for the same reason — a freeze earned on
-// the Trail cannot save an Oracle streak.
+// The chip itself lives in ../arena-streaks, because /profile renders the same
+// row: two surfaces, one component, so the freeze cap and the "hide a game the
+// fan has never touched" rule can only ever be wrong in one place.
 // ---------------------------------------------------------------------------
-function StreakChip({
-  game,
-  icon,
-  streaks,
-}: {
-  game: string;
-  icon: string;
-  streaks: ArenaStreaks;
-}) {
-  // "Where active" — a game the fan has never touched contributes nothing to
-  // the row rather than a chip full of zeroes.
-  const active =
-    streaks.playStreak > 0 || streaks.winStreak > 0 || streaks.freezes > 0;
-  if (!active) return null;
-
-  return (
-    <span className="arena-chip">
-      <span className="arena-chip__game">
-        <span aria-hidden="true">{icon}</span> {game}
-      </span>
-      {streaks.playStreak > 0 && (
-        <span className="arena-chip__stat" title={`${game} play streak`}>
-          <span aria-hidden="true">🔥</span> {streaks.playStreak}
-        </span>
-      )}
-      {streaks.winStreak > 0 && (
-        <span className="arena-chip__stat" title={`${game} win streak`}>
-          <span aria-hidden="true">🎯</span> {streaks.winStreak}
-        </span>
-      )}
-      <span
-        className="arena-chip__freezes"
-        title={`${streaks.freezes} of ${MAX_FREEZES} freezes banked on ${game}`}
-      >
-        {Array.from({ length: MAX_FREEZES }, (_, i) => (
-          <span
-            key={i}
-            className={`arena-freeze${
-              i < streaks.freezes ? ' arena-freeze--on' : ''
-            }`}
-            aria-hidden="true"
-          >
-            ❄️
-          </span>
-        ))}
-        <span className="sr-only">
-          {streaks.freezes} of {MAX_FREEZES} freezes
-        </span>
-      </span>
-    </span>
-  );
-}
-
 function ArenaStrip({
   oracle,
   trail,
@@ -136,9 +75,7 @@ function ArenaStrip({
 
   // Is there anything true to say? A brand-new fan gets the invitation instead
   // of a row of empties — same self-hiding discipline as the feed's bands.
-  const anyStreak = [oracle?.streaks, trail?.streaks].some(
-    (s) => s && (s.playStreak > 0 || s.winStreak > 0 || s.freezes > 0),
-  );
+  const anyStreak = anyStreakActive([oracle?.streaks, trail?.streaks]);
   const anything = anyStreak || badges.length > 0 || pennants > 0;
 
   return (

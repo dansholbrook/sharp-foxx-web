@@ -95,6 +95,11 @@ function oracleTeaser(today: OracleToday | null, now: number): Teaser | null {
   if (!day) return null;
   const mine = day.myPick;
   const graded = day.status === 'graded' || day.status === 'voided';
+  // Has this fan ever played the Oracle? lastPlayedDate is null until their
+  // first pick, which is the one durable "never" this payload carries — the
+  // streak counters are both zero again after a reset, so neither is a test for
+  // it. Used ONLY to name the thing on the first-timer's card; see below.
+  const neverPlayed = today?.streaks.lastPlayedDate === null;
 
   // OPEN and uncalled — the only state with an expiry on it.
   if (!graded && !mine && !day.locked) {
@@ -103,7 +108,22 @@ function oracleTeaser(today: OracleToday | null, now: number): Teaser | null {
       mark: '🔮',
       tone: 'open',
       note: 'Free · once a day',
-      lead: (
+      // THE FIRST-TIMER'S LEAD NAMES THE ACTOR, and this is the smallest fix to
+      // a real problem: on a phone this card is the FIRST thing under the
+      // masthead on the feed (see the mobile `order` block in globals.css), so
+      // for a fan who signed up ten minutes ago "Milwaukee · 72% — ride or
+      // fade?" is a question whose subject has never been introduced. Naming
+      // the Oracle costs four words and answers "who likes Milwaukee?".
+      //
+      // It retires itself after the fan's first pick, permanently — a returning
+      // fan gets the tighter line, which is the better one once you know what
+      // it's about.
+      lead: neverPlayed ? (
+        <>
+          The Oracle likes <strong>{day.oracle.team ?? day.matchup}</strong> at{' '}
+          {day.oracle.confidence}% — ride with it or fade it?
+        </>
+      ) : (
         <>
           <strong>{day.oracle.team ?? day.matchup}</strong> ·{' '}
           {day.oracle.confidence}% — ride or fade?

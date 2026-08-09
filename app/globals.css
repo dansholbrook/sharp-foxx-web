@@ -18147,3 +18147,45 @@ a.arena-tile:active {
   line-height: 1.45;
   color: var(--muted);
 }
+
+/* ===========================================================================
+   /profile — THE FAN'S OWN PAGE.
+
+   LAYOUT ONLY. Every colour, weight and radius below is an existing token, and
+   every block on that page is built from classes that already existed:
+   .points-hero for the standing block, .arena-chip / .arena-medallion for the
+   streaks and the shelf, .trail-trophies for the trophies, .ledger-list for the
+   activity statement, .follow-carousel for the follows. These five rules are
+   the spacing that holds them together and nothing else.
+
+   THE .profile-* PREFIX IS SHARED WITH THE ATHLETE PAGE and that is fine —
+   .profile-hero / .profile-stats / .profile-section belong to /athletes/[id],
+   these five belong here, and the names don't collide. Anything added later
+   that DOES want to be shared should be checked against that page first.
+   =========================================================================== */
+
+.profile-arena {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The streak chips and the medallion shelf both ride .arena-strip__row, which
+   carries its own flex-wrap; these only supply the vertical rhythm between the
+   bands the Arena section stacks. */
+.profile-streaks,
+.profile-medallions {
+  margin: 0;
+}
+
+.profile-trophies {
+  margin: 0;
+}
+
+/* The W-L-R caveat, directly under the standing block it qualifies. Sized like
+   a caption because that is what it is. */
+.profile-note {
+  margin: -16px 0 26px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}

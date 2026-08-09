@@ -3689,10 +3689,34 @@ export function squaresPerSquareLabel(config: ContestConfig): string {
   return typeof c === 'number' && c > 0 ? `${points(c)} pts/square` : 'Squares';
 }
 
-// A human line for one ledger row's action_type. Mirrors the backend's action
-// vocabulary (contest_entry/contest_payout/adjustment + the engagement set);
-// an unknown type degrades to its slug de-underscored rather than rendering raw.
+// A human line for one ledger row's action_type. ONE function, every surface
+// that renders the ledger — /picks' Recent activity and /profile's Activity —
+// so a fan's statement reads identically wherever they open it.
 //
+// THE DEFAULT IS A SAFETY NET, NOT A STRATEGY. An unknown type degrades to its
+// slug de-underscored, which is why a missing case doesn't crash — and also why
+// it doesn't announce itself: it just renders "arena trail win" in a column of
+// properly written labels, and nobody notices until a fan does. This map was
+// short of THIRTEEN verbs on that basis (every Arena payout, both parlay verbs,
+// both prediction verbs, the squares claim). If you add a verb below, add it as
+// a case; don't rely on the default reading acceptably.
+//
+// ----------------------------------------------------------------------------
+// THE GROUPING BELOW IS FOR READERS AND IS NOT AN ALLOWLIST. Ten of these verbs
+// are the backend's SKILL_ACTION_TYPES — the exact definition of the "won"
+// board (predictions.service.ts) — but that list lives on the server and is
+// enforced there, in SQL, and this client has no copy of it and needs none:
+// nothing here computes what a fan has WON, it only names rows.
+//
+// So DO NOT turn these cases into an exported array and call it the skill set.
+// That would be a second copy of a server-owned allowlist, in a repo that can't
+// see the first one, silently drifting the moment a payout verb ships. The
+// backend's own note is explicit that the list fails CLOSED on purpose — a copy
+// over here would give it a way to fail open. The label map's job is different
+// and strictly wider: it must name attendance verbs and stakes too, and those
+// are deliberately NOT on that allowlist.
+//
+// ----------------------------------------------------------------------------
 // BOTH SPELLINGS of the engagement actions are here on purpose. The canonical
 // keys (article_read, watch_live_game, …) are what the economy writes today; the
 // engagement_* names are what the pre-economy ledger wrote, and point_events is
@@ -3700,12 +3724,57 @@ export function squaresPerSquareLabel(config: ContestConfig): string {
 // need a label. See LEGACY_ACTION_ALIASES in engagement-actions.ts.
 export function ledgerActionLabel(actionType: string): string {
   switch (actionType) {
-    case 'contest_entry':
-      return 'Contest entry';
-    case 'contest_payout':
-      return 'Contest payout';
+    // ---- Corrections. 'adjustment' is the platform's ONE refund verb: every
+    // stake-return and manual correction uses it, because `action_type <>
+    // 'adjustment'` is the only thing separating a lifetime-raising earn from a
+    // balance-only credit. The row's own note carries which kind it was.
     case 'adjustment':
       return 'Adjustment';
+
+    // ---- Stakes and spends. Balance down, lifetime_earned untouched.
+    case 'contest_entry':
+      return 'Contest entry';
+    case 'prediction_stake':
+      return 'Pick stake';
+    case 'parlay_stake':
+      return 'Parlay stake';
+    case 'square_claim':
+      return 'Square claimed';
+
+    // ---- Winnings. Predictions, the contest chassis (pick'em, survivor,
+    // over/under and squares all settle through one verb), and parlays.
+    case 'prediction_payout':
+      return 'Pick won';
+    case 'contest_payout':
+      return 'Contest payout';
+    case 'parlay_payout':
+      return 'Parlay won';
+
+    // ---- The Arena, by game. Each game splits its SKILL earns from its
+    // ATTENDANCE earns onto separate verbs (the 2026-08-08 split in
+    // arena-rewards.service.ts), and the labels keep them apart too: a fan
+    // reading their statement should be able to see what they were paid for
+    // being right and what they were paid for turning up.
+    case 'arena_oracle_win':
+      return 'Oracle win';
+    case 'arena_streak_bonus':
+      return 'Oracle streak bonus';
+    case 'arena_trail_win':
+      return 'Trail pennant';
+    case 'arena_trail_trophy':
+      return 'Trail trophy';
+    case 'arena_trail_chest':
+      return 'Scenic Route chest';
+    case 'arena_call_win':
+      return 'Call answers';
+    case 'arena_call_whistle':
+      return 'Golden Whistle';
+    case 'arena_call_pot':
+      return 'Call pot share';
+    case 'arena_call_bonus':
+      return 'Call card filed';
+
+    // ---- Engagement, canonical keys + the retired engagement_* spellings.
     case 'daily_checkin':
       return 'Daily check-in';
     case 'team_follow':
@@ -3721,6 +3790,7 @@ export function ledgerActionLabel(actionType: string): string {
     case 'national_pick':
     case 'engagement_national_pick':
       return 'National pick';
+
     default:
       return actionType.replace(/_/g, ' ');
   }

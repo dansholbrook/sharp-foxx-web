@@ -10,18 +10,24 @@ import { navLinksFor } from './roles';
 import { getReviewQueue, getNilReviewQueue, points } from './api';
 
 // The fan's points identity: a compact ⚡ chip that rides the nav on every page
-// and links to their pick history. Renders only once the wallet has actually
+// and links to their profile. Renders only once the wallet has actually
 // loaded — never a placeholder "0 pts", which would misread as "you're broke" to
 // a fan who simply hasn't been fetched yet.
 //
 // Shown to EVERY role, not just fans: any authenticated caller can pick (the
 // backend deliberately allows staff to play along), so any of them can hold a
-// balance. It doubles as staff's way into /picks, which isn't in their nav.
+// balance.
+//
+// IT POINTS AT /profile, NOT /picks. The chip is the fan's identity in the nav,
+// and /profile is now where that identity lives whole — standing on both boards,
+// streaks, badges, the ledger. /picks is still one tap away (the profile leads
+// with a link to it), so this stays staff's door into their own points too;
+// they just arrive at the room rather than at one shelf in it.
 function PointsChip() {
   const { balance } = usePoints();
   if (balance === null) return null;
   return (
-    <Link href="/picks" className="points-chip" title="Your points and picks">
+    <Link href="/profile" className="points-chip" title="Your points and profile">
       <span className="points-chip__bolt" aria-hidden="true">
         ⚡
       </span>

@@ -74,6 +74,15 @@ const NAV_ITEMS: NavItem[] = [
   // allows it), but only the fan roles carry the nav LINKS: staff nav is already
   // eleven items deep, and the ⚡ chip in the nav is their way into /picks, which
   // links on to the leaderboard. See PAGE_ACCESS below, where both are open.
+  // The fan's own profile: standing on both boards, Arena streaks, badges, the
+  // points ledger, and who they follow. Leads the points cluster because it's
+  // the summary the other two drill down from.
+  //
+  // FAN-ONLY LINK, ALL-ROLES PAGE — same split as /picks and /leaderboard below,
+  // and for the same reason: staff hold balances and streaks too, but their nav
+  // is already fourteen items deep, and the ⚡ chip (which now points here) is
+  // their door. See PAGE_ACCESS, where it's open to everyone.
+  { href: '/profile', label: 'My profile', roles: ['athlete', 'viewer'] },
   { href: '/picks', label: 'My picks', roles: ['athlete', 'viewer'] },
   { href: '/leaderboard', label: 'Leaderboard', roles: ['athlete', 'viewer'] },
   {
@@ -288,6 +297,10 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
   // own points. Listed explicitly rather than left to the open-by-default
   // fallback, since the nav/page split is exactly the thing worth being able to
   // read here.
+  {
+    match: (p) => p === '/profile',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
   {
     match: (p) => p === '/picks',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],

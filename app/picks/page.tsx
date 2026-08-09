@@ -275,10 +275,20 @@ function MyContestsSection({ token }: { token: string }) {
 
 // ---------------------------------------------------------------------------
 // RECENT ACTIVITY — the immutable points ledger made visible. The last 10 moves
-// (action, signed points, when), newest first. Contest entries, payouts,
-// refunds and engagement earns all land here; predictions do NOT (that path
-// doesn't write ledger rows yet — see points-ledger.service.ts), so this reads
-// as "points economy activity", not a second pick history.
+// (action, signed points, when), newest first.
+//
+// EVERYTHING lands here now, predictions included: the backend writes
+// 'prediction_stake' on a pick and 'prediction_payout' on a win (plus the
+// 'adjustment' that returns the stake), same as contests, parlays, squares, the
+// Arena and the engagement verbs. An older note here said predictions were the
+// exception; they aren't, and haven't been since predictions.service.ts started
+// writing through PointsLedgerService.
+//
+// It is still NOT a second pick history, and that distinction is why this
+// section and the Pick history below both belong on the page. This is the
+// MONEY: what moved, which way, when. The pick list is the CALLS: the question,
+// the side taken, what's still live. A fan asking "why is my balance down 400?"
+// wants this one; a fan asking "what did I say about the Lions?" wants that one.
 // ---------------------------------------------------------------------------
 
 function RecentActivitySection({ token }: { token: string }) {

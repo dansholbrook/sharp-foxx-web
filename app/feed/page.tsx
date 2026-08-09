@@ -10,6 +10,7 @@ import { FollowButton } from '../follow-button';
 import { FanCard } from '../fan-card';
 import { AppNav } from '../nav';
 import { ArenaTeaser } from '../arena-teaser';
+import { CarouselItem, FollowDisc, followHref } from '../follow-carousel';
 import {
   YourPicksBand,
   NationalBoardBand,
@@ -233,71 +234,10 @@ function ArticleThumb({ item }: { item: FeedItem }) {
 // ---- Follows experience ----------------------------------------------------
 // The homepage's personalized band: a carousel of who you follow + a "From your
 // follows" content row, or a "Suggested for you" row when you follow nobody yet.
-
-// Up to two initials from a "First Last" (or single-word) display name.
-function followInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  const first = parts[0]?.charAt(0) ?? '';
-  const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
-  return `${first}${last}`.toUpperCase() || '—';
-}
-
-// Where a followed/suggested target links (correspondents have no page yet).
-function followHref(
-  entry: FollowMineEntry | FollowSuggestion,
-): string | null {
-  if (entry.targetType === 'athlete') return `/athletes/${entry.athleteId}`;
-  if (entry.targetType === 'team') return `/teams/${entry.teamId}`;
-  return null;
-}
-
-// Avatar (athletes with a photo) or a monogram disc (teams, correspondents, or
-// avatar-less athletes). Sized by the caller via a modifier class.
-function FollowDisc({
-  entry,
-  size,
-}: {
-  entry: FollowMineEntry | FollowSuggestion;
-  size: 'lg' | 'sm';
-}) {
-  const name = followTargetName(entry);
-  const avatarUrl = entry.targetType === 'athlete' ? entry.avatarUrl : null;
-  return (
-    <span
-      className={`follow-disc follow-disc--${size} follow-disc--${entry.targetType}`}
-    >
-      {avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatarUrl} alt={name} loading="lazy" className="follow-disc__img" />
-      ) : (
-        <span className="follow-disc__mono" aria-hidden="true">
-          {followInitials(name)}
-        </span>
-      )}
-    </span>
-  );
-}
-
-// One tile in the "Following" carousel — disc + name, linking to the page.
-function CarouselItem({ entry }: { entry: FollowMineEntry }) {
-  const name = followTargetName(entry);
-  const href = followHref(entry);
-  const inner = (
-    <>
-      <FollowDisc entry={entry} size="lg" />
-      <span className="follow-carousel__name">{name}</span>
-    </>
-  );
-  return href ? (
-    <Link href={href} className="follow-carousel__item">
-      {inner}
-    </Link>
-  ) : (
-    <span className="follow-carousel__item follow-carousel__item--nolink">
-      {inner}
-    </span>
-  );
-}
+//
+// FollowDisc / CarouselItem / followHref live in ../follow-carousel: /profile
+// renders the same carousel off the same shared membership, so they're one
+// component rather than two that can drift.
 
 // A compact suggestion in the "Suggested" strip shown beneath the carousel.
 function SuggestionChip({ s }: { s: FollowSuggestion }) {
@@ -527,9 +467,24 @@ function railRank(rank: number | null): string {
 // grant, so there's no "no points" empty state to guard. It shows nothing only
 // while the wallet is still in flight (balance null), so it never flashes a
 // wrong zero.
+//
+// THE OPENING LINE, AND WHY IT'S CONDITIONAL. A fan who signed up ninety seconds
+// ago has already been shown this number three times — the ⚡ chip, this hero,
+// and a "+25 ⚡" check-in toast that fired before they touched anything — and
+// nothing anywhere has said what points ARE, where the 1,000 came from, or that
+// they aren't money. This is the one line that answers all three, and it is
+// gated on lifetimeEarned === 0, which is precisely "has never earned anything,
+// so every point on screen is the grant".
+//
+// It survives the whole first session and then retires itself: applyBalance
+// deliberately doesn't touch lifetimeEarned (no pick response carries it), so
+// the check-in that fires on this very page load can't yank the explanation out
+// from under the fan who is still reading it. The next login has a real earned
+// total and the line is gone for good.
 function PointsHero() {
   const { balance, lifetimeEarned } = usePoints();
   if (balance === null) return null;
+  const untouched = lifetimeEarned === 0;
   return (
     <section className="frail-points">
       <span className="frail-points__label">Your points</span>
@@ -540,14 +495,21 @@ function PointsHero() {
         <span className="frail-points__value">{points(balance)}</span>
         <span className="frail-points__unit">pts</span>
       </div>
-      {lifetimeEarned !== null && (
+      {untouched ? (
         <span className="frail-points__lifetime">
-          {points(lifetimeEarned)} pts earned all-time
+          Free points to start — call a game with them. No cash value: points
+          can&apos;t be bought, redeemed, or cashed out.
         </span>
+      ) : (
+        lifetimeEarned !== null && (
+          <span className="frail-points__lifetime">
+            {points(lifetimeEarned)} pts earned all-time
+          </span>
+        )
       )}
       <div className="frail-points__links">
-        <Link href="/picks" className="frail-points__link">
-          My picks →
+        <Link href="/profile" className="frail-points__link">
+          My profile →
         </Link>
         <Link href="/leaderboard" className="frail-points__link">
           Leaderboard →
@@ -787,6 +749,36 @@ export default function FeedPage() {
           </span>
         </div>
         <AppNav />
+      </div>
+
+      {/* ---- THE MASTHEAD, and why the feed of all pages needs one.
+          Every other fan surface answers "what is this?" in its first forty
+          words — the Arena hero, both leaderboard standfirsts, /picks,
+          /contests, /games, /discover. The feed was the only one that didn't,
+          and it is the page a fan lands on the instant they finish signing up:
+          straight from a signup form to a search box, a gold ⚡ number and a
+          card about an "Oracle" nobody has introduced.
+
+          THIS IS THE HOW-IT-WORKS, and it is deliberately not a page. A
+          separate explainer would restate six standfirsts that already exist,
+          one screen away from where each is useful, and would be read by the
+          fans who need it least. What was actually missing is the connective
+          sentence: that the games, the points, the Arena and the board are ONE
+          thing. That belongs here, above all of them, and nowhere else.
+
+          IT IS NOT DISMISSIBLE AND HOLDS NO STATE. A tour would need a
+          "seen it" flag, and every fan is a returning fan eventually — a
+          standfirst they stop reading costs nothing, a modal they have to close
+          costs something every time. ---- */}
+      <div className="masthead">
+        <span className="masthead-kicker">Your feed</span>
+        <h1 className="masthead-title">Tonight&apos;s games</h1>
+        <p className="masthead-standfirst">
+          Sharp Foxx covers the local games the big networks skip, with a
+          correspondent in the building. Follow your teams, call the games with
+          free points, and play the Arena daily — one score, no cash value, and
+          bragging rights on the leaderboard.
+        </p>
       </div>
 
       <SearchBar />
