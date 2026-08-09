@@ -690,8 +690,24 @@ export default function CallComposePage() {
 
       {!loading && !forbidden && card && (
         <>
-          {/* ---- Published already: composing is over, grading is next. ---- */}
-          {(published || card.status !== 'draft') && (
+          {/* ================= COMPOSING IS OVER =================
+              THREE ENDINGS, NOT ONE. This was a single catch-all on
+              `status !== 'draft'`, which told a correspondent to "grade it from
+              the stands once the game ends" on cards that were ALREADY graded and
+              on cards voidCall had permanently closed. A settled card is not a
+              live one, and a tool that says otherwise is telling a rep to go do
+              work that no longer exists.
+
+              THE LIVE BRANCH STAYS THE CATCH-ALL, deliberately: it excludes the
+              two terminal states by name rather than listing the live ones, so a
+              status added later lands on "the card is out of your hands" instead
+              of rendering nothing at all. */}
+
+          {/* ---- Live: composing is over, grading is next. ---- */}
+          {(published ||
+            (card.status !== 'draft' &&
+              card.status !== 'graded' &&
+              card.status !== 'voided')) && (
             <section className="card game compose-done">
               <span className="game-kicker">
                 {published ? 'Published' : callStatusLabel(card.status)}
@@ -710,6 +726,56 @@ export default function CallComposePage() {
                 <Link href={`/arena/call/grade/${callId}`} className="btn-inline">
                   Go to the grade sheet
                 </Link>
+                <Link href="/arena/call" className="link-btn">
+                  See the fan card →
+                </Link>
+              </div>
+            </section>
+          )}
+
+          {/* ---- Graded: the week is settled, and the only move left is a
+                   correction. The grade sheet is still the right destination —
+                   it opens in its regrade state — so the link stays and only the
+                   prose changes. ---- */}
+          {card.status === 'graded' && (
+            <section className="card game compose-done">
+              <span className="game-kicker">{callStatusLabel(card.status)}</span>
+              <h2>This card has already been graded.</h2>
+              <p className="compose-done__note">
+                The week is settled: fans have their results and the card has
+                finished paying. Questions cannot be rewritten — these are the
+                ones that were answered and scored. If a verdict was wrong, fix it
+                on the grade sheet: regrading pays the difference to whoever is
+                owed more, and never takes points back.
+              </p>
+              <div className="compose-done__links">
+                <Link href={`/arena/call/grade/${callId}`} className="btn-inline">
+                  Go to the grade sheet
+                </Link>
+                <Link href="/arena/call" className="link-btn">
+                  See the fan card →
+                </Link>
+              </div>
+            </section>
+          )}
+
+          {/* ---- Voided: the week was washed and there is nothing left to do.
+                   NO GRADE-SHEET LINK, and that is the point rather than an
+                   omission: a voided card cannot be graded afterwards, so a
+                   button pointing at the grade sheet would offer an action that
+                   does not exist. "Nothing left to do" is said structurally, not
+                   only in the prose. ---- */}
+          {card.status === 'voided' && (
+            <section className="card game compose-done">
+              <span className="game-kicker">{callStatusLabel(card.status)}</span>
+              <h2>This card was voided.</h2>
+              <p className="compose-done__note">
+                The week was washed: nothing was scored, and every entrant kept
+                their participation points rather than playing for the pot.
+                Questions cannot be rewritten, and a voided card cannot be graded
+                afterwards — there is nothing left to do on this one.
+              </p>
+              <div className="compose-done__links">
                 <Link href="/arena/call" className="link-btn">
                   See the fan card →
                 </Link>
