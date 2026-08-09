@@ -5,10 +5,24 @@
 // two things at once: a fan browse surface ("find my school") and an internal
 // territory-planning tool ("which D2 schools in NC don't we cover yet?").
 //
-// Which is why Active-only defaults OFF. Nearly every imported row is
-// is_active=false — the row exists so the school graph resolves, not because we
-// cover it. Hiding those would hide the map. Inactive rows carry a subtle
-// "Not yet covered" pill instead.
+// Which is why "Covered only" DEFAULTS BY ROLE, opposite ways, and why the
+// toggle exists at all rather than the page just picking one:
+//
+//   staff (admin, regional_manager, field_rep) -> OFF. Nearly every imported row
+//     is is_active=false — the row exists so the school graph resolves, not
+//     because we cover it. Defaulting these users to covered-only would hide the
+//     map, which is the half of the page that is a territory-planning tool.
+//   fans (athlete, viewer) -> ON. "Which D2 schools in NC don't we cover yet?"
+//     is not a fan question. A fan landing on 2,012 mostly-uncovered schools is
+//     being shown an import artifact and asked to tell it apart from the
+//     product; the "Not yet covered" pill explains the row but does not justify
+//     leading with 25.8k of them.
+//
+// Either default is one click from the other, and the choice is carried in the
+// URL in BOTH directions (?active=true / ?active=false) — see the sync effect.
+// A shared link therefore shows the sharer's view rather than re-deriving from
+// the opener's role, and a fan who unchecks the box does not silently get it
+// back on the next reload.
 //
 // Both tabs filter and page SERVER-side (GET /institutions, GET /teams — each
 // returns { items, total }): 25 rows a page, "Show more" fetches the next
@@ -57,6 +71,16 @@ const TIERS: Array<{ value: InstitutionTier; label: string }> = [
   { value: 'juco', label: 'JUCO' },
   { value: 'unclassified', label: 'Unclassified' },
 ];
+
+// The roles that browse the UNCOVERED map as part of their job. Everyone else
+// gets "Covered only" on by default. Listed positively (staff, not "not a fan")
+// so a role added later defaults to the fan view, which is the safe side to be
+// wrong on: a new role seeing the covered map is a narrower view than intended,
+// a new role seeing 25.8k staged rows is a broken page.
+const MAP_PLANNING_ROLES = ['admin', 'regional_manager', 'field_rep'];
+
+const coveredOnlyDefault = (roles: string[]): boolean =>
+  !roles.some((r) => MAP_PLANNING_ROLES.includes(r));
 
 const TIER_LABEL = new Map(TIERS.map((t) => [t.value, t.label]));
 // A tier the pills don't cover ('high_school', or anything a later import adds)
@@ -473,7 +497,22 @@ function Discover() {
   const [query, setQuery] = useState(params.get('q') ?? '');
   const [stateCode, setStateCode] = useState(params.get('state') ?? '');
   const [tier, setTier] = useState(params.get('tier') ?? '');
-  const [activeOnly, setActiveOnly] = useState(params.get('active') === 'true');
+  // Tri-state on purpose: absent means "use my role's default", and the two
+  // spellings are both explicit. Reading it as `=== 'true'` (as this did when
+  // the default was OFF for everyone) would make an unchecked box indis-
+  // tinguishable from an absent param, so a fan turning coverage off would get
+  // it back on the next reload — the default has to be overridable downward as
+  // well as upward once it isn't the same for everyone.
+  //
+  // AuthProvider renders a placeholder until rehydration finishes, so this page
+  // never mounts with a null user; reading roles in an initialiser is safe.
+  const roleDefault = coveredOnlyDefault(user?.roles ?? []);
+  const [activeOnly, setActiveOnly] = useState(() => {
+    const seeded = params.get('active');
+    if (seeded === 'true') return true;
+    if (seeded === 'false') return false;
+    return roleDefault;
+  });
   const [sport, setSport] = useState(params.get('sport') ?? '');
   const [gender, setGender] = useState(params.get('gender') ?? '');
   const [conference, setConference] = useState<{ id: string; name: string } | null>(
@@ -547,7 +586,9 @@ function Discover() {
     if (query.trim()) qs.set('q', query.trim());
     if (stateCode) qs.set('state', stateCode);
     if (tier) qs.set('tier', tier);
-    if (activeOnly) qs.set('active', 'true');
+    // Written whenever it differs from this viewer's default, in either
+    // direction, so the link carries the view actually on screen.
+    if (activeOnly !== roleDefault) qs.set('active', String(activeOnly));
     if (tab === 'teams') {
       if (sport) qs.set('sport', sport);
       if (gender) qs.set('gender', gender);
@@ -555,7 +596,7 @@ function Discover() {
     }
     const s = qs.toString();
     router.replace(s ? `/discover?${s}` : '/discover', { scroll: false });
-  }, [router, tab, query, stateCode, tier, activeOnly, sport, gender, conference]);
+  }, [router, tab, query, stateCode, tier, activeOnly, roleDefault, sport, gender, conference]);
 
   // The team-only filters are meaningless on the schools tab, and leaving them
   // set would silently narrow a later switch back. They're kept in state (so
@@ -632,8 +673,12 @@ function Discover() {
     load(0);
   }, [token, allowed, load]);
 
+  // "Filtered" means narrowed FROM THIS VIEWER'S DEFAULT, not from the unfiltered
+  // graph. Comparing activeOnly against `true` instead would tell every fan they
+  // had filters applied the moment the page opened, and make "clear all filters"
+  // a control that changes what they see without them having set anything.
   const hasFilters = Boolean(
-    term || stateCode || tier || activeOnly ||
+    term || stateCode || tier || activeOnly !== roleDefault ||
     (tab === 'teams' && (sport || gender || conferenceId)),
   );
 
@@ -641,7 +686,7 @@ function Discover() {
     setQuery('');
     setStateCode('');
     setTier('');
-    setActiveOnly(false);
+    setActiveOnly(roleDefault);
     setSport('');
     setGender('');
     setConference(null);
@@ -989,7 +1034,7 @@ function Discover() {
           ))}
         </div>
 
-        {/* Off by default — see the file header. */}
+        {/* Defaults by role — on for fans, off for staff. See the file header. */}
         <label className="discover-toggle">
           <input
             type="checkbox"
@@ -1012,9 +1057,17 @@ function Discover() {
 
       {!showSkeleton && !error && (
         <div className={busy ? 'discover-results discover-results--busy' : 'discover-results'}>
+          {/* What the count is COUNTING. A fan's default view is already
+              narrowed to the covered map, so the old unfiltered wording would
+              report 34 covered schools as though they were the whole 2,012-row
+              graph — a smaller number presented as the bigger fact. */}
           <p className="result-count">
             {total.toLocaleString()} {total === 1 ? noun : `${noun}s`}
-            {hasFilters ? ' match your filters' : ' in the graph'}
+            {hasFilters
+              ? ' match your filters'
+              : activeOnly
+                ? ' we cover'
+                : ' in the graph'}
           </p>
 
           {rowCount === 0 ? (
@@ -1023,14 +1076,43 @@ function Discover() {
                 No {noun}s match these filters
               </p>
               <p className="results-empty__hint">
+                {/* "Clear all filters" returns to the viewer's DEFAULT, which
+                    for a fan still has "Covered only" on — so when that's the
+                    thing hiding the rows, the escape hatch has to be offered
+                    separately or the hint points at a button that won't help. */}
                 {hasFilters ? (
                   <>
                     Try a broader search —{' '}
                     <button type="button" className="link-btn" onClick={clearFilters}>
                       clear all filters
                     </button>
-                    {activeOnly && ' (most of the map isn’t covered yet, so “Covered only” hides a lot)'}
+                    {activeOnly && (
+                      <>
+                        , or{' '}
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() => setActiveOnly(false)}
+                        >
+                          show the whole map
+                        </button>{' '}
+                        (most of it isn’t covered yet, so “Covered only” hides a
+                        lot)
+                      </>
+                    )}
                     .
+                  </>
+                ) : activeOnly ? (
+                  <>
+                    We don’t cover any {noun}s here yet —{' '}
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => setActiveOnly(false)}
+                    >
+                      show the whole map
+                    </button>{' '}
+                    to see what’s out there.
                   </>
                 ) : (
                   <>

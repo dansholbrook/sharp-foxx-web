@@ -463,7 +463,7 @@ export default function MyPicksPage() {
               honest reading order: here's how points arrive, and here's the
               record of them arriving. Self-fetches and self-hides like its
               neighbours. */}
-          <WaysToEarn token={token} />
+          <WaysToEarn token={token} roles={user?.roles ?? []} />
           <RecentActivitySection token={token} />
 
           <section className="points-history">

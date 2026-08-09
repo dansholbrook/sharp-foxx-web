@@ -51,7 +51,6 @@ import {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
-  resolveDeepLink,
   etTime,
   etDateKey,
   ET_ZONE,
@@ -358,13 +357,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [token, items]);
 
   // Tapping a notification: mark it, close the panel, go to the one-tap action.
-  // resolveDeepLink repairs the two Call paths the backend currently emits with
-  // their segments transposed — see the block in app/api.ts.
+  // The path is routed exactly as the backend sent it — see app/api.ts on why
+  // there is no resolver in between.
   const activate = useCallback(
     (item: NotificationItem) => {
       void markRead(item);
       closeTray();
-      router.push(resolveDeepLink(item.deepLink));
+      router.push(item.deepLink);
     },
     [markRead, closeTray, router],
   );

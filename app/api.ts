@@ -6409,8 +6409,9 @@ export interface NotificationItem {
   title: string;
   body: string;
   // A PATH, never an absolute URL (the backend puts a CHECK on it). Resolve it
-  // against this origin -- and through resolveDeepLink() below, which repairs
-  // the two shapes the backend currently emits wrong.
+  // against this origin and route straight to it -- nothing rewrites a deep
+  // link in flight any more. See docs/notification-deep-links.md for the six
+  // shapes the backend emits and the route file each one lands on.
   deepLink: string;
   // The row this is about. Not used for routing (deepLink already points at the
   // one-tap action); carried because it is the only stable handle on the
@@ -6527,53 +6528,19 @@ export const updateNotificationPreferences = (
   });
 
 // ----------------------------------------------------------------------------
-// DEEP LINK RESOLUTION — A CLIENT-SIDE WORKAROUND FOR A BACKEND MISMATCH.
+// DEEP LINKS ARE ROUTED AS THEY ARRIVE. There is deliberately no resolver here.
 //
-// THIS DOES NOT BELONG HERE PERMANENTLY. The fix is in the API, in
-// src/modules/notifications/deep-links.ts, and it is being raised separately.
-// This exists so the feature can ship without waiting on that, and so the
-// workaround sits in ONE auditable place rather than being spread across the
-// tray, a router call and a settings screen.
+// There WAS one -- resolveDeepLink(), which rewrote the correspondent's two
+// Call paths because the backend built them with the id before the verb
+// (/arena/call/<id>/grade) while this client serves the verb before the id.
+// The backend now emits the correct form and the rewrite is gone with it.
 //
-// THE MISMATCH. deep-links.ts builds the correspondent's two Call paths with
-// the id BEFORE the verb:
-//
-//     linkCallGrade(id)   -> /arena/call/<id>/grade
-//     linkCallCompose(id) -> /arena/call/<id>/compose
-//
-// This client serves them with the verb before the id -- see callStaffRoute()
-// above, and the route files app/arena/call/grade/[callId]/ and
-// app/arena/call/compose/[callId]/. The segments are transposed, so both links
-// currently resolve to nothing.
-//
-// The types affected are `call_needs_grading` -- which the backend's own type
-// file calls the highest-value correspondent message on the platform -- and
-// `call_assigned`, whose entire stated purpose is to be the link a rep cannot
-// otherwise get. deep-links.ts flags the risk in its own header ("confirm them
-// against the client before the first emit ships to production"); this is that
-// confirmation, and it failed.
-//
-// The other four shapes it emits are correct and are NOT touched here:
-// /arena/oracle, /arena/trail, /arena/call, /my-games/<eventId>.
-//
-// UNKNOWN SHAPES PASS THROUGH UNTOUCHED. This is a repair for two known-broken
-// paths, not a router. A path this function does not recognise is returned
-// exactly as it arrived: a new emit site should reach its destination without
-// having to be registered here first, and a genuinely dead link should surface
-// as a 404 rather than be silently rewritten into something else.
+// Nothing replaces it, and that is the point. A client-side rewrite table is a
+// second, silent definition of a contract that already has an owner: the
+// moment it exists, a wrong path from the backend stops being visible as a 404
+// and starts being invisible as a repair. The contract lives in
+// sharp-foxx-api/src/modules/notifications/deep-links.ts, and the six shapes it
+// emits are checked against this app's route files in
+// docs/notification-deep-links.md. If a link 404s, the fix is in that file,
+// not here.
 // ----------------------------------------------------------------------------
-
-// /arena/call/<uuid>/grade  |  /arena/call/<uuid>/compose
-//
-// The uuid is matched by SHAPE rather than as [^/]+, so the already-correct
-// form (/arena/call/grade/<uuid>) cannot match with "grade" captured as the id.
-// It could not anyway -- the trailing segment would have to be grade|compose --
-// but a rewrite rule guarding its own inverse cheaply is worth the extra class.
-const TRANSPOSED_CALL_LINK =
-  /^\/arena\/call\/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\/(grade|compose)$/;
-
-export function resolveDeepLink(deepLink: string): string {
-  const transposed = TRANSPOSED_CALL_LINK.exec(deepLink);
-  if (transposed) return `/arena/call/${transposed[2]}/${transposed[1]}`;
-  return deepLink;
-}

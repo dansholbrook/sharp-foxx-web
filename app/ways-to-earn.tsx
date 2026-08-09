@@ -18,6 +18,16 @@
 // economy — neither is worth a polling loop on a page that's usually idle in a
 // background tab. Coming back to the tab is the moment the numbers might be
 // stale, so that's when it re-reads.
+//
+// ONE ROW IS FILTERED OUT, AND IT IS NOT A DISPLAY PREFERENCE — see
+// EARNABLE_BY_REPS_ONLY below. GET /points/earn-menu returns every enabled
+// action to every caller (economy.service.ts earnMenu() takes `caller` only to
+// count today's usage, never to narrow the list), and `referral_bonus` — the
+// biggest number on the panel at 100 points, uncapped — is paid to a REP's
+// wallet when someone signs up through their code. A fan has no code and no way
+// to get one, so for a fan that row is the panel's largest advertised earn and
+// the one they cannot reach. This is a statement panel; a line it cannot back up
+// is the whole failure mode.
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react';
@@ -30,6 +40,29 @@ import {
   EarnMenu,
   EarnMenuItem,
 } from './api';
+
+// Actions only a rep can actually cause, keyed to the roles that can cause them.
+// referral_bonus fires in auth.service.ts when a signup's ?ref=CODE resolves to
+// a field_reps row, and pays that rep — the referral graph is rep-shaped all the
+// way down (the code lives on field_reps.referral_code, and the edge recorded on
+// the new user is users.referred_by_rep_id, an FK to field_reps). There is no
+// user-to-user referral edge in the schema, so this is not a permissions gap a
+// client can route around.
+//
+// SUPPRESSING THE ROW IS NOT THE FIX, it is the honest half of a fix that needs
+// the API: either fans get referral codes of their own (new endpoint + a schema
+// change to hold a fan→fan edge) or the action stops being advertised platform-
+// wide. Until one of those lands, showing a rep-only earn to fans is the version
+// that is actually wrong on screen, so this hides it there and nowhere else —
+// the line is TRUE for a rep, who sees it unchanged.
+const EARNABLE_BY_REPS_ONLY: Record<string, string[]> = {
+  referral_bonus: ['regional_manager', 'field_rep'],
+};
+
+function canEarn(actionType: string, roles: string[]): boolean {
+  const required = EARNABLE_BY_REPS_ONLY[actionType];
+  return !required || required.some((r) => roles.includes(r));
+}
 
 // "through Sunday" / "through Feb 9" — a promotion's end as a fan reads a
 // deadline, not as a timestamp. Inside a week, the weekday IS the clearest
@@ -103,7 +136,7 @@ function EarnRow({ item }: { item: EarnMenuItem }) {
   );
 }
 
-export function WaysToEarn({ token }: { token: string }) {
+export function WaysToEarn({ token, roles }: { token: string; roles: string[] }) {
   const [menu, setMenu] = useState<EarnMenu | null>(null);
 
   const load = useCallback(() => {
@@ -144,8 +177,16 @@ export function WaysToEarn({ token }: { token: string }) {
 
   // Self-hides until there's something to say. Every action being disabled is a
   // real (if unlikely) admin state, and an empty "Ways to earn" heading over
-  // nothing is worse than no heading.
-  if (!menu || menu.items.length === 0) return null;
+  // nothing is worse than no heading. Counted on the VISIBLE list, so a viewer
+  // whose only remaining row was filtered out gets no heading either.
+  const items = (menu?.items ?? []).filter((i) => canEarn(i.actionType, roles));
+  // A promotion targeting ONLY rows this viewer can't earn is the same false
+  // statement one line higher up — "2x on referral bonus" over a list with no
+  // referral bonus in it. appliesTo null stays: it really is on everything.
+  const promotions = (menu?.promotions ?? []).filter(
+    (p) => p.appliesTo === null || p.appliesTo.some((a) => canEarn(a, roles)),
+  );
+  if (!menu || items.length === 0) return null;
 
   return (
     <section className="earnmenu">
@@ -157,9 +198,9 @@ export function WaysToEarn({ token }: { token: string }) {
       {/* The banner strip leads, because a live 2x is the reason the numbers
           below look unusual. appliesTo null = the platform-wide case, which is
           worded as "on everything" rather than listing six actions. */}
-      {menu.promotions.length > 0 && (
+      {promotions.length > 0 && (
         <div className="earnmenu-promos">
-          {menu.promotions.map((p) => (
+          {promotions.map((p) => (
             <div key={`${p.name}-${p.endsAt}`} className="earnmenu-promo">
               <span className="earnmenu-promo__bolt" aria-hidden="true">
                 ⚡
@@ -176,7 +217,7 @@ export function WaysToEarn({ token }: { token: string }) {
       )}
 
       <ul className="earnmenu-list">
-        {menu.items.map((item) => (
+        {items.map((item) => (
           <EarnRow key={item.actionType} item={item} />
         ))}
       </ul>
