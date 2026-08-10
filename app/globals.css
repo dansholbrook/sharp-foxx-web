@@ -11482,6 +11482,487 @@ a.follow-sugcard__name:hover {
 }
 
 /* ==========================================================================
+   BRACKET  (.bracket-* )  — the single-elimination TREE on a type='bracket'
+   contest. A fan drafts every slot before the first game, then reads back three
+   kinds of outcome per slot.
+
+   THE COLOUR RULE IS THE WHOLE POINT OF THIS BLOCK. Three states, and the third
+   one is the reason the screen exists:
+     • correct     — the squares/survivor "won" green, the app's one non-gold good.
+     • wrong       — --warn red. Your team played here and lost.
+     • unreachable — MUTED. Not red, not green, no alarm: your team never got here,
+                     which is the echo of a loss you already took rather than a new
+                     one. Painting it like `wrong` tells the fan the same bad news
+                     four times and makes a busted bracket read as a broken app.
+   The muted state gets a left rule and a dimmed body instead of a colour, so it
+   still reads as a distinct THING on the page without shouting.
+
+   NO TREE COLUMNS. A real bracket diagram (rounds as columns, connector lines) is
+   unreadable below about 900px and this app is phone-first, so the tree stacks as
+   ROUNDS down the page — which also happens to be how a fan drafts it: left to
+   right in time, top to bottom on a phone. Scoped names throughout.
+   ========================================================================== */
+
+.bracket-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 4px;
+  margin-bottom: 18px;
+}
+.bracket-head__figures {
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+}
+.bracket-figure {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bracket-figure__num {
+  font-family: var(--font-serif);
+  font-size: 1.9rem;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.bracket-figure__key {
+  font-size: 0.66rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* The "am I dead?" sentence. Quiet — it's a reading of the numbers above it, not
+   an alarm; the numbers are the headline. */
+.bracket-head__read {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+/* ---- A round ------------------------------------------------------------- */
+
+.bracket-round {
+  margin-bottom: 22px;
+}
+.bracket-round__title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.bracket-round__worth {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.bracket-round__slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---- One slot ------------------------------------------------------------ */
+
+.bracket-slot {
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 4px;
+}
+.bracket-slot__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.bracket-slot__when {
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.bracket-slot__score {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.bracket-slot__worth {
+  font-size: 0.66rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--accent-dim);
+  white-space: nowrap;
+}
+.bracket-slot__series {
+  margin: 0 0 8px;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* The two candidates, thumb-sized — modeled on .survivor-team. */
+.bracket-slot__sides {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.bracket-slot__vs {
+  align-self: center;
+  font-size: 0.7rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.bracket-team {
+  flex: 1 1 0;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.94rem;
+  text-align: center;
+  cursor: pointer;
+}
+.bracket-team:hover:not(:disabled) {
+  border-color: var(--accent-dim);
+}
+.bracket-team--on {
+  border-color: var(--accent);
+  background: rgba(201, 163, 78, 0.14);
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+.bracket-team:disabled {
+  cursor: default;
+}
+/* A candidate whose feeder isn't picked yet. Inert and obviously so — it holds
+   the slot's shape while the fan works down the tree. */
+.bracket-team--tbd {
+  color: var(--muted);
+  border-style: dashed;
+  background: transparent;
+}
+.bracket-team__seed {
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex: 0 0 auto;
+}
+.bracket-team--on .bracket-team__seed {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+.bracket-team__name {
+  line-height: 1.25;
+}
+
+/* ---- A slot after lock: what happened, and which kind of zero it was ------ */
+
+.bracket-slot--result {
+  border-left-width: 3px;
+}
+.bracket-slot__matchup {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.bracket-slot__winner {
+  margin: 0 0 8px;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+.bracket-slot__winner strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.bracket-slot__nopick {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.bracket-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.bracket-verdict__pick {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.bracket-verdict__pick strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.bracket-verdict__mark {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+
+/* correct — the one non-gold "good" in the app. */
+.bracket-slot--correct {
+  border-left-color: #2f5c3a;
+}
+.bracket-verdict__mark--correct {
+  color: #b4e6c0;
+  background: rgba(47, 92, 58, 0.25);
+  border-color: #2f5c3a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* wrong — your team played and lost. The only red on this screen. */
+.bracket-slot--wrong {
+  border-left-color: var(--warn-border);
+}
+.bracket-verdict__mark--wrong {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+/* unreachable — MUTED ON PURPOSE. See the block header: this is not a loss the
+   fan took here, and it must not wear the loss colour. The slot dims as a whole
+   so it recedes behind the games that actually decided anything. */
+.bracket-slot--unreachable {
+  border-left-color: var(--border-strong);
+  background: transparent;
+}
+.bracket-slot--unreachable .bracket-slot__matchup,
+.bracket-slot--unreachable .bracket-verdict__pick strong {
+  color: var(--muted);
+}
+.bracket-verdict__mark--unreachable {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--border-strong);
+}
+
+/* pending — a live slot the fan is still alive in. */
+.bracket-slot--pending {
+  border-left-color: var(--accent-dim);
+}
+.bracket-verdict__mark--pending {
+  color: var(--accent);
+  background: rgba(201, 163, 78, 0.1);
+  border-color: var(--accent-dim);
+}
+
+/* THE SENTENCE. The most important line on this screen for a fan whose bracket
+   busted — it is the difference between "my picks lost" and "this app is
+   broken". Given room and a left rule so it reads as an explanation rather than
+   as more metadata. */
+.bracket-slot__reason {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---- Commit -------------------------------------------------------------- */
+
+.bracket-commit {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding: 12px;
+  margin: 18px 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--panel-raised);
+}
+.bracket-commit__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bracket-commit__count {
+  font-size: 0.84rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.bracket-commit__go {
+  min-height: 46px;
+  padding: 10px 20px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.bracket-commit__go:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.bracket-commit__go:disabled {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border-strong);
+  cursor: default;
+}
+.bracket-commit__hint {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.bracket-commit__saved {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: #b4e6c0;
+}
+
+/* ---- Standings ----------------------------------------------------------- */
+
+.bracket-standings {
+  margin: 22px 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+}
+.bracket-standings__title {
+  margin: 0 0 4px;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.bracket-standings__note {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.bracket-standings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bracket-standings__row {
+  display: grid;
+  grid-template-columns: 26px 1fr auto auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+.bracket-standings__row:first-child {
+  border-top: 0;
+}
+.bracket-standings__row--me {
+  background: rgba(201, 163, 78, 0.07);
+}
+.bracket-standings__rank {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.bracket-standings__who {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+.bracket-standings__who:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.bracket-standings__row--me .bracket-standings__who {
+  color: var(--accent);
+  font-weight: 600;
+}
+.bracket-standings__score {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+/* The ceiling sits beside the score, deliberately quieter: it's the second
+   number, and reading it as the score would be worse than not showing it. */
+.bracket-standings__ceiling {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.76rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ---- Phone --------------------------------------------------------------- */
+
+@media (max-width: 520px) {
+  .bracket-head__figures {
+    gap: 20px;
+  }
+  .bracket-figure__num {
+    font-size: 1.6rem;
+  }
+  .bracket-slot__sides {
+    gap: 6px;
+  }
+  .bracket-team {
+    min-height: 56px;
+    font-size: 0.88rem;
+    padding: 8px 8px;
+  }
+  .bracket-commit__row {
+    flex-wrap: wrap;
+  }
+  .bracket-commit__go {
+    width: 100%;
+  }
+  .bracket-standings__row {
+    grid-template-columns: 22px 1fr auto;
+  }
+  /* The ceiling drops to its own line rather than squeezing the name. */
+  .bracket-standings__ceiling {
+    grid-column: 2 / -1;
+  }
+}
+
+/* ==========================================================================
    PARLAY BOARD  (.parlay-* )  — the ticket builder on a type='parlay_board'
    contest: the slate as tappable team chips, the TICKET STUB that grows as legs
    are added, and the ticket book below it. Built on the existing tokens and the

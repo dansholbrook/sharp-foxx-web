@@ -27,6 +27,7 @@ import { FanCard } from '../../fan-card';
 import { SquaresBoard } from './squares-board';
 import { SurvivorBoard } from './survivor-board';
 import { ParlayBoard } from './parlay-board';
+import { BracketBoard } from './bracket-board';
 import { canAccess } from '../../roles';
 import { EntryAdvisoryNotice } from '../../entry-advisory';
 import {
@@ -1216,7 +1217,11 @@ export default function ContestPage() {
   // when not entered), but its entered body is its own round timeline, not the
   // pick sheet — so it branches to SurvivorBoard below rather than PickSheetView.
   const isSurvivor = contest?.type === 'survivor';
-  const chassis = playable || isSurvivor;
+  // A bracket rides the same chassis SHELL as survivor — canceled/draft gating and
+  // the enter hero when not entered — then hands its entered body to BracketBoard,
+  // which is a TREE (draft the whole thing, commit once), not a pick sheet.
+  const isBracket = contest?.type === 'bracket';
+  const chassis = playable || isSurvivor || isBracket;
   const face = contest ? statusFaceKicker(contest) : '';
 
   return (
@@ -1259,10 +1264,11 @@ export default function ContestPage() {
 
           {/* Squares carries its own body (the 10x10 grid across every status);
               the parlay board likewise carries its own ticket builder + book;
-              survivor carries its own round timeline; pick'em and over/under split
-              into enter → sheet → scorecard. Survivor shares the chassis SHELL
-              (canceled/draft gating + the enter hero when not entered), then hands
-              its entered/locked body to SurvivorBoard. Any other type has no fan
+              survivor carries its own round timeline; bracket carries its own
+              tree; pick'em and over/under split into enter → sheet → scorecard.
+              Survivor and bracket share the chassis SHELL (canceled/draft gating +
+              the enter hero when not entered), then hand their entered/locked body
+              to SurvivorBoard / BracketBoard. Any other type has no fan
               gameplay in v1 — show the row it is rather than a sheet that 400s. */}
           {isSquares ? (
             <SquaresBoard contest={contest} />
@@ -1295,6 +1301,9 @@ export default function ContestPage() {
           ) : isSurvivor ? (
             // Survivor's entered body across open/locked/live/final: the timeline.
             <SurvivorBoard contest={contest} onWithdrew={load} />
+          ) : isBracket ? (
+            // Bracket's entered body across open/locked/live/final: the tree.
+            <BracketBoard contest={contest} onWithdrew={load} />
           ) : open && entered ? (
             <PickSheetView contest={contest} onWithdrew={load} />
           ) : (

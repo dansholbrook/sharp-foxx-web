@@ -3436,6 +3436,21 @@ export interface ContestConfig {
   minStake?: number;
   maxStake?: number;
   maxTicketsPerUser?: number;
+  // Bracket config (config bag on a type='bracket' contest — see bracket.type.ts).
+  // seeds is the field in seed order; slots is the TREE, each slot naming the two
+  // sources that feed it ({seed:n} in round 1, {winnerOf:slot} after).
+  //
+  // WHY THE BOARD READS THE TREE FROM HERE and not from the sheet: the sheet's
+  // per-slot `participants` are the RESOLVED ones, which stay null for rounds 2+
+  // until real games decide them. Drafting a bracket needs the opposite — who the
+  // FAN's own earlier picks send to slot 5 — and that is a walk over `from`, which
+  // only config carries. See buildDraftTree in bracket-board.tsx.
+  seeds?: BracketSeed[];
+  slots?: BracketConfigSlot[];
+  // Keys are round numbers as strings (jsonb object keys always are). Omitted =>
+  // the doubling rule, 2^(round-1). The sheet sends each slot's resolved `points`,
+  // so the board reads that rather than recomputing from this.
+  roundPoints?: Record<string, number>;
   [key: string]: unknown;
 }
 
@@ -4173,6 +4188,153 @@ export const submitSurvivorPick = (
   id: string,
   input: SurvivorPickInput,
 ) => authPut<SurvivorPicks>(`/contests/${id}/picks`, token, input);
+
+// ============================================================================
+// BRACKET — the single-elimination TREE on a type='bracket' contest. The chassis
+// (enter/withdraw/finalize) is shared with pick'em and survivor; this is the
+// gameplay. A fan picks the WHOLE TREE before round 1 starts — one team per SLOT,
+// all the way to the champion — and scores each slot they got right, weighted by
+// round (points double each round, so every round is worth the same in total).
+// Mirrors bracket.service.ts / bracket.type.ts. POINTS ONLY.
+//
+// GET/PUT /contests/:id/picks again — same path as the pick'em sheet and the
+// survivor timeline, a third shape behind it, dispatched on contest type. Hence
+// typed and named separately.
+// ============================================================================
+
+// A team as it appears anywhere on the sheet. teamName is null only if the team
+// row vanished; seed is null for a team that isn't on a seed line (can't happen
+// in a valid tree, but the read is defensive and so is this).
+export interface BracketTeamRef {
+  teamId: string;
+  teamName: string | null;
+  seed: number | null;
+}
+
+// Where a slot's participant comes from: a seed line (round 1) or the winner of
+// an earlier slot (every later round). `winnerOf` always names a LOWER slot
+// number — validateConfig enforces it — which is what lets the board resolve a
+// draft tree in one ascending pass instead of walking a graph.
+export type BracketSlotSource = { seed: number } | { winnerOf: number };
+
+export interface BracketSeed {
+  seed: number;
+  teamId: string;
+}
+
+// One slot as CONFIG carries it (the topology). eventIds is an array and
+// winsNeeded may exceed 1 because a slot is a SERIES, not a game — best-of-seven
+// postseasons are the reason the shape exists. Both default to the degenerate
+// single-game slot everywhere they're read.
+export interface BracketConfigSlot {
+  slot: number;
+  round: number;
+  eventIds: string[];
+  winsNeeded?: number;
+  from: [BracketSlotSource, BracketSlotSource];
+}
+
+// THE THREE PICK STATES, plus pending. `wrong` and `unreachable` BOTH score zero
+// and are both is_correct=false at rest — and they are NOT the same thing to the
+// fan:
+//   • wrong        — your team played this game and lost. The game working.
+//   • unreachable  — your team never got here (or is already out), so this pick
+//                    was decided by something that happened rounds ago.
+// Rendering those two identically is what makes a busted bracket look like a
+// broken app: seven zeros and no explanation. The backend DERIVES the difference
+// and ships a sentence with it — see unreachableReason, which the board must
+// render VERBATIM rather than paraphrase.
+export type BracketPickResult = 'correct' | 'wrong' | 'unreachable' | 'pending';
+
+// One slot on the sheet. participants are the RESOLVED teams — [null, null] means
+// TBD, the feeders haven't decided yet — so they are NOT what a draft renders
+// (see ContestConfig.slots). points is this slot's round weight, already resolved
+// against config.roundPoints. myPick/result/unreachableReason are null until the
+// fan has submitted a tree.
+export interface BracketSlotView {
+  slot: number;
+  round: number;
+  points: number;
+  eventIds: string[];
+  winsNeeded: number;
+  // The primary (first) game's kickoff, status and score — a series shows its
+  // opener, which is all a one-game slot ever has anyway.
+  scheduledAt: string | null;
+  gameStatus: EventListItem['status'] | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  participants: [BracketTeamRef | null, BracketTeamRef | null];
+  winner: BracketTeamRef | null;
+  myPick: BracketTeamRef | null;
+  result: BracketPickResult | null;
+  // The sentence explaining an `unreachable`, e.g. "Baltimore is out and can no
+  // longer reach this game." Present ONLY on that state. Render it as sent.
+  unreachableReason: string | null;
+}
+
+// One row of the crowd view, top 50, sorted by score then ceiling.
+//
+// ceiling = score + every slot the entry can still win. THE NUMBER THAT ANSWERS
+// "am I dead?": a fan sitting 4th whose ceiling clears the leader's score is in a
+// game; one whose ceiling EQUALS their own score is mathematically out and is
+// entitled to be told rather than left to work it out from a tree.
+//
+// KNOWN GAP: no display name. buildSheet selects entry id/userId/score with no
+// join to users, so a row can only be labelled "You" (isMe) or by its id — the
+// board opens a FanCard to resolve the rest. Typed optional so that adding the
+// join on the backend lights up the names here with no frontend change.
+export interface BracketStandingsRow {
+  entryId: string;
+  userId: string;
+  score: string;
+  ceiling: number;
+  isMe: boolean;
+  displayName?: string | null;
+}
+
+// GET /contests/:id/picks on a bracket contest. Entered fans only (403 — a
+// participant surface, same as the other two sheets). Lazy-recomputes the tree on
+// read, so `result` and the advance are honest even if a grade never fired.
+export interface BracketSheet {
+  contestId: string;
+  entryId: string;
+  contestStatus: ContestStatus;
+  // The crowd view is EARNED AT LOCK — the same anti-herding rule pick'em,
+  // over/under and survivor apply to their distribution reads. false => standings
+  // is absent (pre-lock every score is 0 and every ceiling is the maximum, so it
+  // would say nothing anyway).
+  revealed: boolean;
+  // Bracket entries are never 'eliminated' — an entry whose champion just went out
+  // is STILL SCORING on its other branch. They stay 'active' until finalize.
+  entryStatus: ContestEntry['status'];
+  // numeric -> a STRING at rest, like every other score. Keep it a string to the
+  // render boundary.
+  score: string;
+  ceiling: number;
+  slots: BracketSlotView[];
+  standings?: BracketStandingsRow[];
+}
+
+// PUT /contests/:id/picks body on a bracket contest — THE WHOLE TREE, every slot
+// exactly once. The deliberate difference from pick'em, whose PUT takes a partial
+// sheet: a slot-5 pick only means anything relative to the slot-1 and slot-2 picks
+// the same fan made, so the backend's consistency rule can only be checked against
+// a complete tree. 400s on a missing slot, and on an inconsistent one
+// ("Inconsistent bracket: slot 5 is your slot-1 winner vs your slot-2 winner, so
+// that team can't be your pick there.") — which the board prevents by construction
+// rather than discovering on submit.
+export interface BracketSubmitInput {
+  picks: Array<{ slot: number; teamId: string }>;
+}
+
+// The caller's tree. Entered fans only (403 otherwise).
+export const getBracketSheet = (token: string, id: string) =>
+  authGet<BracketSheet>(`/contests/${id}/picks`, token);
+
+// Commit the whole tree (open contests only — 409 once locked). Returns the
+// rebuilt sheet, so the board reconciles from the response.
+export const submitBracket = (token: string, id: string, input: BracketSubmitInput) =>
+  authPut<BracketSheet>(`/contests/${id}/picks`, token, input);
 
 // ============================================================================
 // PARLAY BOARD — the ticket builder on a type='parlay_board' contest. The contest
