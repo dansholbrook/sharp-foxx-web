@@ -42,13 +42,20 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
-import { CallGameCard, OracleGameCard, TrailGameCard } from './game-cards';
+import {
+  BingoGameCard,
+  CallGameCard,
+  OracleGameCard,
+  TrailGameCard,
+} from './game-cards';
 import { StreakChip, anyStreakActive } from '../arena-streaks';
 import {
+  getBingoToday,
   getCallCurrent,
   getOracleToday,
   getTrailToday,
   oracleBadgeMeta,
+  BingoToday,
   CallCurrent,
   OracleBadge,
   OracleToday,
@@ -159,13 +166,16 @@ export default function ArenaPage() {
   const [oracle, setOracle] = useState<OracleToday | null>(null);
   const [trail, setTrail] = useState<TrailToday | null>(null);
   const [call, setCall] = useState<CallCurrent | null>(null);
+  const [bingo, setBingo] = useState<BingoToday | null>(null);
   // Per-card flags, not one page-wide pair — see the header.
   const [oracleLoading, setOracleLoading] = useState(true);
   const [trailLoading, setTrailLoading] = useState(true);
   const [callLoading, setCallLoading] = useState(true);
+  const [bingoLoading, setBingoLoading] = useState(true);
   const [oracleFailed, setOracleFailed] = useState(false);
   const [trailFailed, setTrailFailed] = useState(false);
   const [callFailed, setCallFailed] = useState(false);
+  const [bingoFailed, setBingoFailed] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -208,6 +218,21 @@ export default function ArenaPage() {
       })
       .finally(() => {
         if (!cancelled) setCallLoading(false);
+      });
+
+    // FOUR READS NOW, and the hub's rule is unchanged by the fourth: fired
+    // together, settled independently, none gating the page. Bingo's today-read
+    // also LAZY-OPENS tonight's night, exactly as the Oracle's does — which is
+    // one more reason it must not be allowed to block the paint.
+    getBingoToday(token)
+      .then((next) => {
+        if (!cancelled) setBingo(next);
+      })
+      .catch(() => {
+        if (!cancelled) setBingoFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setBingoLoading(false);
       });
 
     return () => {
@@ -254,7 +279,10 @@ export default function ArenaPage() {
         badges={oracle?.badges ?? []}
       />
 
-      {/* ---- THE GAMES. One card each — two dailies and the week's Call. ---- */}
+      {/* ---- THE GAMES. ORDERED BY CADENCE, not by ship date: the two dailies
+          that take a pick, then the nightly draw, then the week's Call. That is
+          also the order the fineprint below names them in, so a fan reading down
+          the page meets each game's rhythm twice in the same sequence. ---- */}
       <section className="arena-games" aria-label="Games">
         <OracleGameCard
           today={oracle}
@@ -266,6 +294,11 @@ export default function ArenaPage() {
           loading={trailLoading}
           failed={trailFailed}
         />
+        <BingoGameCard
+          today={bingo}
+          loading={bingoLoading}
+          failed={bingoFailed}
+        />
         <CallGameCard
           current={call}
           loading={callLoading}
@@ -275,10 +308,15 @@ export default function ArenaPage() {
 
       {/* The cadence is spelled out per game rather than averaged: "once a day"
           across a hub with a weekly game in it is a promise the Call cannot
-          keep, and this line sits directly under the tile that breaks it. */}
+          keep, and this line sits directly under the tile that breaks it.
+          BINGO BROKE IT A SECOND WAY — it is nightly, and it is neither a daily
+          pick nor a weekly one, so it gets its own clause rather than being
+          folded into "the dailies". This line has now been wrong twice for the
+          same reason; the next game gets a clause too. */}
       <p className="arena-fineprint">
         Points only · no cash value · never redeemable. Arena games are free to
-        play, forever — the dailies once a day, the Call once a week.
+        play, forever — the dailies once a day, bingo every night, the Call once
+        a week.
       </p>
     </main>
   );

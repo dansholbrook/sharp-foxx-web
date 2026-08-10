@@ -14804,6 +14804,16 @@ a.arena-tile:active {
     var(--panel);
 }
 
+/* The fourth corner light, and the only one that comes from BELOW — the other
+   three are lit from the top edge at 0%, 50% and 100%, so a fourth up there
+   would have had to sit between two of them and read as a smudge. A hall is lit
+   from the floor anyway. */
+.arena-tile--bingo {
+  background:
+    radial-gradient(120% 80% at 0% 100%, rgba(201, 163, 78, 0.12), transparent 60%),
+    var(--panel);
+}
+
 /* A tile with no link: dashed, flat and dim, so it cannot compete with the games
    that ARE playable. NO CALLER TODAY — the coming-soon tile it was built for
    became the Correspondent's Call — but the Arena is a family that keeps
@@ -14986,16 +14996,23 @@ a.arena-tile:active {
   text-align: center;
 }
 
-/* ---- Wider than a phone: the games sit side by side. --------------------- */
+/* ---- Wider than a phone: the games sit side by side. ---------------------
+   TWO ACROSS, AND A GRID RATHER THAN WRAPPING FLEX, because the fourth game
+   changed the arithmetic. At `flex: 1 1 260px` three tiles fit the moment the
+   content box holds 3 × 260 + 2 × 14 = 808px — which .arena-page's 860px cap
+   means happens at a 856px viewport and then NEVER STOPS HAPPENING. With four
+   tiles that is a permanent 3 + 1, the orphan stretched full-width by
+   flex-grow, at every desktop width the page allows.
+
+   Two equal columns give 2 × 2 instead, balanced at every width from the
+   breakpoint to the cap, and it stays balanced at six tiles. The Arena is
+   explicitly a family that keeps growing; a rule that only looks right at a
+   particular count is a rule that breaks on the next game. */
 
 @media (min-width: 720px) {
   .arena-games {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .arena-tile {
-    flex: 1 1 260px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .arena-hero__title {
@@ -15003,29 +15020,22 @@ a.arena-tile:active {
   }
 }
 
-/* ---- Three across: the one width where a long game name breaks. ----------
-   TWO LINES, NEVER THREE. The row goes three-across the moment the content box
-   can hold 3 × the 260px basis + 2 × the 14px gap = 808px, which with the
-   page's 48px of padding is a 856px viewport — and because .arena-page caps the
-   whole hub at 860px, THAT IS ALSO THE WIDEST THE ROW EVER GETS. So this is a
-   fixed ~171px name track at every desktop size, not a ramp, and one flat step
-   is the whole fix.
+/* ---- THE LONG-NAME STEP, RETIRED WITH THE THREE-ACROSS ROW THAT NEEDED IT.
+   There was a rule here dropping .arena-tile__name--long to 1.05rem above
+   856px. It existed for one width: three tiles across a 812px content box gave
+   a ~171px name track, and "The Correspondent's Call" — 180px of Playfair 700
+   at 1.2rem — broke to THREE lines against its siblings' one, pushing that
+   tile's status line clear of the row's rhythm.
 
-   "The Correspondent's" measures ~9.4em in Playfair 700: 180px at the 1.2rem
-   its two short-named siblings use, which overran the track and broke the name
-   as "The / Correspondent's / Call" — three lines against their one, pushing
-   the Call's status line clear of the row's rhythm. At 1.05rem it needs ~158px
-   and lands on two.
+   Sports Bingo made the row 2 × 2 (see the breakpoint above), so the track is
+   now ~310px at every desktop width the 860px cap allows and the long name sits
+   on one line at full size. The step would only shrink a name for no reason.
 
-   A SIZE STEP, NEVER A TRUNCATION — an ellipsis in a game's name is a name the
-   fan has to guess at. Below 856px the row is two-across (or one on a phone),
-   the track is 240px or wider, and the long name sits at full size with its
-   siblings; there is deliberately no rule for it there. */
-@media (min-width: 856px) {
-  .arena-tile__name--long {
-    font-size: 1.05rem;
-  }
-}
+   THE CLASS STAYS APPLIED IN game-cards.tsx, deliberately, and this comment is
+   why: LONG_NAME is a general guard against a future game whose name overruns
+   whatever the track is then, and the next layout change wants the hook already
+   in the markup rather than rediscovered. A size step, never a truncation — an
+   ellipsis in a game's name is a name the fan has to guess at. */
 
 /* ============================================================================
    THE FOXX TRAIL — /arena/trail.
@@ -18692,4 +18702,723 @@ a.arena-tile:active {
   margin: -16px 0 26px;
   font-size: 0.82rem;
   line-height: 1.5;
+}
+
+/* ============================================================================
+   SPORTS BINGO — /arena/bingo.
+   ============================================================================
+   THE HALL, ON THE SAME TOKENS. The Oracle card is lit from within (a machine
+   with an opinion) and the Trail is lit like a roadside at dusk; bingo is lit
+   like a hall — flat, even, and the only bright objects on the screen are the
+   numbers that have been called. Nothing new in the palette. What changes is
+   that the accent is drawn as INK: a filled disc on a square, which is what a
+   daub is.
+
+   ------------------------------------------------------------------------
+   DESIGNED AT 390px. THE BASE RULES ARE THE PHONE.
+   A 5x5 grid plus a call board is the hardest layout on this platform to fit on
+   a handset, and it is the one surface where retrofitting would have meant
+   rebuilding. The arithmetic the squares are sized against:
+
+     390 viewport
+     − 48  main's 24px sides
+     − 32  .bingo-card's 16px sides
+     − 16  four 4px gaps
+     ────
+     294 ÷ 5 = ~58px per square
+
+   ~58px clears the 44px tap floor with room, and two digits at 1.05rem sit in
+   it without crowding. There is ONE breakpoint and all it does is stop the
+   squares growing into slabs on a desktop — the phone never pays for the
+   desktop case. Same discipline .sqgrid states, which does this at TEN columns.
+   ------------------------------------------------------------------------
+
+   THE CARD AND THE BOARD SHARE THEIR COLUMN TRACKS. Five `minmax(0, 1fr)`
+   columns in both, so the board reads as the same object rotated rather than as
+   a second grid, and the B I N G O letters line up down the page. The board's
+   cells are deliberately FLAT (same width, half the height, no aspect-ratio):
+   a reference table must not compete with the fan's own card.
+   ============================================================================ */
+
+.bingo-page {
+  max-width: 860px;
+}
+
+/* ---- THE CALLER — the last tick, and when the next one lands. ------------- */
+
+.bingo-caller {
+  margin: 0 0 20px;
+  padding: 18px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 90% at 50% -10%, rgba(201, 163, 78, 0.16), transparent 62%),
+    linear-gradient(180deg, #221d14 0%, var(--panel) 62%, #17140e 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 16px 34px rgba(0, 0, 0, 0.4);
+}
+
+.bingo-caller__now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bingo-caller__said {
+  min-width: 0;
+}
+
+.bingo-caller__flavour {
+  margin: 0 0 4px;
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.bingo-caller__count {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===========================================================================
+   "ONE AT A TIME" SURVIVES IN THE CLIENT — the four land as a SEQUENCE of four
+   calls, which is what drizzle/arena_bingo.sql asks the client for. The backend
+   reveals a tick atomically (nothing unrevealed ever sits in a readable table
+   for an animation to catch up to); the stagger is purely presentational, and
+   the numbers are already true the instant the payload arrives.
+
+   THE STAGGER IS THE ONLY MOTION IN THIS ENTIRE SURFACE, and that is a boundary
+   worth naming: it plays on ARRIVAL, once, on an object the fan came to watch.
+   Nothing keyed to a near-miss animates — no pulse on the ringed square, no
+   escalation as `needed` falls — because that is the near-win illusion drawn as
+   a feeling. Motion on "four numbers just landed" is theatre; motion on "you're
+   one away" is a slot machine. See bingo-card.tsx.
+
+   REPLAY COMES FROM THE KEY. The ball elements are keyed by slotIndex, so a new
+   tick remounts them and the animation runs again; without the key React would
+   reuse the nodes and only the text would change.
+   =========================================================================== */
+@keyframes bingo-call-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* THE BALL. A disc, because that is what it is — and the newest one is the
+   biggest object on the screen, which is the whole reason a fan checked back. */
+.bingo-ball {
+  animation: bingo-call-in 0.34s ease-out both;
+  /* `both` holds the from-state through the delay, so ball 4 arrives ~1s after
+     ball 1 rather than all four fading together. */
+  animation-delay: calc(var(--call-i, 0) * 320ms);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 999px;
+  background: rgba(201, 163, 78, 0.14);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bingo-ball--newest {
+  flex: 0 0 auto;
+  min-width: 78px;
+  height: 78px;
+  padding: 0;
+  border-width: 2px;
+  border-color: var(--accent);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(201, 163, 78, 0.34), rgba(201, 163, 78, 0.12) 70%);
+  color: var(--accent-hover);
+  font-family: var(--font-serif);
+  font-size: 1.34rem;
+  letter-spacing: 0;
+}
+
+/* The other three from the same tick. FOUR AT A TIME IS THE PRODUCT — the tick
+   is the reveal moment and the slot is the ball — so they are grouped rather
+   than listed, and they wrap on a phone rather than scrolling sideways. */
+.bingo-caller__tick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The reveal is theatre and nothing depends on it. A fan who asked the OS for
+   less motion gets the four numbers immediately — no stagger, no fade, and the
+   same information at the same moment. */
+@media (prefers-reduced-motion: reduce) {
+  .bingo-ball {
+    animation: none;
+  }
+}
+
+.bingo-caller__waiting,
+.bingo-caller__next,
+.bingo-caller__done {
+  margin: 12px 0 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+/* The arrival clock. NOT urgency-styled and never warn-coloured: nothing here
+   expires, and a countdown that looks like a deadline is a reason to sit on the
+   page that the 20-minute cadence was chosen to remove. */
+.bingo-caller__in {
+  color: var(--accent-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.bingo-caller__done {
+  color: var(--text);
+  font-family: var(--font-serif);
+  font-size: 1rem;
+}
+
+/* ---- THE LOBBY — before the first ball. ---------------------------------- */
+
+.bingo-lobby {
+  margin: 0 0 18px;
+  padding: 18px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.bingo-lobby__start {
+  margin: 0 0 14px;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.bingo-lobby__start strong {
+  color: var(--accent);
+}
+
+.bingo-lobby__in {
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bingo-terms {
+  margin: 0 0 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.bingo-terms__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.bingo-terms dt {
+  font-size: 0.74rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bingo-terms dd {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* The equal-arm sentence. Body weight, not a badge — it is a term of the game,
+   not a boast, and it is the one thing that has to be true under a
+   no-purchase-necessary framework. */
+.bingo-lobby__equal {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ---- THE CARD ------------------------------------------------------------ */
+
+.bingo-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 0 20px;
+}
+
+.bingo-card {
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.bingo-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bingo-card__index {
+  font-size: 0.74rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.bingo-card__late {
+  font-size: 0.74rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* THE GRID. Five fr tracks and a sixth header row inside the same grid — a
+   separate flex row above it drifts against fractional pixel widths, and a
+   header that doesn't sit over its column is worse than no header. */
+.bingo-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  /* On a desktop the squares stop growing into slabs — the only thing the
+     desktop case is allowed to change about this object. */
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.bingo-grid__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 2px;
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.bingo-sq {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+/* ===========================================================================
+   THE DAUB. Ink ON the number, not a replacement for it.
+
+   A gold disc under the digits with the digits reversed to --accent-text: the
+   dark-on-gold flip the app already uses for primary buttons, which is the
+   loudest signal this palette contains and costs no new colour. The number
+   stays readable under the daub because that is what a hall card looks like —
+   a fan checks a called ball against a square they can still read.
+   =========================================================================== */
+.bingo-sq--daubed {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  z-index: 0;
+}
+
+.bingo-sq--daubed::before {
+  content: '';
+  position: absolute;
+  inset: 11%;
+  border-radius: 50%;
+  background: var(--accent);
+  z-index: -1;
+}
+
+/* The free centre is daubed by the SCHEMA (bit 12 is pre-set on every card), so
+   it arrives with the same treatment — dimmed and relabelled so it never reads
+   as something the night gave you. */
+.bingo-sq--free {
+  font-size: 0.66rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+}
+
+.bingo-sq--free.bingo-sq--daubed::before {
+  background: var(--accent-dim);
+}
+
+/* ===========================================================================
+   THE ONE SQUARE A BLACKOUT WANTS.
+
+   STATIC. A 1px outline, no fill, no pulse, no glow, and nothing that
+   intensifies as `needed` falls. A static ring is a fact; a pulsing ring is a
+   slot machine. There is deliberately NO @keyframes here and none is wanted —
+   escalating animation on a near-miss is the near-win illusion drawn as a
+   feeling, and it is the exact thing the CEO's design principles name.
+
+   Blackout only, drawing only. See bingo-card.tsx for both limits.
+   =========================================================================== */
+.bingo-sq--wanted {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* A blackout that landed paints the whole card in the predict/won green — the
+   app's only non-gold "good", already reused by .sqgrid-cell--won for exactly
+   this reading. 1 in 5,919 earns the loudest thing in the palette. */
+.bingo-grid--blackout .bingo-sq--daubed {
+  border-color: #2f5c3a;
+  color: #17251a;
+}
+
+.bingo-grid--blackout .bingo-sq--daubed::before {
+  background: #b4e6c0;
+}
+
+/* The ring's sentence. It names a NUMBER, never an action. */
+.bingo-wanted {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.bingo-wanted strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- THE RAIL — what the card has done. ---------------------------------- */
+
+.bingo-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bingo-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 0.78rem;
+}
+
+.bingo-chip__name {
+  color: var(--text);
+}
+
+.bingo-chip__state {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bingo-chip__pts {
+  color: #b4e6c0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bingo-chip--won {
+  border-color: #2f5c3a;
+  background: #17251a;
+}
+
+/* One square short of the blackout. The SAME flat chip with a gold rule around
+   it — it matches the ring on the grid so the two read as one statement, and it
+   gains nothing else. No fill, no size step, no animation. */
+.bingo-chip--wanted {
+  border-color: var(--accent-dim);
+}
+
+.bingo-chip--wanted .bingo-chip__state {
+  color: var(--accent);
+}
+
+.bingo-rail__none {
+  margin: 14px 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+/* ---- THE CLAIM CONTROLS -------------------------------------------------- */
+
+.bingo-claim {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+
+/* Inside the caller, mid-night. Tighter, and it sits on the caller's own
+   ground rather than carrying a second panel. */
+.bingo-claim--inline {
+  margin: 14px 0 0;
+}
+
+.bingo-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease, opacity 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bingo-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.bingo-btn:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.bingo-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bingo-btn__verb {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.bingo-btn__sub {
+  font-size: 0.76rem;
+  opacity: 0.78;
+}
+
+/* THE EXTRA CARD IS THE SECONDARY CONTROL AND LOOKS LIKE ONE. The free card is
+   the filled gold button; a spend is outlined. That ordering is not decoration —
+   the free arm is the one that must never be the worse product, and on the only
+   screen in this build where both exist, the free one is the louder object. */
+.bingo-btn--extra {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.bingo-btn--extra:hover:not(:disabled) {
+  background: rgba(201, 163, 78, 0.08);
+  border-color: var(--accent-dim);
+}
+
+.bingo-claim__note,
+.bingo-claim__closes {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* The purchase deadline. ORDINARY TYPE, and there is deliberately no accent, no
+   warn colour and no countdown class for it to grow into — see the copy rule in
+   lobby.tsx. A ticking clock on a spending deadline is a pressure device. */
+.bingo-claim__closes {
+  font-variant-numeric: tabular-nums;
+}
+
+.bingo-claim__error {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.84rem;
+}
+
+/* ---- THE BOARD ----------------------------------------------------------- */
+
+.bingo-board {
+  margin: 0 0 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.bingo-board__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bingo-board__sub {
+  margin: 2px 0 12px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* THE HALL BOARD, ROTATED. Five columns of fifteen instead of fifteen columns
+   of five — fifteen across a 390px phone is ~19px a cell, which is neither
+   readable nor recognisable. Turned ninety degrees it lands on the card's own
+   five tracks, which is why the two objects rhyme down the page. */
+.bingo-board__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.bingo-board__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 2px;
+  font-family: var(--font-serif);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+/* FLAT, ON PURPOSE — same width as a card square, half the height, no
+   aspect-ratio. A reference table reads as a list; a second 1:1 grid would
+   compete with the object that has to dominate the screen. */
+.bingo-board__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.bingo-board__cell--gone {
+  border-color: var(--accent-dim);
+  background: rgba(201, 163, 78, 0.16);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- VOIDED — the night was washed. -------------------------------------- */
+
+/* NOT WARN-COLOURED. A void is routine and it is never the fan's fault — the
+   same position .call-frozen--voided takes, and the same register: state what
+   happened, confirm the money, and say when the next one is. */
+.bingo-washed {
+  margin: 0 0 20px;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.bingo-washed__headline {
+  margin: 0 0 6px;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  color: var(--muted);
+}
+
+.bingo-washed__sub,
+.bingo-washed__paid,
+.bingo-washed__next {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.bingo-washed__paid strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.bingo-washed__next {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.bingo-fineprint {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ---- Wider than a phone. -------------------------------------------------
+   THE ONLY BREAKPOINT, and it does one thing: puts the board beside the cards
+   instead of under them, now that there is room for both. The grids themselves
+   are already capped at 420px by the base rules, so nothing about the card
+   changes here — the desktop layout is the adaptation, and the phone paid for
+   none of it. */
+@media (min-width: 760px) {
+  .bingo-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+    /* The children's own bottom margins are zeroed below, so the gap to the
+       fineprint has to be re-stated here or the two objects sit flush against
+       it — the stacked layout got that spacing from the children. */
+    margin: 0 0 20px;
+  }
+
+  .bingo-split > * {
+    margin-bottom: 0;
+  }
+
+  .bingo-caller__now {
+    gap: 18px;
+  }
 }

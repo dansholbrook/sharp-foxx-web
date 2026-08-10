@@ -6749,6 +6749,253 @@ export function callStaffRoute(call: { id: string; status: CallStatus }): string
 }
 
 // ============================================================================
+// SPORTS BINGO — the fourth built Arena game, under /arena/bingo.
+//
+// Mirrors sharp-foxx-api/src/modules/arena/bingo.service.ts. Read
+// drizzle/arena_bingo.sql before changing anything in this section: the two
+// rules below are written into that schema with the full argument, and they are
+// the kind of thing that gets "improved" by accident.
+//
+// ----------------------------------------------------------------------------
+// THE FIRST ARENA GAME WHOSE OUTCOME IS DRAWN RATHER THAN EARNED, and the whole
+// shape of this section follows from that. There is no pick, so there is no
+// streak (the migration declines arena_streaks participation outright and says
+// why) — `BingoToday` therefore carries NO streak block, and a component that
+// tries to render one will fail to compile rather than draw a zero.
+//
+// ----------------------------------------------------------------------------
+// !!  THE TWO RULES. Both are enforced on the backend. THIS CLIENT MUST NOT
+// !!  UNDERMINE THEM, and it does not rely on the backend to hold them either.
+//
+//   1. PAID CARDS CLOSE WHEN THE FIRST BALL IS CALLED. `claim.canPurchase` is
+//      false for the entire time any ball is in the air. There is nothing to
+//      sell after 19:00 and no route here that tries.
+//
+//   2. THE NEAR-MISS IS NEVER PLACED BESIDE A PURCHASE CONTROL. `patterns[].
+//      needed` — "one from the blackout" — is honest information about a card
+//      the fan already holds, and it is the tension the game is made of. Beside
+//      a way to spend it becomes a near-win illusion driving a purchase, which
+//      is the mechanic gambling regulators name.
+//
+//      RULE 1 IS MOST OF THE ENFORCEMENT: today() derives both halves from one
+//      clock read, so the payload cannot carry a true `canPurchase` and an
+//      interesting `needed` at the same time. THE UI DOES NOT LEAN ON THAT.
+//      /arena/bingo gates the whole near-miss rail on `night.called > 0` — a
+//      different field, a stricter condition — so rule 2 holds in the layout
+//      even if somebody later relaxes rule 1. See the page.
+// ----------------------------------------------------------------------------
+
+// The night's lifecycle. 'voided' means the night could not be run AT ALL (zero
+// balls called): cards washed, purchases refunded. A night that ran SHORT is not
+// this — it settles with fewer balls and pays normally.
+export type BingoNightStatus = 'open' | 'drawing' | 'settled' | 'voided';
+
+// The pattern set is CODE-DEFINED on the backend (every pattern is read by a
+// specific line of game logic, so a pattern an admin invented would be one
+// nothing can pay). Adding one here without adding it there pays nobody.
+export type BingoPattern = 'line' | 'four_corners' | 'blackout';
+
+// Which rung of the flavour ladder produced a ball's sentence. Stored so the
+// degradation is VISIBLE — expect 'matchup' to dominate at launch, because stat
+// lines are filed after a game ends while the draw runs DURING the slate.
+export type BingoFlavourSource = 'stat_line' | 'matchup' | 'none';
+
+// Free is index 0 and index 0 is free, both directions, enforced by a CHECK.
+export type BingoCardSource = 'free' | 'purchased';
+
+export interface BingoNight {
+  // The ET calendar day. UNIQUE (date) IS the game: every fan in the country is
+  // watching the same 56 balls.
+  date: string;
+  status: BingoNightStatus;
+  firstDrawAt: string;
+  drawCount: number;
+  drawsPerTick: number;
+  tickIntervalMinutes: number;
+  // How many balls have been called. THE GATE FOR THE NEAR-MISS RAIL — see the
+  // section header.
+  called: number;
+  // When the next unfilled slot is DUE. Null once every slot is filled, which is
+  // also what stops the poll. This is the only field on the platform that tells
+  // a client when its own data will next move; the page schedules against it
+  // rather than against a fixed interval.
+  nextCallAt: string | null;
+  payouts: Record<BingoPattern, number>;
+}
+
+// One called ball. `label` is server-rendered ("B-10") off the column ranges —
+// the letter is derived from the number and never stored, so this client renders
+// what it is given rather than re-deriving a second opinion.
+export interface BingoBall {
+  slotIndex: number;
+  number: number;
+  label: string;
+  drawnAt: string;
+  // Decoration, and it can be null: "the number is the fact; the sentence is
+  // decoration. A null flavour still commits the ball."
+  flavourText: string | null;
+  flavourSource: BingoFlavourSource | null;
+}
+
+export interface BingoCardPattern {
+  pattern: BingoPattern;
+  complete: boolean;
+  // Squares short on the BEST candidate line, not the first. 0 means complete.
+  // RULE 2's payload — see the section header for where it may be rendered.
+  needed: number;
+  // What this pattern pays TONIGHT, snapshotted onto the night at open so an
+  // admin edit at 21:00 cannot reprice a night in flight.
+  points: number;
+  awardedAt: string | null;
+  pointsAwarded: number | null;
+}
+
+export interface BingoCard {
+  id: string;
+  cardIndex: number;
+  source: BingoCardSource;
+  costPoints: number;
+  // 25, row-major. Index 12 is the free centre and holds 0.
+  numbers: number[];
+  // The 25-bit mask. Carried because the backend ships it; the UI reads `daubed`
+  // instead, which is the same fact already unpacked.
+  marks: number;
+  // 25 booleans, row-major. DERIVED, NEVER CLAIMED — this is exactly (this
+  // card's numbers) INTERSECT (tonight's called balls). The fan never writes it,
+  // and there is deliberately no tap-to-daub route: the tap would be theatre and
+  // the mark is arithmetic.
+  daubed: boolean[];
+  // Marked squares NOT counting the free centre. 0..24.
+  called: number;
+  // How many balls had already been called when this card was issued. The free
+  // card stays claimable all night, so this is the column that answers "why did
+  // my card only fill six squares". Always 0 on a purchased card, by rule 1.
+  issuedAtSlot: number;
+  patterns: BingoCardPattern[];
+}
+
+export interface BingoClaim {
+  freeCardHeld: boolean;
+  cardsHeld: number;
+  maxCards: number;
+  // TRUE ALL NIGHT, by design: "there is no reason to punish a fan who arrives
+  // at 21:00, and the free arm should have the widest door in the building."
+  canClaimFree: boolean;
+  // RULE 1. False for the entire time any ball has been called.
+  canPurchase: boolean;
+  purchaseClosesAt: string;
+  extraCardCost: number;
+}
+
+export interface BingoToday {
+  night: BingoNight;
+  // NEWEST FIRST (the backend orders by slot_index DESC) — the screen leads with
+  // what just happened.
+  balls: BingoBall[];
+  cards: BingoCard[];
+  claim: BingoClaim;
+}
+
+// POST /arena/bingo/cards returns the issued card and NOT a pattern block —
+// which is right, and worth typing rather than papering over: a card issued
+// before the first ball has nothing to need, and one issued mid-night gets its
+// patterns from the re-read that follows. Typed as an omission of the full card
+// so the two shapes can never drift apart.
+export type BingoIssuedCard = Omit<BingoCard, 'patterns'>;
+
+// NO BALANCE ON THE WIRE, deliberately, and this client does not invent one. A
+// purchase debits inside the claim transaction and the ⚡ chip repairs on the
+// next wallet read — the same honest shape the Oracle takes when it refuses to
+// toast a pick whose points are decided later. Nothing here calls applyBalance.
+export const getBingoToday = (token: string) =>
+  authGet<BingoToday>('/arena/bingo/today', token);
+
+// `purchase` absent/false = the free card (index 0). True = an extra, for
+// points.
+//
+// 409 on: already holding the free card, three cards held, or — for a purchase —
+// the first ball already called. That last one is RULE 1, and the backend's
+// message says WHY rather than just refusing ("every card tonight faces the same
+// 56 numbers"), so the page renders the server's sentence rather than its own.
+//
+// 18+ GATE lives on this route and not on the read, same placement as the
+// Oracle's pick — so an un-attested fan sees the whole night and is stopped only
+// when they play. It matters more here than anywhere else on the platform: this
+// is the first pure chance game and the paid card is the clearest consideration.
+export const claimBingoCard = (token: string, purchase = false) =>
+  authPost<BingoIssuedCard>('/arena/bingo/cards', token, { purchase });
+
+// ---- Rendering helpers -----------------------------------------------------
+
+// The five column ranges: B 1-15, I 16-30, N 31-45, G 46-60, O 61-75. NOT
+// decoration and NOT optional — they are what a person who has played in a hall
+// recognises on sight, and what lets a ball be called as "B-7" rather than "7".
+export const BINGO_COLUMNS = ['B', 'I', 'N', 'G', 'O'] as const;
+
+// Row-major index of the free centre. Column N holds four numbers, not five.
+export const BINGO_FREE_INDEX = 12;
+
+// Which column a number sits in. Used for the call board, which lays the whole
+// 1-75 pool out by column; a called ball's own label comes from the server.
+export function bingoColumnOf(n: number): number {
+  return Math.floor((n - 1) / 15);
+}
+
+// "B-7" for a number that has NOT been called. The only place this client
+// composes a call label itself — a called ball arrives with `label` already
+// rendered by the server, and that one is always preferred. This exists for the
+// one square the blackout ring points at, which by definition has no ball yet.
+// Same derivation as the backend's callLabel, off the same column ranges.
+export function bingoNumberLabel(n: number): string {
+  return `${BINGO_COLUMNS[bingoColumnOf(n)]}-${n}`;
+}
+
+// "Line" / "Four corners" / "Blackout". A switch and not a title-case transform,
+// because 'four_corners' is a wire key rather than a phrase.
+export function bingoPatternLabel(pattern: BingoPattern): string {
+  switch (pattern) {
+    case 'line':
+      return 'Line';
+    case 'four_corners':
+      return 'Four corners';
+    default:
+      return 'Blackout';
+  }
+}
+
+// Which tick a slot landed in. Four slots share one draws_at — the tick is the
+// reveal moment, the slot is the ball — so this is what groups the balls the fan
+// saw arrive together.
+export function bingoTickOf(slotIndex: number, drawsPerTick: number): number {
+  return drawsPerTick > 0 ? Math.floor(slotIndex / drawsPerTick) : slotIndex;
+}
+
+// "in 6m" / "in 45s" / "any moment now" — an ARRIVAL, not a deadline, and the
+// copy has to say so. Every other countdown in the Arena is a lock the fan must
+// beat, so they all read "Locks in 6m" and go urgent at the end. Nothing here is
+// expiring: the balls come whether or not the fan is watching, and dressing an
+// arrival as a deadline would manufacture a reason to sit on the page. The
+// 20-minute cadence exists precisely so this is a check-back game rather than a
+// dwell one that competes with the sport the platform points at.
+export function bingoCallCountdown(
+  nextCallAt: string,
+  now: number = Date.now(),
+): string {
+  const ms = new Date(nextCallAt).getTime() - now;
+  if (Number.isNaN(ms)) return '';
+  // Past due. The cron may run a beat late — draws_at (intended) and drawn_at
+  // (actual) are separate columns on purpose — so this is a normal reading and
+  // not an error one.
+  if (ms <= 0) return 'any moment now';
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `in ${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  return `in ${hrs}h ${mins % 60}m`;
+}
+
+// ============================================================================
 // THE FAN'S OWN INVENTORY — GET /me/items. Every badge, pennant and trophy the
 // caller owns, from every game, in one read.
 //

@@ -48,12 +48,14 @@ import Link from 'next/link';
 import {
   arenaLockCountdown,
   callPhase,
+  getBingoToday,
   getCallCurrent,
   getOracleToday,
   getTrailToday,
   points,
   trailSideTeam,
   etTime,
+  BingoToday,
   CallCurrent,
   OracleToday,
   TrailToday,
@@ -336,10 +338,109 @@ function callTeaser(current: CallCurrent | null, now: number): Teaser | null {
   };
 }
 
+// ---------------------------------------------------------------------------
+// SPORTS BINGO
+//
+// THE ONLY GAME HERE THAT CANNOT PRODUCE AN 'open' CARD, and that is a decision
+// rather than a gap. 'open' is the rail's expiring tone: it means "do this now
+// or lose it", and it is what lets a card jump the settled half of the ladder.
+// Nothing about bingo expires. The free card is claimable until midnight, the
+// numbers go up whether or not the fan is watching, and a card taken at 21:00
+// still faces every ball left in the night. Giving the drip an urgent tone would
+// be manufacturing a deadline the game does not have — on the feed, where it
+// would outrank two games that genuinely do.
+//
+// SO IT RIDES AT 'riding', the standing-reminder tone: interesting enough to
+// mention when nothing is expiring, never interesting enough to displace a pick
+// that is about to lock.
+//
+// NO NEAR-MISS, EVER, ON THIS SURFACE. `needed` is not read in this file and
+// must not be. The feed is the one place a fan lands without choosing to, and a
+// near-miss with no card under it to explain itself, on the platform's busiest
+// rail, is the exact shape rule 2 exists to prevent.
+// ---------------------------------------------------------------------------
+function bingoTeaser(today: BingoToday | null): Teaser | null {
+  if (!today) return null;
+  const { night, claim } = today;
+
+  // A wash is not news for the rail: nothing was called, nothing scored, and the
+  // refund is a line for the night's own screen. Same silence the Call keeps.
+  if (night.status === 'voided') return null;
+
+  if (night.status === 'settled') {
+    // Gold is for a card that PAID. A settled night with nothing on it is not a
+    // reason to put bingo in the rail — the fan can find it on the hub.
+    const paid = today.cards.reduce(
+      (sum, c) => sum + c.patterns.reduce((s, p) => s + (p.pointsAwarded ?? 0), 0),
+      0,
+    );
+    if (paid <= 0) return null;
+    return {
+      kicker: 'Sports Bingo',
+      mark: '🎱',
+      tone: 'win',
+      note: 'Tonight’s card',
+      lead: (
+        <>
+          Your card paid <strong>+{points(paid)}</strong> pts
+        </>
+      ),
+      tail: null,
+    };
+  }
+
+  // DRAWING. The drip is the line, and it is the same whether or not the fan
+  // holds a card — the numbers are going up either way.
+  if (night.called > 0) {
+    return {
+      kicker: 'Sports Bingo',
+      mark: '🎱',
+      tone: 'riding',
+      note:
+        claim.cardsHeld > 0
+          ? 'Your card is in the hall'
+          : 'Free card · still open',
+      lead: (
+        <>
+          Call <strong>{night.called}</strong> of {night.drawCount} tonight
+        </>
+      ),
+      // THE WALL CLOCK, NOT A COUNTDOWN. The ticker below runs only for the
+      // expiring tones, and bingo never has one — so a countdown here would be
+      // painted once and then sit still. That is a small lie on the two daily
+      // cards and a large one here, where the clock moves in twenty-minute
+      // steps and a stale reading is wrong by most of a tick. `lockClock` is
+      // the same instrument this file already reaches for on a call the fan has
+      // already made; the live countdown lives on /arena/bingo, which ticks.
+      tail: night.nextCallAt
+        ? `next four at ${lockClock(night.nextCallAt)}`
+        : null,
+    };
+  }
+
+  // OPEN, before the first ball. Only worth a card when the fan has nothing in:
+  // a lobby with their card already taken has no news in it until 7pm.
+  if (claim.cardsHeld > 0) return null;
+  return {
+    kicker: 'Sports Bingo',
+    mark: '🎱',
+    tone: 'riding',
+    note: 'Free · one card a night',
+    lead: (
+      <>
+        Numbers start at{' '}
+        <strong>{etTime(night.firstDrawAt, { zone: true })}</strong>
+      </>
+    ),
+    tail: null,
+  };
+}
+
 export function ArenaTeaser({ token }: { token: string }) {
   const [oracle, setOracle] = useState<OracleToday | null>(null);
   const [trail, setTrail] = useState<TrailToday | null>(null);
   const [call, setCall] = useState<CallCurrent | null>(null);
+  const [bingo, setBingo] = useState<BingoToday | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -367,6 +468,13 @@ export function ArenaTeaser({ token }: { token: string }) {
       .catch(() => {
         /* best-effort */
       });
+    getBingoToday(token)
+      .then((next) => {
+        if (!cancelled) setBingo(next);
+      })
+      .catch(() => {
+        /* best-effort */
+      });
     return () => {
       cancelled = true;
     };
@@ -376,6 +484,10 @@ export function ArenaTeaser({ token }: { token: string }) {
   const oracleCard = oracleTeaser(oracle, now);
   const trailCard = trailTeaser(trail, now);
   const callCard = callTeaser(call, now);
+  // Takes no `now`: nothing on the bingo card is a countdown this component has
+  // to keep fresh — the drip's tail re-reads its own clock at render, and the
+  // ticker below only runs for the expiring tones, which bingo never has.
+  const bingoCard = bingoTeaser(bingo);
   const teaser =
     (callCard?.tone === 'urgent' ? callCard : null) ??
     (oracleCard?.tone === 'open' ? oracleCard : null) ??
@@ -387,9 +499,16 @@ export function ArenaTeaser({ token }: { token: string }) {
     (callCard?.tone === 'win' ? callCard : null) ??
     (oracleCard?.tone === 'win' ? oracleCard : null) ??
     (trailCard?.tone === 'win' ? trailCard : null) ??
+    // BINGO'S WIN SITS BELOW THE THREE SKILL WINS, and that is the ladder taking
+    // a position rather than an accident of ordering. A blackout is the largest
+    // single payout in the Arena and the rarest thing on the platform, but it is
+    // DRAWN — leading the rail with it would put "you got lucky" above "you were
+    // right" on the surface that teaches fans what this place rewards.
+    (bingoCard?.tone === 'win' ? bingoCard : null) ??
     oracleCard ??
     trailCard ??
-    callCard;
+    callCard ??
+    bingoCard;
 
   // The ticker runs at a MINUTE, not a second: this card shows a coarse
   // countdown, and a per-second timer on a band the fan is scrolling past would

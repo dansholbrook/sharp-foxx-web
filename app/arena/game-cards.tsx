@@ -33,6 +33,7 @@ import {
   points,
   trailSideTeam,
   etTime,
+  BingoToday,
   CallCurrent,
   CallEntry,
   OracleToday,
@@ -78,7 +79,7 @@ function GameTile({
   children,
 }: {
   href: string | null;
-  tone: 'oracle' | 'trail' | 'call';
+  tone: 'oracle' | 'trail' | 'call' | 'bingo';
   mark: React.ReactNode;
   name: string;
   tagline: string;
@@ -605,6 +606,166 @@ function CallState({
           {' · '}
           {arenaLockCountdown(call.locksAt)}
         </span>
+      )}
+    </p>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// THE SPORTS BINGO CARD
+//
+// THE FIRST TILE WITH NO DEADLINE ON IT, and the ladder has to be rebuilt around
+// that rather than copied. The three tiles above all lead with a lock the fan
+// has to beat, because all three games take a PICK that expires. Bingo takes no
+// pick: the free card is claimable all night, the numbers come whether or not
+// anyone is watching, and nothing on this tile is ever urgent.
+//
+// SO THE HOOK IS THE DRIP. "Call 24 of 56 · next four in 6m" is this game's
+// equivalent of the Oracle's confidence and the Call's pot — the single reading
+// that makes the tile a live thing rather than a link. It is also the honest
+// one: the reason to tap is that four numbers are about to go up.
+//
+// NO STREAK, EVER, and none is drawn — BingoToday carries no streak field at
+// all, so nothing here contributes to the shared strip above it. Same position
+// the Call holds, for a different reason: the Call's cadence would burn freezes,
+// bingo simply has no play to record.
+//
+// NO NEAR-MISS ON THE HUB. `needed` is not read in this file and must not be.
+// A tile that says "one from the blackout" is a near-miss on a surface with no
+// card under it to explain itself, three taps from the rest of the product —
+// and the hub is the one Arena surface a fan lands on without choosing to.
+// ---------------------------------------------------------------------------
+export function BingoGameCard({
+  today,
+  loading,
+  failed,
+}: {
+  today: BingoToday | null;
+  loading: boolean;
+  failed: boolean;
+}) {
+  return (
+    <GameTile
+      href="/arena/bingo"
+      tone="bingo"
+      mark={
+        <>
+          <span className="arena-tile__glyph">🎱</span>
+          <span className="arena-tile__glyph arena-tile__glyph--sub">🦊</span>
+        </>
+      }
+      name="Sports Bingo"
+      tagline="Fifty-six numbers a night, called off tonight's slate"
+    >
+      {loading && <TilePlaceholder text="Opening the hall…" />}
+      {!loading && failed && (
+        <TilePlaceholder text="Couldn't reach the hall — tap to try." />
+      )}
+      {/* GET today LAZY-OPENS the night, so a successful read always carries
+          one and this branch is unreachable in practice. Kept because "the
+          endpoint answered with nothing" should render the shell rather than an
+          empty tile body. */}
+      {!loading && !failed && !today && (
+        <p className="arena-tile__state arena-tile__state--quiet">
+          The hall is dark tonight.
+        </p>
+      )}
+      {!loading && !failed && today && <BingoState today={today} />}
+    </GameTile>
+  );
+}
+
+function BingoState({ today }: { today: BingoToday }) {
+  const { night, claim } = today;
+  const held = claim.cardsHeld;
+
+  // ---- VOIDED. Routine, never alarming, and never the fan's fault.
+  if (night.status === 'voided') {
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        Washed — no numbers were called.
+      </p>
+    );
+  }
+
+  // ---- SETTLED. The number leads when there is one, same as the three tiles
+  // above — a fan who took a blackout at 23:20 and opened the hub at 23:30 came
+  // for exactly that. `pointsAwarded` and never a pattern's list price: a
+  // pattern can be priced at 0 and would otherwise read as an unpaid win.
+  if (night.status === 'settled') {
+    if (held === 0) {
+      return (
+        <p className="arena-tile__state arena-tile__state--quiet">
+          Settled — you sat this one out.
+        </p>
+      );
+    }
+    const paid = today.cards.reduce(
+      (sum, c) =>
+        sum +
+        c.patterns.reduce((s, p) => s + (p.pointsAwarded ?? 0), 0),
+      0,
+    );
+    if (paid > 0) {
+      return (
+        <p className="arena-tile__state arena-tile__state--win">
+          <strong className="arena-tile__pts">+{points(paid)}</strong>
+          off tonight&apos;s card
+        </p>
+      );
+    }
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        Settled — nothing landed tonight.
+      </p>
+    );
+  }
+
+  // ---- DRAWING. The drip is the hook, and it is the same line whether or not
+  // the fan holds a card: the numbers are going up regardless, which is the one
+  // true thing about this game that is not true of the other three.
+  //
+  // THE TIME, NEVER A COUNTDOWN, and for the reason lockClock above already
+  // gives: THE HUB DOES NOT POLL AND DOES NOT TICK — one read on mount, because
+  // a fan sitting on the hub is a fan about to leave it. A countdown rendered
+  // once would read "in 6m" for the next twenty minutes, and it goes stale
+  // faster here than anywhere else on this page: bingo's clock moves in
+  // twenty-minute steps, so a stale one is wrong by most of a tick. A wall
+  // clock is still true an hour after it was painted. The countdown lives on
+  // /arena/bingo, which ticks.
+  if (night.called > 0) {
+    return (
+      <p className="arena-tile__state arena-tile__state--open">
+        Call <strong>{night.called}</strong> of {night.drawCount}
+        {night.nextCallAt && (
+          <span className="arena-tile__when">
+            {' · '}next four at {etTime(night.nextCallAt, { zone: true })}
+          </span>
+        )}
+        {held === 0 && (
+          <span className="arena-tile__when"> · your free card is waiting</span>
+        )}
+      </p>
+    );
+  }
+
+  // ---- OPEN, before the first ball. The invitation, and the start time.
+  //
+  // NO PRICE AND NO PURCHASE PROMPT ON THIS TILE. Extra cards are sold in one
+  // place — the lobby — and a hub tile advertising a spend is a purchase control
+  // on a surface with no terms beside it.
+  return (
+    <p className="arena-tile__state arena-tile__state--open">
+      {held > 0 ? (
+        <>
+          {held === 1 ? 'Your card is in' : `${held} cards in`} — first four at{' '}
+          <strong>{etTime(night.firstDrawAt, { zone: true })}</strong>
+        </>
+      ) : (
+        <>
+          Take a free card — first four at{' '}
+          <strong>{etTime(night.firstDrawAt, { zone: true })}</strong>
+        </>
       )}
     </p>
   );
