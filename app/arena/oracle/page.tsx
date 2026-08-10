@@ -540,9 +540,15 @@ export default function OraclePage() {
         <div>
           <span className="masthead-kicker">The Arena</span>
           <h1 className="masthead-title">Beat the Oracle</h1>
+          {/* THE MECHANIC, AND NOTHING ABOUT WHY YOU'RE HERE. This used to end
+              "…and the streak is the reason you come back", which is the
+              product narrating its own retention hook on the surface doing the
+              retaining. What a fan actually needs is what the Oracle IS and
+              what it costs; the streak chip a few inches below makes the rest
+              of the case by simply being a number that goes up. */}
           <p className="masthead-standfirst">
             One call a day from the house engine. Ride with it or fade it —
-            free, once per day, and the streak is the reason you come back.
+            free, once per day.
           </p>
         </div>
         <div className="masthead-actions">

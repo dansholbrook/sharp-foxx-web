@@ -304,9 +304,28 @@ tfoot td {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 32px;
   padding-bottom: 18px;
   border-bottom: 1px solid var(--border);
+}
+
+/* THE PER-PAGE "Signed in as … · role" LINE, HIDDEN EVERYWHERE.
+   That fact now lives in the avatar menu, where it costs no width and sits
+   next to the initials that carry the same answer at a glance. It was never in
+   nav.tsx: the markup is copy-pasted into 39 page files, identical in every one
+   (.header-row > div > .muted), and this rule already hid it below 768px — it
+   is now simply not width-dependent.
+
+   THE DEBT, NAMED: those 39 blocks still render, and this rule is the only
+   thing stopping them. The real fix is a shared <PageHeader> component that
+   owns the wordmark + <AppNav/> so a page never writes its own header at all,
+   at which point this rule and the markup both go. That is a 39-file change of
+   its own and does not belong bolted onto a nav pass; editing 39 files here to
+   delete a line CSS already hides would be a large diff for no rendered
+   difference. Until then: one selector, one place, deliberate. */
+.header-row > div > .muted {
+  display: none;
 }
 
 .nav-links {
@@ -317,6 +336,18 @@ tfoot td {
   letter-spacing: var(--tracking);
   font-size: 0.72rem;
   font-weight: 600;
+  /* THE ROW BREAKS BETWEEN ITEMS OR NOT AT ALL. main is 920px wide; a fan's
+     six sections plus the three controls fit on one line with room to spare,
+     but a staff bar carrying My Games and My Sales as well runs past it. With
+     the default nowrap those flex items would shrink instead, and shrinking a
+     link means breaking its LABEL in half — which is the same failure the
+     wordmark rule above exists to prevent, one level down. So: wrap, and take
+     a tidy second row of whole words. Right-aligned, because the row hangs off
+     the right edge of the header and a ragged left edge under the wordmark
+     would read as a mistake. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 12px;
 }
 
 /* Nav links pick up the wide-uppercase treatment from the row */
@@ -325,6 +356,8 @@ tfoot td {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--tracking);
+  /* See above: a label is atomic. It moves to the next row whole or not at all. */
+  white-space: nowrap;
 }
 
 /* ---- Pill: uppercase micro-label for status/tags ---- */
@@ -436,6 +469,13 @@ tfoot td {
   line-height: 1.1;
   color: var(--accent);
   margin-bottom: 4px;
+  /* THE NAME OF THE PLATFORM DOES NOT BREAK IN HALF. "Sharp Foxx" wrapping to
+     two lines was doing more visible damage to the header than anything else
+     in it. The header row is space-between against a fixed-width control
+     cluster, so without this the left column simply compresses until the
+     wordmark folds. Nothing else may shrink into it — see the mobile block,
+     which sizes the row so this always fits. */
+  white-space: nowrap;
 }
 
 /* ---- Masthead: the content-feed banner ---- */
@@ -9197,8 +9237,155 @@ a.follow-sugcard__name:hover {
   top: 6px;
 }
 
-/* Full-screen menu sheet: identity + every nav item + log out. Fixed over the
-   page, above the slide-over (60) and modals (50). */
+/* ---- The avatar + the menu primitive ------------------------------------
+   Two triggers (the initials circle, the Console item) share one panel. No new
+   colours: the circle is --accent on --accent-text, which is the same gold-fill
+   pair the primary button and the bell's --desk state already use; the panel is
+   --panel-raised inside --border-strong, which is the slide-over's treatment.
+   ------------------------------------------------------------------------ */
+.nav-menu {
+  position: relative;
+  display: inline-flex;
+  /* .nav-links aligns on the baseline, which a circle has nothing useful to
+     contribute to — centre it against the link row, same as .notif-bell. */
+  align-self: center;
+}
+
+/* INITIALS, NOT AN IMAGE. There is no avatar upload on this platform and
+   nothing in the schema to hold one, so the circle draws what it actually
+   knows. */
+.nav-avatar {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.nav-avatar:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Console: a link-row item that opens a menu, so it wears .link-btn and adds a
+   chevron + room for the rolled-up badge. */
+.nav-console {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-console__chev {
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+}
+
+/* The panel. z-index 70 puts it above the notification tray (60) and below the
+   mobile nav sheet (80) — it opens from the header, and the sheet covers the
+   header, so it must never be able to sit over the sheet. */
+.nav-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 70;
+  min-width: 216px;
+  padding: 6px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  /* The panel resets the row's wide-uppercase treatment: a menu is read as
+     prose, not scanned as a bar. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.9rem;
+  font-weight: 400;
+  animation: nav-menu-in 0.14s ease;
+}
+.nav-menu__panel--account {
+  min-width: 232px;
+}
+
+@keyframes nav-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Who you are, at the top of your own menu. */
+.nav-menu__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.nav-menu__name {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+.nav-menu__roles {
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.nav-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 400;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  text-decoration: none;
+}
+.nav-menu__item:hover,
+.nav-menu__item:focus-visible {
+  background: rgba(201, 163, 78, 0.1);
+  color: var(--accent);
+  text-decoration: none;
+}
+.nav-menu__rule {
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--border);
+}
+
+/* Full-screen menu sheet: destinations only. Fixed over the page, above the
+   menu panel (70), the slide-over (60) and modals (50). */
 .nav-sheet {
   position: fixed;
   inset: 0;
@@ -9246,10 +9433,16 @@ a.follow-sugcard__name:hover {
   text-transform: none;
   letter-spacing: normal;
 }
-.nav-sheet__identity {
-  padding: 16px 2px 4px;
-  font-size: 0.82rem;
+/* The Console divider inside the sheet. A heading rather than a nested menu:
+   opening a menu inside a full-screen menu, on a phone, to save eight rows of
+   a screen that already scrolls, would be furniture for its own sake. */
+.nav-sheet__heading {
+  padding: 22px 2px 6px;
   color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
 }
 .nav-sheet__links {
   display: flex;
@@ -9272,10 +9465,18 @@ a.follow-sugcard__name:hover {
   color: var(--accent);
   text-decoration: none;
 }
-.nav-sheet__logout {
-  margin-top: 20px;
-  width: 100%;
-  min-height: 48px;
+
+/* THE SMALLEST PHONES: the ⚡ chip steps out of the header cluster.
+   The wordmark cannot wrap and the three 44px tap targets cannot shrink, so
+   below roughly 400px something has to give — and the chip is the only one of
+   the four that is a readout rather than a control. It is also the only one
+   with a replacement: /profile is in the avatar menu now, for every role, so
+   losing the chip here costs a glanceable balance and no destination. Above
+   this width — which is every current phone — the chip stays. */
+@media (max-width: 399px) {
+  .nav-mobile .points-chip {
+    display: none;
+  }
 }
 
 @media (max-width: 767px) {
@@ -9292,20 +9493,41 @@ a.follow-sugcard__name:hover {
     padding: 24px 16px 56px;
   }
 
-  /* header-row becomes the slim top bar: wordmark left, chip + burger right.
-     The per-page "Signed in as…" line moves into the menu, so hide it here
-     (its markup is identical on every page: .header-row > div > .muted). */
+  /* header-row becomes the slim top bar: wordmark left, controls right. The
+     sign-in line is hidden at every width now, up in the base rule. */
   .header-row {
     align-items: center;
     gap: 12px;
     margin-bottom: 22px;
     padding-bottom: 14px;
   }
-  .header-row > div > .muted {
-    display: none;
-  }
+  /* THE WORDMARK IS THE FIXED THING AND EVERYTHING ELSE FITS AROUND IT. It
+     can't shrink (white-space: nowrap) and it can't be allowed to compress the
+     row into a wrap, so it comes down a step here and the cluster is budgeted
+     against it below. */
   .header-row .wordmark {
     margin-bottom: 0;
+    font-size: 1.15rem;
+  }
+
+  /* The four controls are 44px, 44px, 44px and the chip. Against a 360px
+     viewport minus 16px gutters that leaves the chip roughly 70px of room,
+     which it fits — see the 400px rule below for where it stops fitting. */
+  .nav-avatar {
+    width: 44px;
+    height: 44px;
+    font-size: 0.86rem;
+  }
+  /* Anchored to the cluster's right edge on desktop; on a phone the trigger is
+     close enough to the edge that the panel would overhang, so pin it to the
+     viewport gutter instead and let it use the width it needs. */
+  .nav-menu__panel {
+    right: -4px;
+    min-width: 240px;
+  }
+  .nav-menu__item {
+    min-height: 46px;
+    font-size: 0.95rem;
   }
 
   /* ---- Masthead / page-header: tighten type + spacing so it doesn't eat a

@@ -728,12 +728,16 @@ export default function ProfilePage() {
               and nothing to edit (no PATCH /users/me exists). It falls back to
               the id rather than rendering an empty heading. */}
           <h1 className="masthead-title">{user?.displayName ?? 'Your profile'}</h1>
+          {/* "Everything you've earned, won and collected" is gone — it
+              described the page to someone already looking at it. What's left
+              is the two things that aren't a description: how long they've
+              been here, which is theirs and nobody else's, and the
+              no-cash-value line (see the note on /contests — this is one of
+              the five surfaces it belongs on, because a balance is on screen). */}
           <p className="masthead-standfirst">
-            {since
-              ? `Playing since ${since}. `
-              : ''}
-            Everything you&apos;ve earned, won and collected. Points only — a
-            score with no cash value, never bought and never cashed out.
+            {since ? `Playing since ${since}. ` : ''}
+            Points only — a score with no cash value, never bought and never
+            cashed out.
           </p>
           {/* Your own W-L-R, the same line everyone else sees on your fan card.
               Only once something has resolved: 0-0-0 at a "—" win rate says

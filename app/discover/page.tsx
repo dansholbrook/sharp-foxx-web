@@ -1,6 +1,6 @@
 'use client';
 
-// /discover — one page to search the whole college map: 2,012 schools, 25,833
+// /discover — one page to search schools and teams: 2,012 schools, 25,833
 // teams, 146 conferences. Open to every authenticated role, and deliberately
 // two things at once: a fan browse surface ("find my school") and an internal
 // territory-planning tool ("which D2 schools in NC don't we cover yet?").
@@ -912,11 +912,15 @@ function Discover() {
 
       <header className="masthead">
         <span className="masthead-kicker">Discover</span>
-        <h1 className="masthead-title">The college map</h1>
-        <p className="masthead-standfirst">
-          Every school and team in the graph — the ones we cover and the ones we
-          don’t yet.
-        </p>
+        {/* NOT "The college map", which the Teams tab makes untrue: GET /teams
+            is not filtered to institutions, so pro teams come back with it —
+            their institution cell renders "—" precisely because they have
+            none. The title now says what the two tabs are and nothing more.
+
+            No standfirst. "Every school and team in the graph — the ones we
+            cover and the ones we don't yet" was describing the tabs beneath it,
+            same as /games was. */}
+        <h1 className="masthead-title">Schools and teams</h1>
       </header>
 
       {/* Tabs. Chips rather than role="tab": same treatment as the other

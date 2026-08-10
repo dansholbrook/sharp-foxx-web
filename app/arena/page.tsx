@@ -40,6 +40,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
+import { usePoints } from '../points-context';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import {
@@ -157,6 +158,38 @@ function ArenaStrip({
 // ---------------------------------------------------------------------------
 // THE PAGE
 // ---------------------------------------------------------------------------
+// ---- THE MARQUEE. The fox mark at scale, the name in the masthead serif, and
+// — for a first-timer only — one line that says what the whole place is for.
+//
+// THE STANDFIRST RETIRES ITSELF, on the same lifetimeEarned === 0 gate the feed
+// masthead uses. This hub is the surface a fan opens out of habit, most days,
+// forever; a permanent "Free games, daily and weekly. Real sports. Bragging
+// rights forever." is the product still pitching itself to someone who plainly
+// bought it months ago. A first-timer arriving at the free front door gets the
+// sentence; everyone else gets straight to the games, which is what they came
+// for. Hidden while lifetimeEarned is null (in flight) so it never flashes.
+//
+// The line itself is unchanged and still NAMES BOTH CADENCES: "Free daily
+// games" was true of the two games this hub opened with and became a lie the
+// week the Call shipped — it files once a week, and a standfirst that promises
+// a daily habit is the first thing a fan reads and the last thing they check.
+function ArenaHero() {
+  const { lifetimeEarned } = usePoints();
+  return (
+    <header className="arena-hero">
+      <div className="arena-hero__mark" aria-hidden="true">
+        <span className="arena-hero__fox">🦊</span>
+      </div>
+      <h1 className="arena-hero__title">Sharp Foxx Arena</h1>
+      {lifetimeEarned === 0 && (
+        <p className="arena-hero__standfirst">
+          Free games, daily and weekly. Real sports. Bragging rights forever.
+        </p>
+      )}
+    </header>
+  );
+}
+
 export default function ArenaPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -257,21 +290,7 @@ export default function ArenaPage() {
         <AppNav />
       </div>
 
-      {/* ---- THE MARQUEE. The fox mark at scale, the name in the masthead
-          serif, and one line that says what the whole place is for. ---- */}
-      <header className="arena-hero">
-        <div className="arena-hero__mark" aria-hidden="true">
-          <span className="arena-hero__fox">🦊</span>
-        </div>
-        <h1 className="arena-hero__title">Sharp Foxx Arena</h1>
-        {/* NAMES BOTH CADENCES. "Free daily games" was true of the two games
-            this hub opened with and became a lie the week the Call shipped —
-            it files once a week, and a standfirst that promises a daily habit
-            is the first thing a fan reads and the last thing they check. */}
-        <p className="arena-hero__standfirst">
-          Free games, daily and weekly. Real sports. Bragging rights forever.
-        </p>
-      </header>
+      <ArenaHero />
 
       <ArenaStrip
         oracle={oracle}

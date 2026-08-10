@@ -203,9 +203,43 @@ export default function ContestsPage() {
       <header className="masthead">
         <span className="masthead-kicker">Contests</span>
         <h1 className="masthead-title">Contests</h1>
+        {/* THE SECOND SENTENCE ONLY. "Enter with points, fill your sheet, climb
+            the board" is how-it-works for a fan who is already on the contests
+            page and has therefore worked it out. The no-cash-value line is not
+            copy — it is the legal positioning of the whole points economy, and
+            this is a surface where a fan is one tap from spending. It stays,
+            and it is the reason there is still a standfirst here at all.
+
+            ---- NO CASH VALUE IS SAID IN TWO DIFFERENT PATTERNS. THIS IS
+            PLACEMENT, NOT DRIFT, AND IT WAS COUNTED. ----
+
+            1. THIS CLAUSE, in the standfirst, on the surfaces where a fan is
+               about to spend or is looking at their own balance: here, /picks,
+               /profile. Plus the first-run explainer on /feed, which says it
+               twice — the points hero and the masthead — both gated on
+               lifetimeEarned === 0, so a returning fan sees neither.
+
+            2. `.arena-fineprint`, a different sentence ("Points only · no cash
+               value · never redeemable") ending every Arena play surface: the
+               hub, Oracle, Trail, the Call, bingo. That is the Arena's own
+               convention for a terms line under a game, and it is not this.
+
+            Two strays sit outside both: the "Ways to earn" menu sub-label, and
+            /economy, which is staff prose describing the economy rather than a
+            fan being told about it.
+
+            Consolidating to one canonical placement was considered and
+            rejected. The argument for it would have to be that the line is
+            ignored THROUGH repetition, and nobody has evidence of that; the
+            argument against is that each of these is a moment where a fan
+            could form a wrong belief about what a point is worth, and the
+            cheapest answer is having already said so on that screen. A fan
+            should meet it where the money language is, not once on a page they
+            last opened in March. Evidence of banner-blindness is the thing
+            that would reopen this — not the count. */}
         <p className="masthead-standfirst">
-          Enter with points, fill your sheet, climb the board. Points have no cash
-          value — they can&apos;t be bought, redeemed, or cashed out.
+          Points have no cash value — they can&apos;t be bought, redeemed, or
+          cashed out.
         </p>
       </header>
 

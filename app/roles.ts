@@ -11,22 +11,41 @@ export type Role =
   | 'athlete'
   | 'viewer';
 
+// WHERE A NAV ITEM SITS, which is a different question from who may see it.
+//
+//   'section'  — the top bar. A place on the platform, named the same way for
+//                everyone who has it. Fans and staff share most of these.
+//   'console'  — behind the single "Console" menu. THE HOUSE'S BACK OFFICE:
+//                queues, directories, and the economy. Not "everything staff",
+//                which is the definition this deliberately isn't — a field
+//                rep's My Games IS their job, and burying a role's primary
+//                surface to satisfy a tidiness rule is backwards. So My Games
+//                and My Sales stay in the bar for the roles that hold them.
+//
+// The account items (My profile, My picks, notification settings, change
+// password, log out) are in NEITHER group and are not in this array at all:
+// they're identical for every signed-in role, so a role filter would be a
+// no-op. They're written out once in the avatar menu in nav.tsx.
+type NavGroup = 'section' | 'console';
+
 // Every nav destination, in display order, tagged with the roles that may use
 // it. navLinksFor() filters this; page access reuses the same intent below.
 interface NavItem {
   href: string;
   label: string;
   roles: Role[];
+  group: NavGroup;
 }
 
 const NAV_ITEMS: NavItem[] = [
   // The athlete's home. Listed first so it leads their (short) nav; filtered out
   // for every other role, so it never reorders anyone else's links.
-  { href: '/nil', label: 'My NIL', roles: ['athlete'] },
+  { href: '/nil', label: 'My NIL', roles: ['athlete'], group: 'section' },
   {
     href: '/feed',
     label: 'Feed',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+    group: 'section',
   },
   // The college map (2k schools / 25.8k teams), open to everyone: a fan browses
   // for their school, staff plan territory over the rows we don't cover yet.
@@ -36,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
     href: '/discover',
     label: 'Discover',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+    group: 'section',
   },
   // The schedule: every upcoming and live game, filterable. Open to everyone —
   // it's the "what can I watch tonight?" surface. Sits between Discover (browse
@@ -45,6 +65,7 @@ const NAV_ITEMS: NavItem[] = [
     href: '/games',
     label: 'Games',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+    group: 'section',
   },
   // Contests: browse open pick'em contests, enter, fill a pick sheet, follow the
   // leaderboard. A play surface, so it carries a nav LINK for every role (unlike
@@ -55,6 +76,7 @@ const NAV_ITEMS: NavItem[] = [
     href: '/contests',
     label: 'Contests',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+    group: 'section',
   },
   // The Arena: the free daily games — Beat the Oracle, the Foxx Trail, and
   // whatever lands next. ONE nav item, and the hub at /arena is where a fan
@@ -68,27 +90,35 @@ const NAV_ITEMS: NavItem[] = [
     href: '/arena',
     label: 'Arena',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+    group: 'section',
   },
-  // The fan's pick history + points wallet, and the points leaderboard. Both
-  // PAGES are open to every role (staff can pick too — the backend deliberately
-  // allows it), but only the fan roles carry the nav LINKS: staff nav is already
-  // eleven items deep, and the ⚡ chip in the nav is their way into /picks, which
-  // links on to the leaderboard. See PAGE_ACCESS below, where both are open.
-  // The fan's own profile: standing on both boards, Arena streaks, badges, the
-  // points ledger, and who they follow. Leads the points cluster because it's
-  // the summary the other two drill down from.
+  // The points leaderboard. NOW EVERY ROLE, where it used to be fan-only.
   //
-  // FAN-ONLY LINK, ALL-ROLES PAGE — same split as /picks and /leaderboard below,
-  // and for the same reason: staff hold balances and streaks too, but their nav
-  // is already fourteen items deep, and the ⚡ chip (which now points here) is
-  // their door. See PAGE_ACCESS, where it's open to everyone.
-  { href: '/profile', label: 'My profile', roles: ['athlete', 'viewer'] },
-  { href: '/picks', label: 'My picks', roles: ['athlete', 'viewer'] },
-  { href: '/leaderboard', label: 'Leaderboard', roles: ['athlete', 'viewer'] },
+  // The old fan-only split on this and on /profile + /picks was never about
+  // access — all three PAGES have always been open to everyone (see
+  // PAGE_ACCESS below), because the backend puts no @Roles on the pick and
+  // leaderboard routes and staff play along. It was about room: staff nav was
+  // fifteen items deep and these were the three that could be cut. Console
+  // gives that room back, so the standings stop being something only fans can
+  // find, and /profile + /picks move into the avatar menu where every role
+  // reaches them. The ⚡ chip still points at /profile; it is simply no longer
+  // the only door staff have to it.
+  {
+    href: '/leaderboard',
+    label: 'Leaderboard',
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+    group: 'section',
+  },
+  // A REP'S OWN WORK, AND WHY IT IS NOT IN CONSOLE. Console is the house's back
+  // office; My Games is a correspondent's entire job, and My Sales is where a
+  // rep's commission lives. Putting a role's primary surface two taps deep to
+  // make the bar tidier would be optimising the wrong thing — a field rep's bar
+  // is seven items with these in it, which is not a crowding problem.
   {
     href: '/my-games',
     label: 'My games',
     roles: ['admin', 'regional_manager', 'field_rep'],
+    group: 'section',
   },
   // The rep's "business office": logged sales + earned commissions. Open to every
   // role that can hold a rep profile (a bare admin with no rep row sees the page's
@@ -97,18 +127,31 @@ const NAV_ITEMS: NavItem[] = [
     href: '/my-sales',
     label: 'My sales',
     roles: ['admin', 'regional_manager', 'field_rep'],
+    group: 'section',
   },
-  { href: '/field-reps', label: 'Field reps', roles: ['admin', 'regional_manager'] },
+
+  // ---- CONSOLE: the house's back office. -----------------------------------
+  //
+  // THESE ARE DELIBERATELY NOT GROUPED BY JOB. Splitting them into "editorial"
+  // / "territory" / "platform" would be inventing an information architecture
+  // and then having to defend it, and nobody yet knows which of these pages
+  // gets opened daily and which twice a quarter. Grouping is worth doing off
+  // real usage; until then a flat list in a sensible order is honest about what
+  // we know. This is deferred, not missed.
+  { href: '/field-reps', label: 'Field reps', roles: ['admin', 'regional_manager'], group: 'console' },
   // Read-only advertiser directory. Same gate as Field Reps -- staff who manage
   // the territory book the ads (creation still happens via Log a Sale).
-  { href: '/advertisers', label: 'Advertisers', roles: ['admin', 'regional_manager'] },
+  //
+  // CONSOLE IS THIS PAGE'S ONLY DOOR. Nothing else in the app links to
+  // /advertisers, so it must stay listed here or it becomes unreachable.
+  { href: '/advertisers', label: 'Advertisers', roles: ['admin', 'regional_manager'], group: 'console' },
   // Editorial review queue: submitted articles awaiting an editor. Same gate as
   // the backend GET /content/review-queue (admin + regional_manager).
-  { href: '/review', label: 'Review', roles: ['admin', 'regional_manager'] },
+  { href: '/review', label: 'Review', roles: ['admin', 'regional_manager'], group: 'console' },
   // Staff NIL review queue: submitted deliverables awaiting approval. Same gate
   // as the backend GET /nil/review-queue (admin + regional_manager).
-  { href: '/nil-review', label: 'NIL Review', roles: ['admin', 'regional_manager'] },
-  { href: '/applicants', label: 'Applicants', roles: ['admin', 'regional_manager'] },
+  { href: '/nil-review', label: 'NIL Review', roles: ['admin', 'regional_manager'], group: 'console' },
+  { href: '/applicants', label: 'Applicants', roles: ['admin', 'regional_manager'], group: 'console' },
   // The National Board's management surface: open a house question, then lock /
   // resolve / void it. admin + regional_manager ONLY -- field_rep is excluded
   // deliberately, mirroring the backend's NATIONAL_ROLES (a rep opens questions
@@ -121,7 +164,7 @@ const NAV_ITEMS: NavItem[] = [
   // per-game prediction console) but it is per-EVENT by construction, which is
   // exactly what a national question isn't. Sits last among the staff queues,
   // next to Reports: like Reports, it's a house-wide surface, not territory work.
-  { href: '/national-admin', label: 'National', roles: ['admin', 'regional_manager'] },
+  { href: '/national-admin', label: 'National', roles: ['admin', 'regional_manager'], group: 'console' },
   // The Correspondent's Call editorial desk: designate the week's game, name the
   // correspondent, and follow the card from draft to graded. admin +
   // regional_manager, mirroring the backend's CALL_CREATE_ROLES / CALL_READ_ROLES
@@ -137,15 +180,15 @@ const NAV_ITEMS: NavItem[] = [
   // Call perhaps a few weeks a year; a permanent link that is a dead end most of
   // the time is worse than none. Their door is the tile on the game's own
   // workspace, which appears only when that game HAS a Call.
-  { href: '/arena/call/desk', label: 'Call desk', roles: ['admin', 'regional_manager'] },
+  { href: '/arena/call/desk', label: 'Call desk', roles: ['admin', 'regional_manager'], group: 'console' },
   // The engagement economy console: what each passive action pays, and the
   // scheduled multiplier windows. admin + regional_manager, matching the
   // backend's ECONOMY_READ_ROLES — but an RM sees it READ-ONLY, because every
   // write route narrows to @Roles('admin'). An RM needs to answer "why did my
   // fans stop earning check-in points?" without being able to move the economy.
   // Next to National and Reports: another house-wide surface, not territory work.
-  { href: '/economy', label: 'Economy', roles: ['admin', 'regional_manager'] },
-  { href: '/dashboard', label: 'Reports', roles: ['admin'] },
+  { href: '/economy', label: 'Economy', roles: ['admin', 'regional_manager'], group: 'console' },
+  { href: '/dashboard', label: 'Reports', roles: ['admin'], group: 'console' },
 ];
 
 // Post-login landing, highest-priority role first. A user with several roles
@@ -165,10 +208,30 @@ export function landingFor(roles: string[]): string {
   return '/feed';
 }
 
-export function navLinksFor(roles: string[]): Array<{ href: string; label: string }> {
-  return NAV_ITEMS.filter((item) =>
+export interface NavLink {
+  href: string;
+  label: string;
+}
+
+// The nav, split the way it is rendered: `sections` is the top bar, `console`
+// is the single menu behind it. Returning two arrays rather than one flat list
+// keeps the grouping decision in this file, where the reasoning for it lives,
+// instead of leaving nav.tsx to re-derive it from hrefs.
+//
+// `console` is empty for every fan role, which is how nav.tsx knows not to
+// render the Console trigger at all — there is no such thing as an empty menu.
+export function navLinksFor(roles: string[]): {
+  sections: NavLink[];
+  console: NavLink[];
+} {
+  const mine = NAV_ITEMS.filter((item) =>
     item.roles.some((r) => roles.includes(r)),
-  ).map(({ href, label }) => ({ href, label }));
+  );
+  const pick = (group: NavGroup): NavLink[] =>
+    mine
+      .filter((item) => item.group === group)
+      .map(({ href, label }) => ({ href, label }));
+  return { sections: pick('section'), console: pick('console') };
 }
 
 // Which roles may open a given page. Paths not listed are open to any
@@ -290,13 +353,17 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p === '/discover',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
-  // The points surfaces. Open to EVERY authenticated role, deliberately wider
-  // than their nav links (fan roles only): the backend puts no @Roles on
-  // /predictions/my-picks or /leaderboards/points because any caller can pick,
-  // so a rep who followed their ⚡ chip here must not hit AccessDenied on their
-  // own points. Listed explicitly rather than left to the open-by-default
-  // fallback, since the nav/page split is exactly the thing worth being able to
-  // read here.
+  // The points surfaces. Open to EVERY authenticated role: the backend puts no
+  // @Roles on /predictions/my-picks or /leaderboards/points because any caller
+  // can pick, so a rep who followed their ⚡ chip here must not hit AccessDenied
+  // on their own points.
+  //
+  // These three used to be wider than their nav links, which were fan-only for
+  // room rather than for access. That gap is now closed: /leaderboard is a
+  // section for every role above, and /profile + /picks are in the avatar menu,
+  // which every signed-in role gets. Still listed explicitly rather than left
+  // to the open-by-default fallback, because "open to everyone" is the load-
+  // bearing fact here and it should be readable, not inferred.
   {
     match: (p) => p === '/profile',
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],

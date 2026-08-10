@@ -399,9 +399,13 @@ export default function MyPicksPage() {
         <div>
           <span className="masthead-kicker">Points</span>
           <h1 className="masthead-title">My picks</h1>
+          {/* "Pick with points, climb the leaderboard" is gone — how-it-works
+              for a fan who is reading their own pick history and has therefore
+              worked it out. The no-cash-value line stays: see the note on
+              /contests for why it is on five surfaces on purpose. */}
           <p className="masthead-standfirst">
-            Pick with points, climb the leaderboard. Points have no cash value —
-            they can&apos;t be bought, redeemed, or cashed out.
+            Points have no cash value — they can&apos;t be bought, redeemed, or
+            cashed out.
           </p>
           {/* The same line, from the same numbers, that everyone else sees on
               your fan card. Only once something has resolved: a fan whose first

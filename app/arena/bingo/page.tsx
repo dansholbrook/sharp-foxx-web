@@ -352,10 +352,15 @@ export default function BingoPage() {
         <div>
           <span className="masthead-kicker">The Arena</span>
           <h1 className="masthead-title">Sports Bingo</h1>
+          {/* THE CADENCE ONLY. The fairness line that used to close this
+              sentence ("your free card faces exactly the same numbers as
+              anyone else's") is not gone — it's in the lobby terms further
+              down, which is where a fan is actually taking a card and is
+              therefore where the question occurs to them. Saying it twice on
+              one page made it read as protesting. */}
           <p className="masthead-standfirst">
             Fifty-six numbers a night, four every twenty minutes, every one of
-            them called off tonight&apos;s slate. Your free card faces exactly
-            the same numbers as anyone else&apos;s.
+            them called off tonight&apos;s slate.
           </p>
         </div>
         <div className="masthead-actions">

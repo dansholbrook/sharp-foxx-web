@@ -519,6 +519,51 @@ function PointsHero() {
   );
 }
 
+// ---- THE MASTHEAD, and why the feed of all pages needs one.
+// Every other fan surface answers "what is this?" in its first forty words —
+// the Arena hero, both leaderboard standfirsts, /picks, /contests. The feed was
+// the only one that didn't, and it is the page a fan lands on the instant they
+// finish signing up: straight from a signup form to a search box, a gold ⚡
+// number and a card about an "Oracle" nobody has introduced.
+//
+// THIS IS THE HOW-IT-WORKS, and it is deliberately not a page. A separate
+// explainer would restate standfirsts that already exist, one screen away from
+// where each is useful, and would be read by the fans who need it least. What
+// was actually missing is the connective sentence: that the games, the points,
+// the Arena and the board are ONE thing.
+//
+// IT NOW RETIRES ITSELF, which is the part that was wrong. It held no state and
+// never went away, so a fan 1,892 points deep was still being pitched the
+// product they had plainly already bought — the pitch on every page, forever,
+// is worse than no pitch. It rides the SAME GATE as the points hero's opening
+// line (lifetimeEarned === 0, "has never earned anything"), for the same reason
+// and with the same property: applyBalance deliberately doesn't touch
+// lifetimeEarned, so the check-in that fires on this very page load can't yank
+// the explanation out from under the fan still reading it. The next login has a
+// real earned total and both lines are gone for good.
+//
+// Still not dismissible and still holding no state of its own — the wallet
+// already knows the only thing a "seen it" flag would have tracked. And it
+// stays hidden while lifetimeEarned is null (in flight), so a returning fan
+// never sees it flash in and out. ---- */
+function FeedMasthead() {
+  const { lifetimeEarned } = usePoints();
+  return (
+    <div className="masthead">
+      <span className="masthead-kicker">Your feed</span>
+      <h1 className="masthead-title">Tonight&apos;s games</h1>
+      {lifetimeEarned === 0 && (
+        <p className="masthead-standfirst">
+          Sharp Foxx covers the local games the big networks skip, with a
+          correspondent in the building. Follow your teams, call the games with
+          free points, and play the Arena daily — one score, no cash value, and
+          bragging rights on the leaderboard.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // LEADERBOARD TEASER: the top five off the global board, each row opening the
 // same fan card the full /leaderboard opens (the component is exported and
 // self-contained, so it's cheap to reuse here). Hides entirely when the board
@@ -751,35 +796,7 @@ export default function FeedPage() {
         <AppNav />
       </div>
 
-      {/* ---- THE MASTHEAD, and why the feed of all pages needs one.
-          Every other fan surface answers "what is this?" in its first forty
-          words — the Arena hero, both leaderboard standfirsts, /picks,
-          /contests, /games, /discover. The feed was the only one that didn't,
-          and it is the page a fan lands on the instant they finish signing up:
-          straight from a signup form to a search box, a gold ⚡ number and a
-          card about an "Oracle" nobody has introduced.
-
-          THIS IS THE HOW-IT-WORKS, and it is deliberately not a page. A
-          separate explainer would restate six standfirsts that already exist,
-          one screen away from where each is useful, and would be read by the
-          fans who need it least. What was actually missing is the connective
-          sentence: that the games, the points, the Arena and the board are ONE
-          thing. That belongs here, above all of them, and nowhere else.
-
-          IT IS NOT DISMISSIBLE AND HOLDS NO STATE. A tour would need a
-          "seen it" flag, and every fan is a returning fan eventually — a
-          standfirst they stop reading costs nothing, a modal they have to close
-          costs something every time. ---- */}
-      <div className="masthead">
-        <span className="masthead-kicker">Your feed</span>
-        <h1 className="masthead-title">Tonight&apos;s games</h1>
-        <p className="masthead-standfirst">
-          Sharp Foxx covers the local games the big networks skip, with a
-          correspondent in the building. Follow your teams, call the games with
-          free points, and play the Arena daily — one score, no cash value, and
-          bragging rights on the leaderboard.
-        </p>
-      </div>
+      <FeedMasthead />
 
       <SearchBar />
 

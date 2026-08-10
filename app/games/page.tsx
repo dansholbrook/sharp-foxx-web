@@ -445,9 +445,10 @@ function Games() {
       <header className="masthead">
         <span className="masthead-kicker">Games</span>
         <h1 className="masthead-title">What&apos;s on</h1>
-        <p className="masthead-standfirst">
-          Every game we cover — live now, coming up, and just played.
-        </p>
+        {/* NO STANDFIRST. "Every game we cover — live now, coming up, and just
+            played" was a description of the two tabs sitting directly beneath
+            it, which the tabs make in one word each and make truthfully. A line
+            that only restates the controls under it is furniture. */}
       </header>
 
       {/* Tabs. Chips rather than role="tab", matching /discover: each tab is a
