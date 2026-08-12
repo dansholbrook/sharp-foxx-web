@@ -20,9 +20,33 @@
 // hands down myPick.outcome as one of pending/win/loss/void and the day's own
 // status; both are read, neither is reconstructed. See api.ts's Oracle header.
 //
-// THE PAYOUTS LIVE ON THE BUTTONS. Not in a legend, not in a tooltip: RIDE +10
-// and FADE +24 are the entire decision, and the backend pre-computes both at
-// today's confidence so the number on the button is the number that lands.
+// TWO NUMBERS, NOT A PERCENTAGE. The card used to lead with "New York Mets —
+// 68% confident", which asks a fan to know what a confidence percentage BUYS
+// them before they can tell whether fading is worth it. It buys 21 instead of
+// 10, so the card says that: the team, then "Ride it → win 10" over "Back the
+// Marlins → win 21", with the percentage demoted to small print underneath. One
+// number roughly double the other makes the bolder call obvious to someone who
+// has never thought about implied odds.
+//
+// The matching push notification opens with the same sentence, so a fan tapping
+// through lands on the words they were just shown.
+//
+// BOTH PAYOUTS ARE RENDERED VERBATIM. The backend pre-computes them for this day
+// at this confidence, with the same function that grades the pick — neither is
+// recomputed here and the fade figure is never derived from the confidence, so
+// an admin retuning the reward (or the confidence ceiling, 95 → 80) moves the
+// card without touching it. Nothing here knows a maximum.
+//
+// TWO THINGS THE API PUSHES TO THIS CLIENT ON PURPOSE:
+//
+//   NULL TEAM NAMES. oracle.team and fadeTeam are both null when an event has no
+//   linked team row (a rep-created game). The raw null comes down because
+//   fan-facing copy lives here — see sideName().
+//
+//   A PAYOUT OF 0. That is an admin having DISABLED the reward, a config state
+//   rather than a prize of nothing, so the promise clause is suppressed rather
+//   than rendered as "win 0". The button stays: a 0-point fade is still a pick,
+//   and it still moves the play streak and the crowd split.
 // ============================================================================
 
 import { useEffect, useState } from 'react';
@@ -31,6 +55,7 @@ import {
   OracleChoice,
   OracleDay,
   OraclePickResult,
+  OracleSide,
   oracleChoiceLabel,
   oracleLockCountdown,
   oracleOutcomeCopy,
@@ -40,33 +65,50 @@ import {
 } from '../../api';
 import { EntryAdvisoryNotice } from '../../entry-advisory';
 
-// The dial and the split bar both animate; both stop dead under reduced motion
+// The mark and the split bar both animate; both stop dead under reduced motion
 // (see globals.css). Nothing here branches on the preference — the CSS owns it,
 // so there is one place to look and no chance of the two disagreeing.
 
 // ---------------------------------------------------------------------------
-// The confidence dial. A conic-gradient ring, not an SVG arc: one element, one
-// custom property, and the value is legible in the DOM as a number rather than
-// as a stroke-dasharray nobody can read.
+// A team name for the middle of a sentence. Both sides are nullable and the API
+// sends the raw null rather than a placeholder, because this string is copy.
 //
-// The ring is drawn to `--pct` of a full turn and the centre is punched out by
-// a radial mask, so the gold is a genuine arc rather than a pie slice.
+// "the home side" rather than "Home": it lands mid-sentence ("The Oracle likes
+// the home side", "Back the away side"), not in a score-line column, where the
+// bare word is right and stays — see ScoreLine.
 // ---------------------------------------------------------------------------
-function ConfidenceDial({ confidence }: { confidence: number }) {
+function sideName(team: string | null, side: OracleSide): string {
+  return team ?? (side === 'home' ? 'the home side' : 'the away side');
+}
+
+// ---------------------------------------------------------------------------
+// ONE OFFER — "Ride it → win 10". The same body renders inside a button while
+// the day is pickable and inside a static line once it isn't, so a locked or
+// covered card says exactly what the pickable one said.
+//
+// `pay` of 0 drops the whole promise clause and leaves the action naked. See the
+// header: zero is a disabled reward, and "win 0" would read as an insult.
+// ---------------------------------------------------------------------------
+function OfferBody({ act, pay }: { act: string; pay: number }) {
   return (
-    <div
-      className="oracle-dial"
-      style={{ ['--pct' as string]: String(confidence) }}
-      role="img"
-      aria-label={`The Oracle is ${confidence}% confident`}
-    >
-      <div className="oracle-dial__ring" aria-hidden="true" />
-      <div className="oracle-dial__hub" aria-hidden="true">
-        <span className="oracle-dial__pct">{confidence}</span>
-        <span className="oracle-dial__unit">%</span>
-      </div>
-    </div>
+    <>
+      <span className="oracle-offer__act">{act}</span>
+      {pay > 0 && (
+        <span className="oracle-offer__win">
+          <span className="oracle-offer__arrow" aria-hidden="true">
+            →
+          </span>
+          win <strong className="oracle-offer__pay">{points(pay)}</strong>
+        </span>
+      )}
+    </>
   );
+}
+
+// The button's spoken label. The arrow is decoration; a screen reader gets the
+// sentence it stands for, and the same suppression rule at 0.
+function offerLabel(act: string, pay: number): string {
+  return pay > 0 ? `${act} to win ${points(pay)} points` : act;
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +254,24 @@ export function TodayCard({
   const covered = graded ? null : covering;
   const canPick = day.status === 'open' && !day.locked && !mine && !covered;
 
+  // The two sides, in fan terms. The fade side is the one the Oracle didn't
+  // take, and its name arrives on the day rather than being joined here.
+  const rideName = sideName(day.oracle.team, day.oracle.side);
+  const fadeName = sideName(
+    day.fadeTeam,
+    day.oracle.side === 'home' ? 'away' : 'home',
+  );
+  const rideAct = 'Ride it';
+  const fadeAct = `Back ${fadeName}`;
+  // The read-only reading of the offers: a fan who arrived after kickoff, or a
+  // correspondent covering the game. Only sides that actually promise something
+  // survive here — with no button under it, an offer of nothing is just noise.
+  const showStaticOffers =
+    !canPick &&
+    !mine &&
+    !graded &&
+    (day.payouts.ride > 0 || day.payouts.fade > 0);
+
   return (
     <section
       className={`oracle-card${graded ? ' oracle-card--graded' : ''}${
@@ -227,23 +287,65 @@ export function TodayCard({
           <span className="oracle-mark__orb">🔮</span>
         </div>
         <p className="oracle-kicker">{friendlyDate(date)}</p>
-        <h2 className="oracle-proclaim">The Oracle has spoken</h2>
         <p className="oracle-matchup">{day.matchup}</p>
+        {/* THE LINE THE SCREEN EXISTS TO DELIVER, and the one the push
+            notification opens with. Past tense once the day has settled — the
+            Oracle's opinion is history by then, and "likes" would read as a tip
+            on a game that already finished. */}
+        <h2 className="oracle-likes">
+          The Oracle {graded ? 'liked' : 'likes'} {rideName}.
+        </h2>
       </header>
 
-      {/* ---- The call itself: the team, big, beside the dial. ---- */}
-      <div className="oracle-call">
-        <ConfidenceDial confidence={day.oracle.confidence} />
-        <div className="oracle-call__text">
-          <span className="oracle-call__label">The call</span>
-          <span className="oracle-call__team">
-            {day.oracle.team ?? (day.oracle.side === 'home' ? 'Home' : 'Away')}
-          </span>
-          <span className="oracle-call__conf">
-            {day.oracle.confidence}% confident
-          </span>
+      {/* ---- THE OFFER. Two rows, stacked so the numbers sit in a column and
+          the difference between them is a glance rather than a comparison.
+          Buttons while the day is pickable, and the biggest tap targets on the
+          site; the same sentences, static, once it isn't. ---- */}
+      {canPick && (
+        <div className="oracle-offers">
+          <button
+            type="button"
+            className={`oracle-offer oracle-offer--ride${
+              picking === 'ride' ? ' oracle-offer--picking' : ''
+            }`}
+            aria-label={offerLabel(rideAct, day.payouts.ride)}
+            disabled={picking !== null}
+            onClick={() => onPick('ride')}
+          >
+            <OfferBody act={rideAct} pay={day.payouts.ride} />
+          </button>
+          <button
+            type="button"
+            className={`oracle-offer oracle-offer--fade${
+              picking === 'fade' ? ' oracle-offer--picking' : ''
+            }`}
+            aria-label={offerLabel(fadeAct, day.payouts.fade)}
+            disabled={picking !== null}
+            onClick={() => onPick('fade')}
+          >
+            <OfferBody act={fadeAct} pay={day.payouts.fade} />
+          </button>
         </div>
-      </div>
+      )}
+
+      {showStaticOffers && (
+        <div className="oracle-offers">
+          {day.payouts.ride > 0 && (
+            <p className="oracle-offer oracle-offer--ride oracle-offer--static">
+              <OfferBody act={rideAct} pay={day.payouts.ride} />
+            </p>
+          )}
+          {day.payouts.fade > 0 && (
+            <p className="oracle-offer oracle-offer--fade oracle-offer--static">
+              <OfferBody act={fadeAct} pay={day.payouts.fade} />
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ---- The confidence, as small print. It is context for the two numbers
+          above, not a thing a fan has to understand before they can play. ---- */}
+      <p className="oracle-conf">{day.oracle.confidence}% confident.</p>
 
       {/* ---- GRADED: the reveal. Leads the lower half, because on a settled
           day the result is the only thing the fan came for. ---- */}
@@ -255,11 +357,16 @@ export function TodayCard({
         >
           {mine ? (
             <>
-              {mine.outcome === 'win' && mine.pointsAwarded !== null && (
-                <span className="oracle-reveal__points">
-                  +{points(mine.pointsAwarded)}
-                </span>
-              )}
+              {/* The same rule the offer rows follow: a win worth 0 (the reward
+                  was disabled) shows the headline and no badge, rather than
+                  celebrating "+0". */}
+              {mine.outcome === 'win' &&
+                mine.pointsAwarded !== null &&
+                mine.pointsAwarded > 0 && (
+                  <span className="oracle-reveal__points">
+                    +{points(mine.pointsAwarded)}
+                  </span>
+                )}
               <p className="oracle-reveal__headline">
                 {oracleOutcomeCopy(mine.choice, mine.outcome).headline}
               </p>
@@ -300,38 +407,7 @@ export function TodayCard({
         </div>
       )}
 
-      {/* ---- OPEN + unpicked: THE TWO BUTTONS. The biggest tap targets on the
-          site, and the payouts ride ON them. ---- */}
-      {canPick && (
-        <div className="oracle-actions">
-          <button
-            type="button"
-            className={`oracle-btn oracle-btn--ride${
-              picking === 'ride' ? ' oracle-btn--picking' : ''
-            }`}
-            disabled={picking !== null}
-            onClick={() => onPick('ride')}
-          >
-            <span className="oracle-btn__verb">Ride</span>
-            <span className="oracle-btn__pay">+{points(day.payouts.ride)}</span>
-            <span className="oracle-btn__hint">with the Oracle</span>
-          </button>
-          <button
-            type="button"
-            className={`oracle-btn oracle-btn--fade${
-              picking === 'fade' ? ' oracle-btn--picking' : ''
-            }`}
-            disabled={picking !== null}
-            onClick={() => onPick('fade')}
-          >
-            <span className="oracle-btn__verb">Fade</span>
-            <span className="oracle-btn__pay">+{points(day.payouts.fade)}</span>
-            <span className="oracle-btn__hint">against it</span>
-          </button>
-        </div>
-      )}
-
-      {/* ---- COVERING: where the two buttons would have been. The dial, the
+      {/* ---- COVERING: where the two buttons would have been. The call, the
           matchup and the split above are untouched — a correspondent working
           tonight's game still wants to see what the room thinks of it; they
           just aren't calling it. Rendered even when `mine` exists (they were
@@ -349,13 +425,18 @@ export function TodayCard({
           <span className="oracle-locked-in__text">
             {oracleChoiceLabel(mine.choice)}
           </span>
-          <span className="oracle-locked-in__pay">
-            Pays +
-            {points(
-              mine.choice === 'fade' ? day.payouts.fade : day.payouts.ride,
-            )}{' '}
-            if it lands
-          </span>
+          {/* Suppressed at 0, like the offer rows — "Pays +0 if it lands" is a
+              promise of nothing dressed as a promise. */}
+          {(mine.choice === 'fade' ? day.payouts.fade : day.payouts.ride) >
+            0 && (
+            <span className="oracle-locked-in__pay">
+              Pays +
+              {points(
+                mine.choice === 'fade' ? day.payouts.fade : day.payouts.ride,
+              )}{' '}
+              if it lands
+            </span>
+          )}
         </div>
       )}
 

@@ -2845,6 +2845,51 @@ export interface OpenPickGame {
   minStake: number;
 }
 
+// GET /predictions/for-events?eventIds=a,b,c — THE BATCH BOARD READ. The
+// pickable state of many games in one request, for a surface already holding a
+// page of events. Open and locked questions only; resolved/voided are history and
+// this read drops them.
+//
+// WHY THIS EXISTS RATHER THAN A FAN-OUT: a schedule page renders 20 game rows,
+// and 20 `getEventPredictions` calls per page (plus 20 more per "Show more") is
+// the shape this endpoint was added to avoid. Ask once, group by eventId.
+//
+// TWO DIFFERENCES FROM `Prediction` (the per-game board), both deliberate on the
+// server side:
+//
+//   • `covering` IS A BARE BOOLEAN, NOT AN `entry` ADVISORY, and this is the one
+//     thing to get right when rendering it. coveringVerdict() given more than one
+//     event id calls the set a slate and returns the SLATE sentence ("it would
+//     change how the whole slate scores"), which is true of a pick sheet and
+//     false of a schedule — nothing scores across these rows. So the server sends
+//     the flag and no message, exactly as /predictions/open-games does.
+//
+//     RENDER IT BY GREYING THE ROW'S CONTROL, AND WRITE NO SENTENCE FOR IT. The
+//     words belong to the board each row links to, whose `entry` IS single-event
+//     and whose message is therefore true. Never pattern-match a local string
+//     here — see the covering doctrine above `entryRefusal`. If a per-row
+//     sentence is ever wanted, that is a backend change, not a local literal.
+//
+//   • No `entry` field at all, for the same reason. Do not pass one of these rows
+//     to `entryRefusal()`; it would report a missing advisory on a read that
+//     deliberately carries none.
+export interface EventQuestion extends PredictionBase {
+  eventId: string;
+  covering: boolean;
+}
+
+// The batch read. Capped at 50 ids SERVER-SIDE, and it is a 400 rather than a
+// truncation — so a caller holding more than 50 events must page rather than
+// discover that the tail silently came back empty.
+export const getQuestionsForEvents = (token: string, eventIds: string[]) => {
+  // No request at all for an empty list: the endpoint 400s on it (an empty
+  // `IN ()` is a SQL error, not an empty answer), and "nothing asked for" is
+  // already the right answer to give a caller with no rows on screen.
+  if (eventIds.length === 0) return Promise.resolve<EventQuestion[]>([]);
+  const qs = new URLSearchParams({ eventIds: eventIds.join(',') });
+  return authGet<EventQuestion[]>(`/predictions/for-events?${qs.toString()}`, token);
+};
+
 // POST /predictions body. Labels are MOSTLY server-owned: the backend takes team
 // names from the event for a game `winner`, and writes "Over <line>"/"Under
 // <line>"/"Yes"/"No" itself. Sending keys only keeps the server authoritative.
@@ -4957,9 +5002,22 @@ export interface OracleDay {
   matchup: string;
   homeTeam: string | null;
   awayTeam: string | null;
+  // THE SIDE A FADE BACKS — the mirror of oracle.team below, and sent for
+  // exactly the same reason: so the card can say "back the Marlins to win 21"
+  // without joining sides to names. Deriving it here from homeTeam/awayTeam +
+  // oracle.side is the very join oracle.team exists to avoid, and it is the one
+  // that breaks quietly when a rep-created event has no linked team row.
+  //
+  // NOT inside `oracle`, deliberately: that block is the HOUSE'S POSITION, and
+  // this is the one position the house did not take.
+  //
+  // NULLABLE, exactly like oracle.team. The API sends the raw null rather than a
+  // placeholder because the fallback ("the away side") is fan-facing copy, and
+  // that lives here — see sideName() in today-card.tsx.
+  fadeTeam: string | null;
   oracle: {
     side: OracleSide;
-    // 50..95, per the CHECK constraint. Never 100 — the fade multiplier would
+    // 50..80, per the CHECK constraint. Never 100 — the fade multiplier would
     // divide by zero.
     confidence: number;
     // Which actual team the Oracle is on, so the card says "the Oracle likes
@@ -4967,8 +5025,16 @@ export interface OracleDay {
     team: string | null;
   };
   // What each side pays TODAY, at this day's confidence, with the current
-  // admin-tuned reward values — PRE-COMPUTED, so the buttons show the number
-  // that lands in the wallet rather than a base plus a formula.
+  // admin-tuned reward values — PRE-COMPUTED by the same function that grades
+  // the pick, so the card shows the number that lands in the wallet rather than
+  // a base plus a formula. Rendered VERBATIM: never recomputed here, and the
+  // fade figure is never derived from the confidence. That formula is
+  // server-owned and admin-tunable — the confidence ceiling moved 95 → 80 (and
+  // the fade cap 30 → 40) without a line of this client changing.
+  //
+  // 0 MEANS AN ADMIN DISABLED THAT REWARD — a config state the API reports
+  // honestly rather than papering over. It is not a prize of nothing, so the
+  // card suppresses that side's promise line rather than rendering "win 0".
   payouts: { ride: number; fade: number };
   // The live ride/fade split. The social pressure IS the feature.
   split: { ride: number; fade: number; total: number };

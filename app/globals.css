@@ -7409,6 +7409,147 @@ a.follow-sugcard__name:hover {
   color: #b4e6c0;
 }
 
+/* ============================================================================
+   CASUAL PICK STRIP -- the two-button control under a /games schedule card.
+   See app/game-pick-strip.tsx.
+
+   IT REUSES .predict-opt AND ITS STATE CLASSES WHOLESALE (--live, --mine, --dim,
+   the __fill crowd bar, the :active press). Everything below is a tighter box
+   around the same treatment, so a pick reads identically on the schedule and on
+   the game board -- which is the point: it is the same act.
+
+   The strip is a SIBLING of the card's <Link>, never inside it, so it carries its
+   own top border rather than inheriting the anchor's hover.
+   ============================================================================ */
+.gamepick {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Two options, side by side, equal width. A 2-col grid rather than flex so the
+   two buttons are the SAME width regardless of team-name length -- a wider
+   button reads as a recommendation, and this control must not have an opinion
+   about which side the fan takes. */
+.gamepick__opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* Tighter than the board's full-width option: at 390px the card is ~358px wide,
+   so each of these is ~171px and the label has to survive it. */
+.gamepick-opt {
+  border-radius: 8px;
+}
+
+/* STACKED: name on its own line(s), split underneath.
+   ----------------------------------------------------------------------------
+   THIS WAS A ROW, AND THE ROW IS WHAT TRUNCATED THE TEAM NAMES.
+   Side by side, the percentage took a fixed ~33px out of a 155px inner width and
+   the name got what was left -- which is how "MINNESOTA" became "MINNESOT" and
+   "PHILADELPHIA" became "PHILADELPH". Note what those names have in common: the
+   global `button` rule sets text-transform: uppercase AND letter-spacing: 0.09em,
+   which the board never resets, so every character here is ~1.2px wider than its
+   lowercase self. Caps are the house style and they are not the bug; budgeting a
+   name against a number on one 175px button was.
+   ---------------------------------------------------------------------------- */
+.gamepick-opt__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 10px;
+}
+
+/* WRAPS ON WORDS. NEVER ELLIPSISED.
+   The board's .predict-opt__label has no nowrap and no overflow rule -- it wraps,
+   which is why a long team name has never truncated there. This overrides its
+   `display: flex` (which makes the text one anonymous flex item and fights normal
+   wrapping) and otherwise lets the same behaviour apply at a smaller size.
+
+   overflow-wrap: break-word is the last-resort net, not the normal path: it only
+   engages for a SINGLE WORD too long for the box (~15 caps characters here), and
+   a mid-word wrap still shows every character. Hiding letters is the thing this
+   must never do again. */
+.gamepick-opt__label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: break-word;
+}
+
+/* The split, on its own line under the name. Quiet: the fill bar behind the
+   button already carries the weight, so this is the exact figure and nothing
+   more. Rendered only once a pick exists (see hasCrowd) -- 0%/0% is not a
+   measurement, it is the absence of one. */
+.gamepick-opt__pct {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* PICKED, AND IT COSTS THE NAME NO WIDTH. The whole "this one is mine" signal is
+   carried by things that do not compete with the label: .predict-opt--mine's
+   accent border and stronger fill (inherited from the board), the sibling going
+   --dim, this brighter figure, and the foot line spelling it out in words. No
+   inline ✓ and no "YOUR PICK" tag -- either would take back the width the stack
+   above just bought, on the one card state where the fan has already decided and
+   the name still has to be legible. */
+.predict-opt--mine .gamepick-opt__pct {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Dimming the other side must not make it unreadable -- a fan still reads both
+   names after picking. .predict-opt--dim (from the board) drops opacity; this
+   keeps the label itself at full strength so only the emphasis moves. */
+.predict-opt--dim .gamepick-opt__label {
+  opacity: 0.92;
+}
+
+/* One foot line: the price, the fan's standing, or a pointer to the board. */
+.gamepick__foot {
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+}
+
+.gamepick__foot--link {
+  color: var(--accent);
+  text-decoration: none;
+  align-self: flex-start;
+}
+
+.gamepick__foot--link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.gamepick__error {
+  margin: 0;
+  font-size: 0.74rem;
+  padding: 7px 9px;
+}
+
+/* At the narrowest widths the two buttons still sit side by side (~143px each at
+   320px), which is deliberate: stacking the OPTIONS would make the second one
+   look like a consequence of the first rather than its alternative. Only the type
+   and the padding tighten, which buys the name back ~6px of the 4px the padding
+   costs it. */
+@media (max-width: 380px) {
+  .gamepick-opt__label {
+    font-size: 0.78rem;
+  }
+
+  .gamepick-opt__body {
+    padding: 8px 8px;
+  }
+}
+
 /* The tap: a quick overshoot so a pick feels landed rather than submitted. */
 @keyframes predict-pop {
   0% {
@@ -13813,156 +13954,65 @@ a.follow-sugcard__name:hover {
   color: var(--muted);
 }
 
-.oracle-proclaim {
-  margin: 2px 0 0;
-  font-family: var(--font-serif);
-  font-size: 1.15rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--accent);
-  text-shadow: 0 0 18px rgba(201, 163, 78, 0.28);
-}
-
 .oracle-matchup {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   font-size: 0.85rem;
   color: var(--muted);
 }
 
-/* ---- The call + the dial ------------------------------------------------- */
-
-.oracle-call {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin: 20px 0 22px;
-}
-
-.oracle-call__text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-}
-
-.oracle-call__label {
-  font-size: 0.62rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking);
-  color: var(--muted);
-}
-
-/* The team, as big as the card can carry it — this is the sentence the whole
-   screen exists to deliver. Clamped so a long school name still fits a 390px
-   phone without wrapping to three lines. */
-.oracle-call__team {
+/* THE HEADLINE IS A SENTENCE, not a proclamation standing over a number. "The
+   Oracle likes New York Mets." is the one line the screen exists to deliver, and
+   it is the line the push notification opens with — a fan tapping through lands
+   on the words they were just shown. Clamped so a long school name still fits a
+   390px phone without running to three lines. */
+.oracle-likes {
+  margin: 10px 0 0;
   font-family: var(--font-serif);
-  font-size: clamp(1.5rem, 7vw, 2.1rem);
+  font-size: clamp(1.45rem, 6.4vw, 2.05rem);
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.15;
   color: var(--text);
   text-wrap: balance;
 }
 
-.oracle-call__conf {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--accent);
-}
+/* ---- THE TWO OFFERS ------------------------------------------------------
+   "Ride it → win 10" over "Back Miami Marlins → win 21". STACKED, not paired
+   side by side: the numbers land in a column, and one roughly double the other
+   is then a glance rather than a comparison. Side by side the pair reads as a
+   menu; stacked it reads as an offer and a better offer.
 
-/* THE CONFIDENCE DIAL. One conic-gradient painted to --pct of a turn, with the
-   centre punched out by a mask so it reads as a ring rather than a pie. The
-   mask is doubled (-webkit- first) for Safari, which is most of this audience. */
-.oracle-dial {
-  position: relative;
-  flex: 0 0 auto;
-  width: 104px;
-  height: 104px;
-  display: grid;
-  place-items: center;
-}
+   ONE CLASS FOR BOTH READINGS. The row is a <button> while the day is pickable
+   and a <p> once it isn't, so a locked or covered card says exactly what the
+   pickable one said — the interactive chrome is scoped to `button.oracle-offer`
+   and nothing else has to be kept in step. */
 
-.oracle-dial__ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    from -90deg,
-    var(--accent-dim) 0%,
-    var(--accent) calc(var(--pct) * 0.6%),
-    var(--accent-hover) calc(var(--pct) * 1%),
-    rgba(255, 255, 255, 0.06) calc(var(--pct) * 1%),
-    rgba(255, 255, 255, 0.06) 100%
-  );
-  -webkit-mask: radial-gradient(closest-side, transparent 71%, #000 72%);
-  mask: radial-gradient(closest-side, transparent 71%, #000 72%);
-  filter: drop-shadow(0 0 10px rgba(201, 163, 78, 0.35));
-  animation: oracle-dial-in 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-/* The dial fills in on arrival — the one piece of theatre on the card, and it
-   runs once. */
-@keyframes oracle-dial-in {
-  from {
-    opacity: 0;
-    transform: rotate(-24deg) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.oracle-dial__hub {
-  display: flex;
-  align-items: baseline;
-  gap: 1px;
-  color: var(--text);
-}
-
-.oracle-dial__pct {
-  font-family: var(--font-serif);
-  font-size: 1.7rem;
-  font-weight: 700;
-  line-height: 1;
-  color: var(--accent);
-}
-
-.oracle-dial__unit {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--accent-dim);
-}
-
-/* ---- THE TWO BUTTONS ----------------------------------------------------- */
-
-.oracle-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 0 0 18px;
-}
-
-.oracle-btn {
+.oracle-offers {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  /* The biggest tap target on the site. 96px is a deliberate overshoot of the
-     44px minimum: this is the one action the page exists for, and a thumb
-     should not have to aim. */
-  min-height: 96px;
-  padding: 14px 10px;
+  gap: 10px;
+  margin: 20px 0 12px;
+}
+
+.oracle-offer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  /* The biggest tap target on the site. A deliberate overshoot of the 44px
+     minimum: this is the one action the page exists for, and a thumb should not
+     have to aim. */
+  min-height: 68px;
+  padding: 16px 18px;
   border-radius: 14px;
   border: 1px solid var(--border-strong);
   background: var(--panel-raised);
   color: var(--text);
   font-family: inherit;
+  text-align: left;
+}
+
+button.oracle-offer {
   cursor: pointer;
   transition:
     transform 0.12s ease,
@@ -13971,69 +14021,101 @@ a.follow-sugcard__name:hover {
     box-shadow 0.15s ease;
 }
 
-.oracle-btn:hover:not(:disabled) {
+button.oracle-offer:hover:not(:disabled) {
   border-color: var(--accent-dim);
   background: #262117;
 }
 
-.oracle-btn:active:not(:disabled) {
-  transform: scale(0.97);
+button.oracle-offer:active:not(:disabled) {
+  transform: scale(0.985);
 }
 
-.oracle-btn:disabled {
+button.oracle-offer:disabled {
   cursor: default;
   opacity: 0.55;
 }
 
-.oracle-btn__verb {
-  font-family: var(--font-serif);
-  font-size: 1.35rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  line-height: 1;
+/* The read-only reading: the offer that was on the table, with no target under
+   it inviting a tap that would 409. */
+.oracle-offer--static {
+  margin: 0;
+  opacity: 0.7;
 }
 
-/* THE PAYOUT LIVES ON THE BUTTON. It is the entire decision, so it is set at
-   button-label weight rather than as a caption. */
-.oracle-btn__pay {
-  font-size: 1.05rem;
+.oracle-offer__act {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* "→ win 21" holds together on one line, so the number never orphans onto a row
+   of its own however long the team name beside it runs. */
+.oracle-offer__win {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.oracle-offer__arrow {
+  margin-right: 6px;
+  color: var(--border-strong);
+}
+
+/* THE NUMBER. The whole point of the card is that THIS, not the percentage, is
+   what a fan compares — so it is the largest thing on the row. */
+.oracle-offer__pay {
+  margin-left: 3px;
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--accent);
 }
 
-.oracle-btn__hint {
-  font-size: 0.68rem;
-  color: var(--muted);
-}
-
-/* RIDE is the safe, warm side (with the house); FADE is the defiant one, so it
-   carries the gold. Both stay inside the one-accent rule — the difference is
-   emphasis, not hue. */
-.oracle-btn--ride .oracle-btn__verb {
-  color: var(--text);
-}
-
-.oracle-btn--fade {
+/* FADE carries the gold: it is the defiant side and it is the bigger number, and
+   those should look like the same fact. Still inside the one-accent rule — the
+   difference is emphasis, not hue. */
+.oracle-offer--fade {
   border-color: var(--accent-dim);
   background: linear-gradient(180deg, #2a2317, var(--panel-raised));
 }
 
-.oracle-btn--fade .oracle-btn__verb {
+.oracle-offer--fade .oracle-offer__act {
   color: var(--accent);
 }
 
-.oracle-btn--fade:hover:not(:disabled) {
+button.oracle-offer--fade:hover:not(:disabled) {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(201, 163, 78, 0.25);
 }
 
-/* The optimistic state: the tapped button commits visually before the response
+/* The optimistic state: the tapped row commits visually before the response
    lands, so the tap feels instant on a slow connection. */
-.oracle-btn--picking {
+.oracle-offer--picking {
   border-color: var(--accent);
   background: linear-gradient(180deg, #33291a, #241f16);
   opacity: 1;
+}
+
+/* ---- The small print -----------------------------------------------------
+   THE CONFIDENCE, DEMOTED. It was the headline and a 104px gold dial, which
+   asked a fan to know what a percentage buys them before they could tell whether
+   fading was worth it. The two numbers above answer that; this is the footnote
+   that explains where they came from. */
+.oracle-conf {
+  margin: 0 0 18px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* On a settled or already-picked day the offer rows are gone and the footnote
+   lands straight under the headline, which would otherwise sit on top of it. */
+.oracle-head + .oracle-conf {
+  margin-top: 14px;
 }
 
 /* ---- Locked in: what the buttons become --------------------------------- */
@@ -14621,26 +14703,26 @@ a.follow-sugcard__name:hover {
   text-align: center;
 }
 
-/* ---- Desktop: the dial rides beside the call, buttons keep their pair ---- */
+/* ---- Desktop: the same card with more air, and the offer rows given the room
+   to set their numbers larger. They stay stacked at every width — the column of
+   two numbers IS the layout, and pairing them sideways would undo it. ---- */
 
 @media (min-width: 560px) {
   .oracle-card {
     padding: 32px 28px 26px;
   }
 
-  .oracle-call {
-    flex-direction: row;
-    justify-content: center;
-    gap: 24px;
+  .oracle-offer {
+    min-height: 78px;
+    padding: 18px 22px;
   }
 
-  .oracle-call__text {
-    align-items: flex-start;
-    text-align: left;
+  .oracle-offer__act {
+    font-size: 1.35rem;
   }
 
-  .oracle-btn {
-    min-height: 108px;
+  .oracle-offer__pay {
+    font-size: 1.7rem;
   }
 
   .oracle-hrow {
@@ -14761,10 +14843,6 @@ a.follow-sugcard__name:hover {
     animation: none;
   }
 
-  .oracle-dial__ring {
-    animation: none;
-  }
-
   .oracle-celebrate,
   .oracle-reveal {
     animation: none;
@@ -14775,12 +14853,12 @@ a.follow-sugcard__name:hover {
     transition: none;
   }
 
-  .oracle-btn,
+  button.oracle-offer,
   .arena-teaser__card {
     transition: none;
   }
 
-  .oracle-btn:active:not(:disabled),
+  button.oracle-offer:active:not(:disabled),
   .arena-teaser__card:hover {
     transform: none;
   }

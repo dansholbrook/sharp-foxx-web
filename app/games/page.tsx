@@ -29,10 +29,11 @@
 //     blank surface. An empty result that the user filtered their way into still
 //     gets the normal "no games match" state — that one isn't a surprise.
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
+import { GamePickStrip, GamePicks, useGamePicks } from '../game-pick-strip';
 import { AppNav, AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import {
@@ -154,7 +155,7 @@ function shiftDays(dayKey: string, days: number): string {
 // game still gets the subtle LIVE text pill (a status, not a stream). Same tcard
 // shell so the grid stays uniform; the .playcard/.gamescope-* scope knocks it
 // back. See THE RULE in api.ts. ----
-function FeedGameCard({ event }: { event: EventListItem }) {
+function FeedGameCard({ event, picks }: { event: EventListItem; picks: GamePicks }) {
   const home = event.homeTeam ?? 'TBD';
   const away = event.awayTeam ?? 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
@@ -191,6 +192,11 @@ function FeedGameCard({ event }: { event: EventListItem }) {
           </div>
         </div>
       </Link>
+      {/* OUTSIDE THE <Link>, AND IT HAS TO BE: the whole card above is one
+          anchor, and a <button> nested inside an <a> is invalid markup that
+          breaks the tap target on iOS. The strip is a sibling; it renders null
+          when this game carries no question. */}
+      <GamePickStrip eventId={event.id} picks={picks} />
     </article>
   );
 }
@@ -200,8 +206,8 @@ function FeedGameCard({ event }: { event: EventListItem }) {
 // the visual; score replaces "vs" once a result is in, and the whole card links
 // to the game's page at /games/[id]. A feed game (source != null) is a play
 // surface, so it renders the quieter FeedGameCard instead. ----
-function GameCard({ event }: { event: EventListItem }) {
-  if (isFeedEvent(event.source)) return <FeedGameCard event={event} />;
+function GameCard({ event, picks }: { event: EventListItem; picks: GamePicks }) {
+  if (isFeedEvent(event.source)) return <FeedGameCard event={event} picks={picks} />;
   const home = event.homeTeam ?? 'TBD';
   const away = event.awayTeam ?? 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
@@ -250,6 +256,8 @@ function GameCard({ event }: { event: EventListItem }) {
           </div>
         </div>
       </Link>
+      {/* Sibling of the <Link>, not inside it -- see FeedGameCard. */}
+      <GamePickStrip eventId={event.id} picks={picks} />
     </article>
   );
 }
@@ -405,6 +413,19 @@ function Games() {
     if (!token || !allowed) return;
     load(0);
   }, [token, allowed, load]);
+
+  // ---- CASUAL PICKING. One request for the whole page (see game-pick-strip.tsx),
+  // keyed on the rows currently rendered -- so a "Show more" widens the set and
+  // costs one more read rather than one per new card.
+  //
+  // `items` only, not the recent-finals fallback: that list is finals, and the
+  // batch read returns open and locked questions alone. Asking about twenty
+  // settled games would be a request whose answer is always empty.
+  //
+  // Called ABOVE the token/permission early-returns because hooks cannot be
+  // conditional; the hook itself declines to fetch without a token or ids.
+  const pickEventIds = useMemo(() => items.map((ev) => ev.id), [items]);
+  const picks = useGamePicks(token ?? '', pickEventIds);
 
   function clearFilters() {
     setSport('');
@@ -596,7 +617,7 @@ function Games() {
                   <h2 className="row-title gamesdir-fallback-title">Recent results</h2>
                   <div className="results-grid">
                     {fallbackItems.map((ev) => (
-                      <GameCard key={ev.id} event={ev} />
+                      <GameCard key={ev.id} event={ev} picks={picks} />
                     ))}
                   </div>
                 </>
@@ -625,7 +646,7 @@ function Games() {
               ) : (
                 <div className="results-grid">
                   {items.map((ev) => (
-                    <GameCard key={ev.id} event={ev} />
+                    <GameCard key={ev.id} event={ev} picks={picks} />
                   ))}
                 </div>
               )}
