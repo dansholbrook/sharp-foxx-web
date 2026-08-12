@@ -10355,6 +10355,19 @@ a.follow-sugcard__name:hover {
   color: var(--muted);
   margin-left: auto;
 }
+/* ENTERED. The row the fan is already in gets a live left edge rather than a
+   badge: a badge competes with the countdown for the same eye, and the whole
+   point of this state is that the row still reads as one glance. The border
+   colour is the "something of yours is riding" treatment, not a success tick —
+   nothing has been won yet. */
+.railcontest--in {
+  border-color: var(--accent-dim);
+  box-shadow: inset 2px 0 0 0 var(--accent);
+}
+.railcontest__in {
+  color: var(--accent);
+  font-weight: 600;
+}
 
 /* ---- My Picks: my contests + recent activity ---- */
 .mycontests-list,

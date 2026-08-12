@@ -493,6 +493,12 @@ function kickerFor(item: NotificationItem): string {
   if (item.type.startsWith('call_')) return "Correspondent's Call";
   if (item.type.startsWith('oracle_')) return 'Beat the Oracle';
   if (item.type.startsWith('trail_')) return 'Foxx Trail';
+  // THE FIRST TYPE HERE THAT IS NOT AN ARENA GAME. Its kicker is "Contests"
+  // rather than "Tonight's Pick'em" because this line labels the row's HOME —
+  // the surface the deep link opens — and the pick'em's home is the contest
+  // lobby, which the fan already knows by that name from the nav and the feed
+  // band. The title carries the specific.
+  if (item.type.startsWith('pickem_')) return 'Contests';
   if (item.type === 'streak_jeopardy') return 'Your streak';
   return 'Sharp Foxx';
 }

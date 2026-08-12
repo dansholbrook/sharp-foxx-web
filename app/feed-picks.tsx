@@ -29,6 +29,7 @@ import {
   getNationalPredictions,
   getOpenPickGames,
   getContests,
+  getMyContests,
   isNationalOverdue,
   isFeedEvent,
   contestCost,
@@ -419,16 +420,51 @@ function OpenGameCard({ game, isFeed }: { game: OpenPickGame; isFeed: boolean })
 // 4. CONTESTS
 // ---------------------------------------------------------------------------
 
-// The feed's window onto the contest lobby: open pick'em contests as compact
-// rail rows, linking to /contests/[id]. Best-effort and self-hiding, same as the
-// bands above — a fan with no open contest never sees it.
+// The feed's window onto the contest lobby: open contests as compact rail rows,
+// linking to /contests/[id]. Best-effort and self-hiding, same as the bands
+// above — a fan with no open contest never sees it.
 //
-// Shows title, cost and a lock countdown from the list payload. It deliberately
-// does NOT show an "Entered ✓" flag: GET /contests carries no per-fan entry
-// state (that lives on the detail read), and a detail fan-out per row is exactly
-// what a compact rail band shouldn't do. The Entered state shows once the fan
-// opens the contest.
+// ===========================================================================
+// THIS BAND IS THE NIGHTLY PICK'EM'S HOME ON THE FEED, and it did not need a
+// new component to become one.
+//
+// The nightly contest has appeared here since the day it shipped — it is the
+// newest open contest every night, so `createdAt DESC` floated it to the top by
+// accident. What it carried was a title, a type tag and "Free": no deadline, no
+// sign of whether the fan had played it. A tile you read once.
+//
+// THREE THINGS CHANGED, and none of them is a fifth visual language:
+//
+//   1. THE COUNTDOWN NOW RENDERS. It always could; contests.locks_at was simply
+//      NULL on every nightly, because the opener never wrote it (the real lock is
+//      derived by pickemType.autoLockAt and never persisted). The opener now
+//      stamps it. Note what that means here: locks_at is DISPLAY METADATA and
+//      can drift from the derived lock if a game is rescheduled — see the block
+//      at the write site in nightly-pickem.service.ts. Do not start branching on
+//      it.
+//
+//   2. THE BAND SORTS BY WHAT EXPIRES, not by what was created most recently.
+//      The nightly leading the rail because it is newest is the right row for the
+//      wrong reason, and it silently becomes the wrong row the night somebody
+//      hand-builds a contest at 17:00.
+//
+//   3. ENTRY STATE. "Your sheet is in" vs "Locks in 3h" is the difference
+//      between a tile a fan reads once and one they check.
+//
+// (3) REVERSES A DECISION RECORDED HERE, so the old reasoning stays rather than
+// being quietly deleted. It said: GET /contests carries no per-fan entry state,
+// that lives on the detail read, and a detail fan-out per row is exactly what a
+// compact rail band shouldn't do. Every word of that is still true — what changed
+// is that GET /contests/mine now exists and answers it in ONE query driven off
+// the fan's own entries. The objection was to the FAN-OUT, not to the fact, and
+// the fan-out is gone.
+// ===========================================================================
 const CONTESTS_RAIL_CAP = 4;
+
+// How many of the fan's own entries to pull for the entry-state join. This reads
+// the fan's OPEN entries only, which is bounded by how many contests are open at
+// once, not by their history — and the band shows four rows. 24 is slack.
+const MINE_LOOKUP_LIMIT = 24;
 
 function contestLockCountdown(locksAt: string | null): string | null {
   if (!locksAt) return null;
@@ -443,24 +479,52 @@ function contestLockCountdown(locksAt: string | null): string | null {
   return `Locks in ${Math.round(hrs / 24)}d`;
 }
 
-function ContestRailRow({ contest }: { contest: Contest }) {
+function ContestRailRow({
+  contest,
+  entered,
+}: {
+  contest: Contest;
+  // TRI-STATE, AND THE THIRD STATE IS THE POINT. true = the fan holds an entry,
+  // false = they do not, null = we don't know yet (the /contests/mine read is
+  // still in flight, or it failed). Null renders exactly like "not entered"
+  // minus the claim — a fan who HAS entered must never be told to go and enter,
+  // which is what a boolean defaulting to false would do for the whole of the
+  // first paint and forever after a failed read.
+  entered: boolean | null;
+}) {
   const countdown = contestLockCountdown(contest.locksAt);
   return (
-    <Link href={`/contests/${contest.id}`} className="railcontest">
+    <Link
+      href={`/contests/${contest.id}`}
+      className={`railcontest${entered ? ' railcontest--in' : ''}`}
+    >
       <span className="railcontest__title">{contest.title}</span>
       <span className="railcontest__foot">
         {/* The type tag distinguishes a Survivor / Squares / Pick'em row at a
             glance — the lobby leans on it, so the rail should too. */}
         <span className="railcontest__type">{contestTypeLabel(contest.type)}</span>
-        {/* Squares and parlay boards enter free — show the per-square price /
-            the ticket stake range, not "Free". */}
-        <span className="railcontest__cost">
-          {contest.type === 'squares'
-            ? squaresPerSquareLabel(contest.config)
-            : contest.type === 'parlay_board'
-            ? parlayStakeRangeLabel(contest.config)
-            : contestCost(contest.entryCost)}
-        </span>
+        {/* ENTERED REPLACES THE PRICE, it does not sit beside it. What a contest
+            costs is the question you ask before you enter; once you are in, the
+            answer is spent and the row has one line of space. Same move the
+            Arena teaser makes when it swaps "Free · once a day" for "Locked
+            in". */}
+        {entered ? (
+          <span className="railcontest__in">Your sheet is in</span>
+        ) : (
+          /* Squares and parlay boards enter free — show the per-square price /
+             the ticket stake range, not "Free". */
+          <span className="railcontest__cost">
+            {contest.type === 'squares'
+              ? squaresPerSquareLabel(contest.config)
+              : contest.type === 'parlay_board'
+              ? parlayStakeRangeLabel(contest.config)
+              : contestCost(contest.entryCost)}
+          </span>
+        )}
+        {/* THE COUNTDOWN STAYS WHEN THE FAN IS IN. It is not a call to action
+            here, it is a standing reminder that something of theirs is riding —
+            the Arena teaser's "IT DOES NOT HIDE ONCE PLAYED" rule, which
+            optimises for tomorrow's visit rather than today's tap. */}
         {countdown && <span className="railcontest__when">{countdown}</span>}
       </span>
     </Link>
@@ -469,6 +533,9 @@ function ContestRailRow({ contest }: { contest: Contest }) {
 
 export function ContestsBand({ token }: { token: string }) {
   const [contests, setContests] = useState<Contest[] | null>(null);
+  // The ids the fan has an entry on. NULL until the read lands (or forever, if
+  // it fails) — see the tri-state note on ContestRailRow.
+  const [enteredIds, setEnteredIds] = useState<Set<string> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -486,8 +553,45 @@ export function ContestsBand({ token }: { token: string }) {
     };
   }, [token]);
 
+  // The fan's own entries, SEPARATELY and best-effort. Two reads rather than one
+  // await of both, deliberately: the band's job is to show the lobby, and a slow
+  // or dead /contests/mine must not hold the rows hostage — it should cost the
+  // ✓ and nothing else. Same contract as every other band on this feed.
+  useEffect(() => {
+    let cancelled = false;
+    getMyContests(token, { status: 'open', limit: MINE_LOOKUP_LIMIT })
+      .then((page) => {
+        if (!cancelled) setEnteredIds(new Set(page.items.map((c) => c.id)));
+      })
+      .catch(() => {
+        /* best-effort: the rows render, the entry state stays unknown */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // SORTED BY WHAT EXPIRES FIRST. The backend orders open-then-newest, which is
+  // right for a LOBBY (a browse surface, where recency is the useful order) and
+  // wrong for a four-row rail (an urgency surface). A contest with no locksAt
+  // sorts last rather than first: an unknown deadline is not an imminent one,
+  // and null sorting to the top would push a dated nightly off a four-row band
+  // for a hand-built contest that may lock next week.
+  const sorted = useMemo(() => {
+    const rows = [...(contests ?? [])];
+    rows.sort((a, b) => {
+      const at = a.locksAt ? new Date(a.locksAt).getTime() : Number.POSITIVE_INFINITY;
+      const bt = b.locksAt ? new Date(b.locksAt).getTime() : Number.POSITIVE_INFINITY;
+      if (at !== bt) return at - bt;
+      // Both undated (or, vanishingly, identical): fall back to the server's own
+      // order, which this preserves by comparing nothing further.
+      return 0;
+    });
+    return rows;
+  }, [contests]);
+
   if (!contests || contests.length === 0) return null;
-  const shown = contests.slice(0, CONTESTS_RAIL_CAP);
+  const shown = sorted.slice(0, CONTESTS_RAIL_CAP);
 
   return (
     <section className="row feedpicks">
@@ -499,7 +603,11 @@ export function ContestsBand({ token }: { token: string }) {
       </div>
       <div className="railcontest__list">
         {shown.map((c) => (
-          <ContestRailRow key={c.id} contest={c} />
+          <ContestRailRow
+            key={c.id}
+            contest={c}
+            entered={enteredIds ? enteredIds.has(c.id) : null}
+          />
         ))}
       </div>
     </section>
