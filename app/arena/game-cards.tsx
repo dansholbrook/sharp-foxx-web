@@ -41,6 +41,7 @@ import {
   CallEntry,
   ClashTug,
   OracleToday,
+  ScoutBook,
   TrailToday,
 } from '../api';
 
@@ -69,11 +70,11 @@ const LONG_NAME = 18;
 // the game computed. `href` null renders the tile as a dead panel rather than a
 // link, because a link that goes nowhere is worse than no link.
 //
-// NO CALLER PASSES null TODAY — the "coming soon" tile it was built for became
-// the Correspondent's Call. The branch stays because the Arena is explicitly a
-// family that keeps growing, and the next announced-but-unbuilt game wants
-// exactly this. Its .arena-tile--dead styling is kept for the same reason; the
-// four copy-specific --soon rules were deleted with the tile they described.
+// THE SCOUT BOOK IS THE FIRST CALLER TO PASS null, and it is not an
+// announced-but-unbuilt game — it is fully built and legitimately unplayable,
+// because no Scout Book season is running. That is a state the tile must be
+// able to hold honestly rather than a placeholder for missing work, which is
+// why .arena-tile--dead survived the tile it was originally written for.
 function GameTile({
   href,
   tone,
@@ -83,7 +84,7 @@ function GameTile({
   children,
 }: {
   href: string | null;
-  tone: 'oracle' | 'trail' | 'call' | 'bingo' | 'clash';
+  tone: 'oracle' | 'trail' | 'call' | 'bingo' | 'clash' | 'scout';
   mark: React.ReactNode;
   name: string;
   tagline: string;
@@ -923,4 +924,92 @@ function ordinal(n: number): string {
     default:
       return `${n}th`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// THE SCOUT BOOK CARD
+//
+// THE ONLY TILE ON THIS HUB THAT CAN BE UNPLAYABLE, and today it is. With no
+// season running there is nothing to draft, so the tile takes `--dead`: dashed,
+// flat, unlinked. An enticing tile leading to an empty room is worse than an
+// honest one that doesn't lead anywhere — and this game's emptiness is a
+// compliance rule succeeding, which is a thing to state rather than dress up.
+//
+// IT GOES LIVE ON `book.season`, the same signal the page itself gates on. Once
+// a season is running the tile links through, whether or not the market has
+// cards in it: a fan with a season has a book to keep even before anyone is
+// eligible to fill it.
+// ---------------------------------------------------------------------------
+export function ScoutGameCard({
+  book,
+  loading,
+  failed,
+}: {
+  book: ScoutBook | null;
+  loading: boolean;
+  failed: boolean;
+}) {
+  const live = book != null && book.season !== null;
+
+  return (
+    <GameTile
+      href={live ? '/arena/scout' : null}
+      tone="scout"
+      mark={
+        <>
+          <span className="arena-tile__glyph">📓</span>
+          <span className="arena-tile__glyph arena-tile__glyph--sub">🔍</span>
+        </>
+      }
+      name="The Scout Book"
+      tagline={
+        live
+          ? 'Draft five rising athletes and hold them through the season'
+          : 'Opens when the first prospects are scouted'
+      }
+    >
+      {loading && <TilePlaceholder text="Reading your book…" />}
+      {!loading && failed && (
+        <TilePlaceholder text="Couldn't reach the Scout Book." />
+      )}
+      {!loading && !failed && book && <ScoutState book={book} live={live} />}
+    </GameTile>
+  );
+}
+
+function ScoutState({ book, live }: { book: ScoutBook; live: boolean }) {
+  if (!live) {
+    // The honest dead state. It says what is true — no season — and does NOT
+    // recite the eligibility rule, because no rule has excluded anyone yet.
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        No season running yet.
+      </p>
+    );
+  }
+
+  // Narrowed: the live branch is the only one carrying week and slot counts.
+  const b = book as Extract<ScoutBook, { season: string }>;
+  const used = b.slots.length;
+
+  if (used === 0) {
+    return (
+      <p className="arena-tile__state arena-tile__state--open">
+        Week {b.week} · your five slots are open.
+      </p>
+    );
+  }
+
+  return (
+    <p className="arena-tile__state arena-tile__state--quiet">
+      Week {b.week} ·{' '}
+      <strong>
+        {used} of {b.slotsTotal}
+      </strong>{' '}
+      drafted
+      {b.swapWindowOpen && b.swapAvailable > 0 && (
+        <span className="arena-tile__when">{' · '}swap window open</span>
+      )}
+    </p>
+  );
 }

@@ -48,6 +48,7 @@ import {
   CallGameCard,
   ClashGameCard,
   OracleGameCard,
+  ScoutGameCard,
   TrailGameCard,
 } from './game-cards';
 import { StreakChip, anyStreakActive } from '../arena-streaks';
@@ -56,6 +57,7 @@ import {
   getCallCurrent,
   getClashTug,
   getOracleToday,
+  getScoutBook,
   getTrailToday,
   oracleBadgeMeta,
   BingoToday,
@@ -63,6 +65,7 @@ import {
   ClashTug,
   OracleBadge,
   OracleToday,
+  ScoutBook,
   TrailToday,
 } from '../api';
 
@@ -204,17 +207,20 @@ export default function ArenaPage() {
   const [call, setCall] = useState<CallCurrent | null>(null);
   const [bingo, setBingo] = useState<BingoToday | null>(null);
   const [clash, setClash] = useState<ClashTug | null>(null);
+  const [scout, setScout] = useState<ScoutBook | null>(null);
   // Per-card flags, not one page-wide pair — see the header.
   const [oracleLoading, setOracleLoading] = useState(true);
   const [trailLoading, setTrailLoading] = useState(true);
   const [callLoading, setCallLoading] = useState(true);
   const [bingoLoading, setBingoLoading] = useState(true);
   const [clashLoading, setClashLoading] = useState(true);
+  const [scoutLoading, setScoutLoading] = useState(true);
   const [oracleFailed, setOracleFailed] = useState(false);
   const [trailFailed, setTrailFailed] = useState(false);
   const [callFailed, setCallFailed] = useState(false);
   const [bingoFailed, setBingoFailed] = useState(false);
   const [clashFailed, setClashFailed] = useState(false);
+  const [scoutFailed, setScoutFailed] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -289,6 +295,21 @@ export default function ArenaPage() {
         if (!cancelled) setClashLoading(false);
       });
 
+    // SIX READS NOW. The Scout Book's is the fan's BOOK rather than a "today" —
+    // it is the read that answers whether a season exists at all, which is what
+    // decides between a live tile and a dead one. Same treatment as the other
+    // five: fired together, gating nothing, failing alone.
+    getScoutBook(token)
+      .then((next) => {
+        if (!cancelled) setScout(next);
+      })
+      .catch(() => {
+        if (!cancelled) setScoutFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setScoutLoading(false);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -352,6 +373,17 @@ export default function ArenaPage() {
           tug={clash}
           loading={clashLoading}
           failed={clashFailed}
+        />
+        {/* BELOW CLASH, because it is the only tile on the hub that is not
+            playable today — no Scout Book season is running, so it renders
+            dead and unlinked. A column sorted by urgency puts a game the fan
+            cannot open beneath the one being played on their behalf. When a
+            season opens it goes live in place; it does not need to move, since
+            it is season-long and never the most urgent thing on the page. */}
+        <ScoutGameCard
+          book={scout}
+          loading={scoutLoading}
+          failed={scoutFailed}
         />
       </section>
 

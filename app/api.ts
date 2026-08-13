@@ -7605,3 +7605,458 @@ export function clashSplitPct(mine: ClashSide, theirs: ClashSide): number {
   if (!Number.isFinite(total) || total <= 0) return 50;
   return Math.round((a / total) * 1000) / 10;
 }
+
+// ===========================================================================
+// THE SCOUT BOOK — /scout
+//
+// THE SUBJECTS OF THIS GAME ARE REAL NAMED PEOPLE, most of them nineteen, who
+// agreed to be scored by strangers. That is not a tone note; it is the reason
+// several shapes below are typed narrowly and several obvious display fields
+// are deliberately not surfaced. Read the comments before widening anything.
+//
+// ROUTE NAMES, VERIFIED ON THE WIRE 2026-08-13 — three of them are not what the
+// spec's prose calls them, and the wrong ones 404 rather than failing loudly at
+// a type boundary:
+//
+//   GET    /scout/cards?season=…      NOT /scout/market. season REQUIRED (400).
+//   GET    /scout/cards/:id           includes retired + called-up cards.
+//   GET    /scout/book                the five slots.
+//   POST   /scout/book/slots          NOT /scout/book/draft (404).
+//   DELETE /scout/book/slots/:cardId  NOT POST /scout/book/drop (404).
+//   GET    /scout/recap               NOT /scout/weeks/recap (404).
+//   GET    /scout/leaderboard         NOT /scout/weeks/leaderboard (404).
+//   GET    /scout/prospects/:id/history
+// ===========================================================================
+
+// The four eligible tiers, and the entire reason the market is empty today: the
+// backend's CHECK constraint admits only these, every athlete on the platform
+// is at a D-I school, and D-I is excluded on purpose.
+export type ScoutTier = 'juco' | 'naia' | 'ncaa_d2' | 'ncaa_d3';
+
+export type ScoutCardStatus = 'active' | 'retired' | 'called_up';
+
+// WHY A CARD CLOSED. Never rendered raw — see scoutRetiredLine(), which is the
+// only place these become English.
+export type ScoutRetiredReason = 'consent_revoked' | 'editorial' | 'season_end';
+
+// THE FIVE STAT KINDS, and note the third: baseball and softball are ONE kind
+// on the backend. The spec's mockup shows a "Baseball" chip alone, which would
+// misdescribe the filter and erase the softball players it also returns.
+//
+// THE CLIENT OWNS THIS LIST because the server does not validate it:
+// `?statKind=lacrosse` answers 200 with an empty array rather than a 400, so a
+// typo here is indistinguishable from "nobody is eligible" — which on this
+// screen is a false statement about a compliance rule, not a cosmetic bug.
+export const SCOUT_STAT_KINDS = [
+  { id: 'football', label: 'Football' },
+  { id: 'basketball', label: 'Basketball' },
+  { id: 'baseball_softball', label: 'Baseball / Softball' },
+  { id: 'volleyball', label: 'Volleyball' },
+  { id: 'soccer', label: 'Soccer' },
+] as const;
+
+// GET /scout/cards — a market row.
+//
+// NOTE WHAT THIS CARRIES AND THE DETAIL DOES NOT, and vice versa: the two reads
+// are NOT the same object. This one has `heldBy`, `teamName` and the avatar; it
+// has no `status`, because the market query filters to active. The detail has
+// `status`/`retiredReason`/`calledUpAt` and no `heldBy`. Anything needing both
+// needs both calls.
+export interface ScoutMarketCard {
+  id: string;
+  athleteId: string;
+  firstName: string;
+  lastName: string;
+  position: string | null;
+  scoutingNote: string;
+  statKind: string;
+  tier: ScoutTier;
+  school: string | null;
+  teamName: string;
+  avatarMediaId: string | null;
+  avatarUrl: string | null;
+  scoutedBy: string | null;
+  // ---------------------------------------------------------------------
+  // HOW MANY FANS HOLD THIS PERSON. TYPED, AND DELIBERATELY NOT RENDERED.
+  //
+  // A live count of strangers holding a teenager is a pressure display with no
+  // upside to them. It is on the wire, the spec's mockup chips it ("214
+  // scouts"), and it is the single easiest number on this payload to drop into
+  // a card — which is exactly why the refusal is written down here rather than
+  // left as an omission somebody tidies up later.
+  //
+  // It is also absent from the DETAIL payload, so the spec's detail-screen chip
+  // cannot be built even if we wanted it. Leave both alone.
+  // ---------------------------------------------------------------------
+  heldBy: number;
+  createdAt: string;
+}
+
+export interface ScoutMarket {
+  cards: ScoutMarketCard[];
+  poolCap: number;
+}
+
+// GET /scout/cards/:id — INCLUDES RETIRED AND CALLED-UP CARDS, on purpose. A
+// holder whose prospect withdrew still reaches the card, marked closed, with
+// the points they earned intact; hiding it would make a fan's own history
+// vanish and would make withdrawal read as erasure.
+export interface ScoutCardDetail {
+  id: string;
+  athleteId: string;
+  firstName: string;
+  lastName: string;
+  position: string | null;
+  scoutingNote: string;
+  statKind: string;
+  tier: ScoutTier;
+  school: string | null;
+  status: ScoutCardStatus;
+  retiredReason: ScoutRetiredReason | null;
+  calledUpAt: string | null;
+  avatarUrl: string | null;
+  scoutedBy: string | null;
+  createdAt: string;
+}
+
+// A filled slot in the fan's book. `status` rides along, so a card that retired
+// while held renders as closed IN THE BOOK rather than only on its own page.
+export interface ScoutSlot {
+  slotId: string;
+  prospectCardId: string;
+  draftedWeekNo: number;
+  firstName: string;
+  lastName: string;
+  position: string | null;
+  scoutingNote: string;
+  statKind: string;
+  school: string | null;
+  status: ScoutCardStatus;
+  calledUpAt: string | null;
+  weeksHeld: number;
+  loyal: boolean;
+  // REPORTED, NEVER APPLIED — the Sunday scorer multiplies. 1 or 1.2.
+  multiplier: number;
+  }
+
+// GET /scout/book — TWO GENUINELY DIFFERENT SHAPES, discriminated on `season`.
+//
+// The no-season branch does not merely null its fields, it OMITS them:
+// `swapWindow`, `swapAvailable`, `slotsUsed` and `loyalty` are absent, so
+// `book.loyalty.weeks` throws rather than reading undefined. Same class of
+// null-branch trap as the Oracle's and the Trail's. Narrow before you read.
+export type ScoutBook =
+  | {
+      season: null;
+      week: null;
+      swapWindowOpen: false;
+      slots: [];
+      slotsTotal: number;
+      message: string;
+    }
+  | {
+      season: string;
+      week: number;
+      swapWindowOpen: boolean;
+      swapWindow: { opensAt: string; closesAt: string };
+      swapAvailable: number;
+      slots: ScoutSlot[];
+      slotsUsed: number;
+      slotsTotal: number;
+      loyalty: { weeks: number; multiplier: number };
+    };
+
+export interface ScoutWeekRef {
+  id: string;
+  weekNo: number;
+  season: string;
+  status?: string;
+}
+
+// The four bonus events. `bonuses` on a reveal slot is an array of these type
+// STRINGS — not name/value pairs. The point values live in `arena_rewards` and
+// no fan-readable route returns them, which is why nothing here renders a
+// number next to a bonus name.
+export type ScoutBonusType =
+  | 'team_win'
+  | 'feature'
+  | 'conference_honor'
+  | 'called_up';
+
+export interface ScoutRevealSlot {
+  prospectCardId: string;
+  name: string;
+  position: string | null;
+  school: string | null;
+  statKind: string;
+  weeksHeld: number;
+  loyal: boolean;
+  // -------------------------------------------------------------------
+  // THE THREE ZERO-STATES, AND THE REASON THEY ARE SEPARATE FIELDS.
+  //
+  // A prospect can score zero three ways, and they are not the same event:
+  //   counted    — they played and the week scored what it scored.
+  //   didNotPlay — they did not play. Nothing happened. Not a bad week.
+  //   missing    — WE HAVE NOT FILED THE LINE YET. Our failure, not theirs.
+  //
+  // The backend separates them deliberately. Collapsing them to "0" on screen
+  // throws away the only thing that makes a zero fair to the athlete, and in
+  // the `missing` case reports our own unfinished work as their flat week.
+  // scoutLinesLine() below is the one place these become English; do not
+  // reduce them to a total anywhere else.
+  // -------------------------------------------------------------------
+  lines: { counted: number; didNotPlay: number; missing: number };
+  // Centi-points, like every other money-shaped integer in this app. Divide at
+  // the render boundary and nowhere else.
+  perfCenti: number;
+  perfAfterLoyaltyCenti: number;
+  bonusCenti: number;
+  bonuses: ScoutBonusType[];
+  totalCenti: number;
+  calledUp: boolean;
+  retired: boolean;
+}
+
+// The scored reveal.
+export interface ScoutRecapScored {
+  scored: true;
+  week: ScoutWeekRef;
+  slots: ScoutRevealSlot[];
+  totalCenti: number;
+  total: number;
+  pointsPaid: number;
+  scoringVersion: string;
+  rank: number | null;
+  previousRank: number | null;
+  // NEGATIVE MEANS CLIMBED (450 → 12 is −438). Null in week one.
+  rankMovement: number | null;
+  // THE HONESTY FLAG. The per-slot breakdown attributes stored numbers; `total`
+  // is the stored number the ledger actually paid. If they disagree, the reveal
+  // would be narrating a week nobody was paid, and the screen says so instead.
+  reconciles: boolean;
+  breakdownCenti: number;
+}
+
+// The three ways there is nothing to reveal: no week scored yet, the week isn't
+// scored yet, no book this season, or a book that wasn't scored. All carry a
+// server-written `reason`, and it is a real answer rather than an error.
+export interface ScoutRecapPending {
+  scored: boolean;
+  reason: string;
+  week: ScoutWeekRef | null;
+  slots?: [];
+}
+
+export type ScoutRecap = ScoutRecapScored | ScoutRecapPending;
+
+// `scored: true` ALONE IS NOT ENOUGH — two of the empty branches also set it
+// (no book this season; book not scored this week) and carry `slots: []` with
+// no totals at all. The presence of a numeric total is what separates a reveal
+// from an explanation.
+export function isScoutRecapScored(r: ScoutRecap): r is ScoutRecapScored {
+  return (
+    r.scored === true &&
+    typeof (r as ScoutRecapScored).total === 'number' &&
+    Array.isArray((r as ScoutRecapScored).slots)
+  );
+}
+
+export interface ScoutHistoryWeek {
+  weekNo: number;
+  perfCenti: number;
+  bonusCenti: number;
+  linesCounted: number;
+  linesDnp: number;
+  linesMissing: number;
+  scoringVersion: string;
+}
+
+export interface ScoutHistory {
+  prospectCardId: string;
+  weeks: ScoutHistoryWeek[];
+}
+
+export interface ScoutStanding {
+  rank: number;
+  bookId: string;
+  scout: string | null;
+  seasonCenti: number;
+  seasonTotal: number;
+  weeksScored: number;
+  pointsPaid: number;
+  isYou: boolean;
+}
+
+export interface ScoutLeaderboard {
+  season: string;
+  standings: ScoutStanding[];
+  leader: ScoutStanding | null;
+}
+
+export interface ScoutDraftResult {
+  slot: unknown;
+  slotsUsed: number;
+  slotsTotal: number;
+}
+
+export interface ScoutDropResult {
+  dropped: true;
+  // WHICH KIND OF SWAP PAID FOR THIS. A fan handed a bonus swap because their
+  // prospect withdrew should see that that is what was spent.
+  swapReason: string;
+  slotsUsed: number;
+  slotsTotal: number;
+}
+
+// ---- Reads ----
+
+export const getScoutBook = (token: string) =>
+  authGet<ScoutBook>('/scout/book', token);
+
+// THE ONE READ THAT NEEDS A SEASON THE CLIENT CANNOT DISCOVER. `season` is
+// required (400 without) and unvalidated (any string answers 200 with an empty
+// list), and no endpoint names the current season while no week is live — so
+// every caller must source it from a live `ScoutBook` and MUST NOT invent one.
+// A guessed season returns a response byte-identical to "nobody is eligible
+// yet", which is the one sentence this game's empty state must never say
+// falsely. Backend ask is out; until it lands, callers gate on book.season.
+export const getScoutMarket = (token: string, season: string, statKind?: string) =>
+  authGet<ScoutMarket>(
+    `/scout/cards?season=${encodeURIComponent(season)}` +
+      (statKind ? `&statKind=${encodeURIComponent(statKind)}` : ''),
+    token,
+  );
+
+export const getScoutCard = (token: string, cardId: string) =>
+  authGet<ScoutCardDetail>(`/scout/cards/${cardId}`, token);
+
+export const getScoutHistory = (token: string, cardId: string) =>
+  authGet<ScoutHistory>(`/scout/prospects/${cardId}/history`, token);
+
+export const getScoutRecap = (token: string, weekId?: string) =>
+  authGet<ScoutRecap>(
+    `/scout/recap${weekId ? `?weekId=${encodeURIComponent(weekId)}` : ''}`,
+    token,
+  );
+
+export const getScoutLeaderboard = (token: string, season: string) =>
+  authGet<ScoutLeaderboard>(
+    `/scout/leaderboard?season=${encodeURIComponent(season)}`,
+    token,
+  );
+
+// ---- Writes. BOTH ARE AGE-GATED (403 AGE_ATTESTATION_REQUIRED) — wrap them in
+// useAgeGate().runGated() at the call site, exactly as the other four games do.
+
+// Filling an OPEN slot is free and is not a swap: it removes nobody, so it is
+// neither rationed nor confined to the Mon–Wed window.
+export const draftProspect = (token: string, prospectCardId: string) =>
+  authPost<ScoutDraftResult>('/scout/book/slots', token, { prospectCardId });
+
+// Dropping SPENDS the weekly swap and is Mon–Wed only. The scarce act.
+export const dropProspect = (token: string, prospectCardId: string) =>
+  authDeleteJson<ScoutDropResult>(`/scout/book/slots/${prospectCardId}`, token);
+
+// ---- Presentation helpers. These exist so the compliance-shaped decisions are
+// made once, in one file, rather than re-argued in each component.
+
+export function scoutStatKindLabel(id: string): string {
+  return SCOUT_STAT_KINDS.find((k) => k.id === id)?.label ?? id;
+}
+
+export function scoutTierLabel(tier: ScoutTier): string {
+  switch (tier) {
+    case 'juco':
+      return 'JUCO';
+    case 'naia':
+      return 'NAIA';
+    case 'ncaa_d2':
+      return 'NCAA D-II';
+    case 'ncaa_d3':
+      return 'NCAA D-III';
+    default:
+      return tier;
+  }
+}
+
+// HOW A CLOSED CARD SAYS WHY, and the wording is the whole point.
+//
+// `consent_revoked` never becomes "revoked" or "withdrew" — both put an action
+// on the athlete and invite the reader to wonder about it. The athlete is no
+// longer taking part; that is all a fan is owed and all we will say. `editorial`
+// is OURS and is named as ours, so it cannot be read as something they did.
+export function scoutRetiredLine(reason: ScoutRetiredReason | null): string {
+  switch (reason) {
+    case 'consent_revoked':
+      return 'This athlete is no longer taking part.';
+    case 'season_end':
+      return 'The season closed.';
+    case 'editorial':
+      return 'Closed by the newsroom.';
+    default:
+      return 'This card is closed.';
+  }
+}
+
+// THE FOUR BONUSES IN ENGLISH — with no point values, because none are
+// available to a fan-facing read: the numbers live in `arena_rewards` and are
+// admin-tunable, so a hardcoded "+500" here would diverge the first time
+// somebody tunes one. The ladder's job is to show that every route moves
+// upward, and it does that without the arithmetic.
+export function scoutBonusLabel(type: ScoutBonusType | string): string {
+  switch (type) {
+    case 'team_win':
+      return 'Team win';
+    case 'feature':
+      return 'Featured in a Sharp Foxx story';
+    case 'conference_honor':
+      return 'Conference weekly honour';
+    case 'called_up':
+      return 'Called up';
+    default:
+      return type;
+  }
+}
+
+// THE THREE ZERO-STATES, IN ENGLISH. Called wherever a week's points are shown,
+// including — especially — when they are zero.
+//
+// `missing` is listed FIRST when present and is phrased as our outstanding work,
+// because it is: the line has not been filed. A fan reading "0" next to a
+// prospect who in fact played deserves to know the zero is ours.
+export function scoutLinesLine(lines: ScoutRevealSlot['lines']): string {
+  const parts: string[] = [];
+  if (lines.missing > 0) {
+    parts.push(
+      lines.missing === 1
+        ? '1 line still being filed'
+        : `${lines.missing} lines still being filed`,
+    );
+  }
+  if (lines.counted > 0) {
+    parts.push(lines.counted === 1 ? 'Played 1' : `Played ${lines.counted}`);
+  }
+  if (lines.didNotPlay > 0) {
+    parts.push('Did not play this week');
+  }
+  if (parts.length === 0) return 'No games this week';
+  return parts.join(' · ');
+}
+
+// Centi-points → a whole number for display. Half-up, matching the backend's
+// roundHalfUp so the client and the ledger never differ by a point.
+export function scoutPoints(centi: number): number {
+  return Math.floor(centi / 100 + 0.5);
+}
+
+// "#450 → #12". Null-safe in both directions: week one has no previous rank and
+// an unscored book has no rank at all.
+export function scoutRankMove(
+  rank: number | null,
+  previousRank: number | null,
+): string | null {
+  if (rank == null) return null;
+  if (previousRank == null) return `#${rank}`;
+  if (previousRank === rank) return `#${rank}`;
+  return `#${previousRank} → #${rank}`;
+}

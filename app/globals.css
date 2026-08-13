@@ -20590,3 +20590,697 @@ a.arena-tile:active {
     font-size: 1.9rem;
   }
 }
+
+/* =================================================================
+   THE SCOUT BOOK — /arena/scout
+   Mobile is the base; the only breakpoint is the one where the slot
+   list can afford two columns. Existing tokens only: there is one
+   warm gold in this app and the spec's cyan does not exist here.
+
+   NOTHING IN THIS BLOCK ANIMATES. The recap is a record of a week
+   that already scored, not a reveal — see app/arena/scout/recap.tsx
+   for why, at length. Do not add a flip, a count-up or a stamp.
+   ================================================================= */
+.scout-page {
+  max-width: 860px;
+}
+
+.scout-hero {
+  margin: 0 0 26px;
+}
+
+.scout-hero__kicker {
+  margin: 0 0 8px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--accent);
+}
+
+.scout-hero__title {
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0 0 10px;
+}
+
+.scout-hero__standfirst {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  max-width: 46ch;
+}
+
+.scout-back {
+  margin: 0 0 20px;
+  font-size: 0.8rem;
+}
+
+/* ---- Bands ---- */
+.scout-book,
+.scout-market,
+.scout-recap,
+.scout-history,
+.scout-ladder {
+  margin: 0 0 30px;
+}
+
+.scout-band__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.scout-band__title {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+
+.scout-band__head .scout-band__title {
+  margin: 0;
+}
+
+.scout-band__count {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.scout-quiet {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.scout-error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: 10px;
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: 0.88rem;
+}
+
+.scout-foot {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.scout-foot strong {
+  color: var(--text);
+}
+
+.scout-swapline {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.scout-swapline strong {
+  color: var(--text);
+}
+
+/* ---- The five slots ---- */
+.scout-slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  counter-reset: slot;
+}
+
+.scout-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+/* An OPEN slot is dashed and dim — a shape waiting to be filled, not a card
+   that failed to load. */
+.scout-slot--open {
+  border: 1px dashed var(--border);
+  color: var(--muted);
+}
+
+.scout-slot--filled {
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+}
+
+/* ---- A CLOSED CARD IN THE BOOK. Recessive, finished, unalarmed.
+
+   DELIBERATELY NOT THE --warn PALETTE. That token is this app's alarm colour;
+   painting a withdrawn athlete in it would say something went wrong with THEM.
+   Retirement is not performance and must never share a visual channel with it,
+   so a closed slot differs from an active one only by going quiet. ---- */
+.scout-slot--closed {
+  border-color: var(--border);
+  background: transparent;
+}
+
+.scout-slot--closed .scout-slot__name {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.scout-slot__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.scout-slot__main--open {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+a.scout-slot__main:hover .scout-slot__name {
+  color: var(--accent);
+}
+
+.scout-slot__n {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.scout-slot__open {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.scout-slot__cta {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.scout-slot__name {
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.scout-slot__meta,
+.scout-card__meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.scout-slot__chips,
+.scout-card__action,
+.scout-slot__action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.scout-slot__chips {
+  margin-top: 4px;
+}
+
+/* ---- Tags. Gold is earned and nothing else takes it.
+
+   THERE IS NO ×1.0 TAG and there must not be one: a badge whose content is
+   "you get nothing extra" is a deduction wearing a multiplier's clothes, and
+   this game has no deductions. Absence of a bonus gets no pill. ---- */
+.scout-tag {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.scout-tag--gold {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(201, 163, 78, 0.09);
+}
+
+.scout-tag--closed {
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+/* ---- The market ---- */
+.scout-chips {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin: 0 0 14px;
+  scrollbar-width: none;
+}
+
+.scout-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.scout-chips .chip {
+  flex: 0 0 auto;
+}
+
+.scout-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scout-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.scout-card__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.scout-card__main:hover .scout-card__name {
+  color: var(--accent);
+}
+
+.scout-card__name {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* The correspondent's judgement, and the byline that makes it somebody's
+   rather than a system's rating. */
+.scout-card__note {
+  font-size: 0.83rem;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.scout-card__by {
+  font-style: normal;
+  font-size: 0.72rem;
+  color: var(--accent-dim);
+}
+
+.scout-card__held {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* ---- THE EMPTY MARKET. Today this is the whole game, so it carries the
+   weight of a screen — not the grey stub used for a transient miss. The copy
+   is signed off; see app/arena/scout/market.tsx before editing it. ---- */
+.scout-empty {
+  padding: 30px 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(201, 163, 78, 0.07), transparent 62%),
+    var(--panel);
+}
+
+.scout-empty__title {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 12px;
+  max-width: 22ch;
+}
+
+.scout-empty__body {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 52ch;
+}
+
+.scout-empty__body:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- Prospect detail ---- */
+.scout-detail {
+  padding: 18px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--panel);
+  margin: 0 0 26px;
+}
+
+/* A closed card goes quiet — plain border, no panel fill, no alarm colour. */
+.scout-detail--closed {
+  border-color: var(--border);
+  background: transparent;
+}
+
+.scout-detail__name {
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 0 0 6px;
+}
+
+.scout-detail--closed .scout-detail__name {
+  color: var(--muted);
+}
+
+.scout-detail__meta {
+  margin: 0 0 14px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.scout-detail__note {
+  margin: 14px 0 0;
+  padding: 0 0 0 14px;
+  border-left: 2px solid var(--border-strong);
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.scout-detail__by {
+  margin-top: 8px;
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--accent-dim);
+}
+
+/* A dated record, not a verdict. No rotated stamp, no red. */
+.scout-closed {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.scout-closed__line {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+/* The points survive visibly — what makes closure read as an ending rather
+   than a loss. */
+.scout-closed__keep {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.scout-calledup {
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---- The ladder. The screen's proof that every route moves upward. ---- */
+.scout-ladder__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.scout-ladder__item {
+  padding: 12px 14px;
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+
+/* ---- Week-by-week bars ---- */
+.scout-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.scout-bars::-webkit-scrollbar {
+  display: none;
+}
+
+.scout-bar {
+  flex: 1 0 42px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  height: 130px;
+}
+
+/* A zero week still draws a bar at floor height: a MISSING bar reads as
+   missing data, a floor bar reads as a week that scored nothing — which is
+   what it was. */
+.scout-bar__fill {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 4px 4px 2px 2px;
+  background: rgba(201, 163, 78, 0.42);
+}
+
+.scout-bar__n {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.scout-bar__wk {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.scout-bar__why {
+  font-size: 0.56rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--muted);
+  max-width: 60px;
+  line-height: 1.25;
+}
+
+/* ---- The recap. A record, arrived at. ---- */
+.scout-reveal {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scout-reveal__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.scout-reveal__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.scout-reveal__main:hover .scout-reveal__name {
+  color: var(--accent);
+}
+
+.scout-reveal__name {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.scout-reveal__meta {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* The three zero-states, in the row where they explain a number. */
+.scout-reveal__lines {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.scout-reveal__chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+
+.scout-reveal__pts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: 0 0 auto;
+}
+
+/* NO COUNT-UP. This number is not animated on arrival — the week already
+   scored and the fan was already paid. */
+.scout-reveal__ptsn {
+  font-family: var(--font-serif);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.scout-reveal__ptsl {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.scout-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 14px;
+  background: rgba(201, 163, 78, 0.07);
+}
+
+.scout-total__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.scout-total__value {
+  font-family: var(--font-serif);
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+}
+
+/* Rank movement — the one genuine moment on the recap, and it is about the
+   FAN rather than about an athlete. That is the only reason it gets emphasis. */
+.scout-rank {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.scout-rank strong {
+  color: var(--text);
+}
+
+.scout-rank--up {
+  color: var(--accent);
+}
+
+/* The Scout Book's corner light: bottom-right, the last free position — the
+   other five are lit from 0%/50%/100% top and 0% bottom.
+
+   :not(--dead) IS LOAD-BEARING and not tidiness. This rule sits ~5,700 lines
+   BELOW .arena-tile--dead, so on equal specificity it would win the cascade and
+   paint the corner light back onto a tile that is meant to read as flat and
+   unplayable — which is the Scout Book's state today. The other five tones
+   never needed the guard because none of them can be dead. */
+.arena-tile--scout:not(.arena-tile--dead) {
+  background:
+    radial-gradient(120% 80% at 100% 100%, rgba(201, 163, 78, 0.11), transparent 60%),
+    var(--panel);
+}
+
+@media (min-width: 640px) {
+  .scout-hero__title {
+    font-size: 2.4rem;
+  }
+
+  .scout-empty {
+    padding: 38px 30px;
+  }
+
+  .scout-empty__title {
+    font-size: 1.55rem;
+  }
+}
