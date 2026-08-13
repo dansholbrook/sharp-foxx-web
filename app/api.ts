@@ -7356,3 +7356,252 @@ export const updateNotificationPreferences = (
 // forever. A notification about a permanent thing goes to the surface that
 // keeps it; a this-week result goes to this week's card.
 // ----------------------------------------------------------------------------
+
+// ============================================================================
+// BUREAU CLASH — /arena/clash. The one Arena game with NO PLAY IN IT.
+//
+// Every credit earned in every other Arena game scores here, for whichever
+// bureau the fan was in AT THE MOMENT OF THE EARN. So this client reads a status
+// board; there is no pick call, no entry call, and the only POST is the one that
+// picks a city.
+//
+// THE CASING IS MIXED AND IT IS MIRRORED AS-IS. `sides[]` comes back camelCase
+// (`bureauId`, `crestPrimary`); the `bureau` object on the unpaired/no_week
+// branches comes back snake_case (`bureau_id`, `crest_primary`, `switch_used`).
+// Same service, two shapes, because the bureau object is a row projection and
+// the sides are built in TypeScript. Normalising one would be a second, silent
+// definition of a contract that already has an owner — the same rule the Trail's
+// `name`/`townName` split is kept under.
+//
+// SO IS THE STRING/NUMBER SPLIT: `clashPoints`, `score` and a contributor's
+// `points` are STRINGS (bigint and numeric out of pg, per the money rule in
+// CLAUDE.md — no math on them here), while `contribution.points` and `cap` are
+// plain numbers. Verified on the wire, not assumed; the meter is the one place
+// that divides, and it divides the two numbers.
+// ============================================================================
+
+// A bureau as the join board reads it. `members` is a live count, so a city a
+// fan is deciding between shows how full it already is.
+export interface ClashBureau {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  state_code: string | null;
+  crest_primary: string | null;
+  crest_secondary: string | null;
+  members: number;
+}
+
+// The caller's membership. `switch_used` is the whole join flow's hinge: false
+// means one free change remains this season, true means the other five cities
+// are inert until next season.
+export interface ClashMembership {
+  bureau_id: string;
+  code: string;
+  name: string;
+  city: string;
+  crest_primary: string | null;
+  crest_secondary: string | null;
+  season: string;
+  joined_at: string;
+  switch_used: boolean;
+}
+
+export interface ClashWeek {
+  id: string;
+  season: string;
+  weekNo: number;
+  startsAt: string;
+  endsAt: string;
+  status: string;
+}
+
+// One bureau on this week's board. `score` is clashPoints / actives to 2dp and
+// is THE NUMBER THAT DECIDES THE WEEK — see the sub-label rule in the board.
+export interface ClashSide {
+  bureauId: string;
+  code: string;
+  name: string;
+  crestPrimary: string | null;
+  isMine: boolean;
+  clashPoints: string;
+  actives: number;
+  score: string;
+}
+
+export interface ClashContribution {
+  points: number;
+  cap: number;
+  capped: boolean;
+}
+
+export interface ClashContributor {
+  userId: string;
+  displayName: string;
+  points: string;
+}
+
+// FIVE STATES, and the two the brief didn't name are real: `unpaired` (your
+// bureau isn't on this week's board — no sides, no engine room, but your
+// contribution still counts) and `free_for_all` (an under-populated tier plays
+// one N-way board instead of a pairing, so the tug is not a tug).
+//
+// A BYE IS A FLAG, NOT A STATE. `isBye` rides inside `paired` and still carries
+// sides.
+export type ClashTug =
+  | { state: 'unaffiliated'; week: ClashWeek | null; bureaus: ClashBureau[] }
+  | { state: 'no_week'; week: null; bureau: ClashMembership }
+  | {
+      state: 'unpaired';
+      week: ClashWeek;
+      bureau: ClashMembership;
+      contribution: ClashContribution;
+    }
+  | {
+      state: 'paired' | 'free_for_all';
+      week: ClashWeek;
+      matchupId: string;
+      tier: string;
+      isRivalry: boolean;
+      isBye: boolean;
+      sides: ClashSide[];
+      contribution: ClashContribution;
+      engineRoom: ClashContributor[];
+      // RENDERED VERBATIM. Shipped by the server precisely so a client that only
+      // wanted the numbers cannot drop it — see docs/design/clash-copy-note.md.
+      engineRoomCaption: string;
+    };
+
+export interface ClashStanding {
+  bureau_id: string;
+  code: string;
+  name: string;
+  wins: number;
+  losses: number;
+  weeks: number;
+  avg_score: string | null;
+}
+
+// The two auto-posts. `kind` is what separates an announcement from a banner:
+// a 'result' post is the loudest thing this game says all week.
+export interface ClashPost {
+  id: string;
+  kind: 'matchup' | 'result' | string;
+  headline: string;
+  body: string;
+  pinned: boolean;
+  created_at: string;
+}
+
+export type ClashPosts =
+  | { state: 'unaffiliated'; items: [] }
+  | { state: 'ok'; bureau: ClashMembership; items: ClashPost[] };
+
+export interface ClashJoinResult {
+  bureauId: string;
+  code: string;
+  // True when this call SPENT the season's one change. False on a first join
+  // and false on a no-op.
+  switched: boolean;
+  // Re-joining the bureau you are already in. Costs nothing — a double-tapped
+  // button must not cost a fan their one move of the season.
+  noop: boolean;
+}
+
+export const getClashTug = (token: string) =>
+  authGet<ClashTug>('/arena/clash/tug', token);
+
+export const getClashPosts = (token: string) =>
+  authGet<ClashPosts>('/arena/clash/posts', token);
+
+export const getClashStandings = (token: string) =>
+  authGet<{ season: string; items: ClashStanding[] }>(
+    '/arena/clash/standings',
+    token,
+  );
+
+export const getClashBureaus = (token: string) =>
+  authGet<{ items: ClashBureau[] }>('/arena/clash/bureaus', token);
+
+// GET /arena/clash/me — WITH ITS OWN EMPTY-BODY BRANCH, which is why it cannot
+// go through authGet.
+//
+// An unaffiliated caller gets HTTP **200 with Content-Length: 0** — not a 404,
+// so `authGetOrNull` doesn't save it either, and `res.json()` throws
+// "Unexpected end of JSON input" on it. Verified on the wire.
+//
+// USED BY ONE SURFACE: the switch board. The tug embeds the membership on its
+// no_week and unpaired branches, but the PAIRED and FREE_FOR_ALL branches do
+// not — they carry sides, not a bureau row — so `switch_used` is simply not
+// available to a fan looking at a live board. That flag decides whether the
+// other five cities are live or inert, so the switch board reads it here rather
+// than guessing.
+export async function getClashMe(token: string): Promise<ClashMembership | null> {
+  const res = await fetch(`${BASE}/arena/clash/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw await toAuthError(res);
+  const body = await res.text();
+  if (body.trim() === '') return null;
+  return JSON.parse(body) as ClashMembership;
+}
+
+export async function joinBureau(
+  token: string,
+  code: string,
+): Promise<ClashJoinResult> {
+  const res = await fetch(`${BASE}/arena/clash/join`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw await toAuthError(res);
+  return res.json();
+}
+
+// "Resolves in 2d" / "Resolves in 4h 12m" / "Resolving now". A separate verb
+// from oracleLockCountdown's on purpose: nothing LOCKS here. A fan has nothing
+// to get in before the buzzer, and a countdown that says "Locks in" would invent
+// an urgency this game does not have and cannot honour.
+export function clashResolveCountdown(
+  endsAt: string,
+  now: number = Date.now(),
+): string {
+  const ms = new Date(endsAt).getTime() - now;
+  if (Number.isNaN(ms)) return '';
+  if (ms <= 0) return 'Resolving now';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `Resolves in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `Resolves in ${hrs}h ${mins % 60}m`;
+  return `Resolves in ${Math.round(hrs / 24)}d`;
+}
+
+// The fan's own side, found BY FLAG AND NEVER BY INDEX. `sides[]` comes back in
+// no guaranteed order — the server's query carries no ORDER BY, and on the wire
+// the opponent came first — so sides[0] is a coin flip, not "you".
+export function myClashSide(sides: ClashSide[]): ClashSide | null {
+  return sides.find((s) => s.isMine) ?? null;
+}
+
+export function otherClashSides(sides: ClashSide[]): ClashSide[] {
+  return sides.filter((s) => !s.isMine);
+}
+
+// The tug's split, as a percentage of the bar for the fan's own side. Built off
+// `score` (the average) rather than `clashPoints`, because the average is what
+// decides the week: a smaller bureau out-earning a bigger one per head is
+// WINNING, and a bar drawn from raw totals would show it losing.
+//
+// 50 when neither side has scored — an honest dead heat, not a fake lead.
+export function clashSplitPct(mine: ClashSide, theirs: ClashSide): number {
+  const a = Number(mine.score);
+  const b = Number(theirs.score);
+  const total = a + b;
+  if (!Number.isFinite(total) || total <= 0) return 50;
+  return Math.round((a / total) * 1000) / 10;
+}

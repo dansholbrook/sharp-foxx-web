@@ -19735,3 +19735,858 @@ a.arena-tile:active {
     gap: 18px;
   }
 }
+
+/* ==========================================================================
+   BUREAU CLASH — /arena/clash
+   ==========================================================================
+
+   !! THE PALETTE RULE, AND IT IS THE WHOLE REASON THIS BLOCK LOOKS LIKE THIS !!
+
+   The API ships every bureau a `crest_primary` (Dallas #00B9E3, Philly
+   #F83C20, four more), and the reviewer's spec draws the tug-of-war
+   cyan-versus-blaze straight out of them. Do not do that here.
+
+   This app's :root is ONE warm gold plus a deliberately non-gold --warn. Six
+   arbitrary hexes let onto the tug bar would not read as "two cities" — they
+   would read as the page having no palette, and differently on every matchup:
+   Dallas/Philly is cyan-vs-red, Grambling/Odessa is gold-vs-orange, and the
+   colour meaning "your side" would silently become the opponent's.
+
+   SO: THE TUG IS GOLD FOR YOUR SIDE AND NEUTRAL FOR THEIRS, on every board,
+   against every opponent. Gold already means "this is yours" everywhere else in
+   this stylesheet, and the one thing the bar must never make ambiguous is which
+   half belongs to the fan reading it.
+
+   This is an EXISTING idiom, not a new one — .oracle-split__bar gets
+   ride-versus-fade out of one accent by painting a fill over a gold track, and
+   .trail-split__bar does away-versus-home with a gradient hard stop. The tug is
+   the third instance.
+
+   CREST HEXES ARE CONFINED TO .clash-crest, which takes them through a --crest
+   custom property set inline from the data. That is the only selector in this
+   block that touches a bureau's own colour, and the only place it belongs: at
+   56px, bounded by a disc, it reads as team identity. On a bar, on text, on a
+   border or a chip it reads as chaos.
+   ========================================================================== */
+
+.clash-page .masthead-standfirst {
+  max-width: 46ch;
+}
+
+/* ---- THE CREST. The one bounded home of a bureau's own colour. ---- */
+.clash-crest {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--crest, var(--accent));
+  color: var(--crest, var(--accent));
+  background: var(--panel-raised);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  flex: 0 0 auto;
+  /* The glow is the crest colour at low alpha via color-mix, so a bureau's
+     identity reaches the halo without a second hex ever entering this file. */
+  box-shadow: 0 0 14px color-mix(in srgb, var(--crest, var(--accent)) 28%, transparent);
+}
+
+.clash-crest--lg {
+  width: 56px;
+  height: 56px;
+  font-size: 0.82rem;
+}
+
+.clash-crest--sm {
+  width: 34px;
+  height: 34px;
+  font-size: 0.62rem;
+  box-shadow: none;
+}
+
+/* ---- THE BOARD CARD ---- */
+.clash-board__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+/* These chips are STATUS, not controls — .chip carries cursor:pointer for the
+   filter chips it was built for, and a pointer on a label invites a tap that
+   does nothing. */
+.clash-board__chips .chip {
+  cursor: default;
+}
+
+.chip--gold {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.clash-board__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.clash-board__side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.clash-board__name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  color: var(--text);
+}
+
+/* "your bureau", and its empty twin on the opponent's column. The empty span
+   reserves the same line so the two crests stay vertically aligned whichever
+   side is yours — without it the opponent's name sits a line higher. */
+.clash-board__you {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--accent);
+  min-height: 1em;
+}
+
+.clash-board__you--empty {
+  color: transparent;
+}
+
+.clash-board__wk {
+  align-self: center;
+  font-size: 0.72rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 0 0 auto;
+  padding-top: 18px;
+}
+
+/* ---- THE TUG. Gold = mine, track = theirs. ---- */
+.clash-tug {
+  position: relative;
+  height: 12px;
+  margin-top: 16px;
+  border-radius: 999px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border-strong);
+  overflow: hidden;
+}
+
+.clash-tug__mine {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--mine-pct, 50%);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent-dim));
+  transition: width 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.clash-tug__knot {
+  position: absolute;
+  top: 50%;
+  left: var(--mine-pct, 50%);
+  width: 3px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  background: var(--text);
+  border-radius: 2px;
+  transition: left 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Nobody has scored: a flat dashed track rather than a 50/50 split that would
+   read as real data. Same refusal .oracle-split__bar--empty makes. */
+.clash-tug--dead {
+  border-style: dashed;
+}
+
+.clash-tug--dead .clash-tug__mine,
+.clash-tug--dead .clash-tug__knot {
+  display: none;
+}
+
+.clash-tug__scores {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.clash-tug__score {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.clash-tug__score b {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--text);
+}
+
+.clash-tug__score small {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* THE FAN'S OWN AVERAGE IS THE GOLD ONE. It is the number that decides the
+   week and the number the bar is drawn from. */
+.clash-tug__score--mine b {
+  color: var(--accent);
+}
+
+.clash-tug__score--theirs {
+  text-align: right;
+  align-items: flex-end;
+}
+
+/* The raw totals, DEMOTED. clashPoints is the most misreadable figure on this
+   screen — a smaller bureau out-earning a bigger one per head is winning while
+   its total sits lower — so it lives down here at small size with its own
+   denominator beside it, and never in the display face above. */
+.clash-tug__totals {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.clash-tug__totals span:last-child {
+  text-align: right;
+}
+
+.clash-board__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.clash-board__clock {
+  color: var(--text);
+}
+
+/* ---- FREE-FOR-ALL: a ranked board, because there is no opponent to draw
+   against. ---- */
+.clash-ffa__lede {
+  margin: 4px 0 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.clash-ffa {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clash-ffa__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.clash-ffa__row--mine {
+  background: var(--panel-raised);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.clash-ffa__rank {
+  width: 1.4em;
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.clash-ffa__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.clash-ffa__name small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.clash-ffa__score {
+  flex: 0 0 auto;
+  text-align: right;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.clash-ffa__score small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* ---- THE CONTRIBUTION METER — the thesis of the game, second on the page. */
+.clash-contrib__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.clash-contrib__label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+}
+
+.clash-contrib__figure {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.clash-contrib__figure small {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.clash-contrib__note {
+  margin: 9px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* A hit cap is NOT a warning and must not be painted like one — the fan's
+   credits are still banking, only the city contribution has stopped. --warn
+   here would tell them they had done something wrong by playing. */
+.clash-contrib__note strong {
+  color: var(--text);
+}
+
+/* ---- THE ENGINE ROOM ---- */
+.clash-engine__title,
+.clash-standings__title {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.clash-engine__list,
+.clash-standings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clash-engine__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.clash-engine__row--mine {
+  background: var(--panel-raised);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.clash-engine__rank {
+  width: 1.4em;
+  color: var(--muted);
+  font-size: 0.8rem;
+  flex: 0 0 auto;
+}
+
+.clash-engine__who {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clash-engine__row--mine .clash-engine__who {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.clash-engine__pts {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.clash-engine__empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* THE CAPTION IS LOAD-BEARING COPY, NOT A FOOTNOTE, and it ships from the
+   server so it cannot be dropped. It is what stops the board above reading as
+   a skill ranking when the 200/day cap means it ranks turnout. Legible, not
+   whispered — see docs/design/clash-copy-note.md. */
+.clash-engine__caption {
+  margin: 11px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ---- THE SEASON TABLE ---- */
+.clash-standings__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.clash-standings__row--mine {
+  background: var(--panel-raised);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.clash-standings__rank {
+  width: 1.4em;
+  color: var(--muted);
+  font-size: 0.8rem;
+  flex: 0 0 auto;
+}
+
+.clash-standings__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.clash-standings__name small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.clash-standings__avg {
+  flex: 0 0 auto;
+  text-align: right;
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.clash-standings__avg small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.clash-standings__empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ---- QUIET STATES: no_week and unpaired. Deliberate, not broken. ---- */
+.clash-quiet {
+  text-align: center;
+}
+
+.clash-quiet__title {
+  margin: 12px 0 6px;
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+.clash-quiet__body {
+  margin: 0 auto;
+  max-width: 42ch;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.clash-quiet__clock {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.clash-fineprint {
+  margin: 18px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--muted);
+  text-align: center;
+}
+
+.clash-fineprint strong {
+  color: var(--text);
+}
+
+/* ==========================================================================
+   THE JOIN BOARD — the screen most fans meet first (38 of 45 accounts).
+   ========================================================================== */
+
+.clash-join__title {
+  margin: 0 0 6px;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  color: var(--text);
+}
+
+.clash-join__lede {
+  margin: 0 0 16px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 48ch;
+}
+
+/* The commitment sentence, wherever it appears, is the one part of the lede
+   that must survive a skim. */
+.clash-join__lede strong {
+  color: var(--text);
+}
+
+.clash-join__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clash-city {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.clash-city--open {
+  border-color: var(--accent-dim);
+}
+
+.clash-city--home {
+  border-color: var(--accent-dim);
+  background: var(--panel-raised);
+}
+
+.clash-city--inert {
+  opacity: 0.55;
+}
+
+.clash-city__pick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.clash-city__pick:disabled {
+  cursor: default;
+}
+
+.clash-city__id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clash-city__name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.clash-city__where {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.clash-city__members {
+  flex: 0 0 auto;
+  text-align: right;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.clash-city__members small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.clash-city__badge {
+  margin: 0;
+  padding: 0 13px 11px;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking);
+  color: var(--accent);
+}
+
+.clash-city__badge--inert {
+  color: var(--muted);
+}
+
+/* ---- THE COMMITMENT, EXPANDED IN PLACE. No modal: the other five cities stay
+   on screen while the fan decides, which is the entire argument for building it
+   this way. ---- */
+.clash-city__commit {
+  padding: 0 13px 13px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.clash-city__rule {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* The button NAMES WHAT IT SPENDS rather than saying "Confirm" — worth more
+   than a dialog asking whether you're sure. */
+.clash-city__go {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.clash-city__go:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.clash-city__go:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.clash-city__cancel {
+  display: block;
+  margin: 9px auto 0;
+}
+
+.clash-switch__open,
+.clash-switch__back {
+  display: block;
+  margin: 16px auto 0;
+}
+
+/* ==========================================================================
+   THE AUTO-POSTS — two a week, and this page is their only home in the app.
+   ========================================================================== */
+
+.clash-posts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.clash-post {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 14px;
+}
+
+.clash-post__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 9px;
+}
+
+.clash-post__bot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.clash-post__from {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.clash-post__pin {
+  padding: 2px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+}
+
+.clash-post__headline {
+  margin: 0 0 5px;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.clash-post__body {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* ---- THE BANNER. The Sunday result post, and the one beat the whole game is
+   built around: a fan opens the app on Monday and their city won something
+   overnight, off work they had already done. It gets the loudest treatment on
+   the page and it is simply THERE — no play button, no unfurl. ---- */
+.clash-post--result {
+  border-color: var(--accent-dim);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(201, 163, 78, 0.14), transparent 62%),
+    var(--panel);
+}
+
+.clash-banner {
+  text-align: center;
+  padding: 6px 0 2px;
+}
+
+.clash-banner__headline {
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+  font-size: 1.6rem;
+  line-height: 1.15;
+  color: var(--accent);
+}
+
+.clash-banner__body {
+  margin: 0 auto;
+  max-width: 40ch;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* ---- THE HUB TILE. The fifth corner light, from the bottom-right — the other
+   four are lit at 0%/50%/100% top and 0% bottom, so this is the one free
+   corner. No crest colour here at all: the hub's tiles are one visual system
+   and Clash does not get to be the exception. ---- */
+.arena-tile--clash {
+  background:
+    radial-gradient(120% 80% at 100% 100%, rgba(201, 163, 78, 0.12), transparent 60%),
+    var(--panel);
+}
+
+/* ==========================================================================
+   WIDER THAN A PHONE. Mobile is the base above; these are the only two things
+   that genuinely want the extra room.
+   ========================================================================== */
+@media (min-width: 620px) {
+  /* Six cities go two-up. The commitment panel stays inside its own card, so a
+     fan comparing two cities never loses the one they were looking at. */
+  .clash-join__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* The crests do NOT grow with the card — they move apart. A 56px disc is the
+     right size for a crest at every width; scaling it up just makes the tug,
+     which is the actual subject, look like a caption. */
+  .clash-board__head {
+    max-width: 460px;
+    margin: 0 auto;
+  }
+
+  .clash-banner__headline {
+    font-size: 1.9rem;
+  }
+}

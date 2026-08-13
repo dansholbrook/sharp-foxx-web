@@ -46,6 +46,7 @@ import { canAccess } from '../roles';
 import {
   BingoGameCard,
   CallGameCard,
+  ClashGameCard,
   OracleGameCard,
   TrailGameCard,
 } from './game-cards';
@@ -53,11 +54,13 @@ import { StreakChip, anyStreakActive } from '../arena-streaks';
 import {
   getBingoToday,
   getCallCurrent,
+  getClashTug,
   getOracleToday,
   getTrailToday,
   oracleBadgeMeta,
   BingoToday,
   CallCurrent,
+  ClashTug,
   OracleBadge,
   OracleToday,
   TrailToday,
@@ -200,15 +203,18 @@ export default function ArenaPage() {
   const [trail, setTrail] = useState<TrailToday | null>(null);
   const [call, setCall] = useState<CallCurrent | null>(null);
   const [bingo, setBingo] = useState<BingoToday | null>(null);
+  const [clash, setClash] = useState<ClashTug | null>(null);
   // Per-card flags, not one page-wide pair — see the header.
   const [oracleLoading, setOracleLoading] = useState(true);
   const [trailLoading, setTrailLoading] = useState(true);
   const [callLoading, setCallLoading] = useState(true);
   const [bingoLoading, setBingoLoading] = useState(true);
+  const [clashLoading, setClashLoading] = useState(true);
   const [oracleFailed, setOracleFailed] = useState(false);
   const [trailFailed, setTrailFailed] = useState(false);
   const [callFailed, setCallFailed] = useState(false);
   const [bingoFailed, setBingoFailed] = useState(false);
+  const [clashFailed, setClashFailed] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -268,6 +274,21 @@ export default function ArenaPage() {
         if (!cancelled) setBingoLoading(false);
       });
 
+    // FIVE READS NOW. Clash is the only one of them that is not a "today" —
+    // it has no day and nothing to open lazily, so it is the cheapest of the
+    // five and still gets the same treatment: fired with the rest, gating
+    // nothing, failing alone.
+    getClashTug(token)
+      .then((next) => {
+        if (!cancelled) setClash(next);
+      })
+      .catch(() => {
+        if (!cancelled) setClashFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setClashLoading(false);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -323,6 +344,15 @@ export default function ArenaPage() {
           loading={callLoading}
           failed={callFailed}
         />
+        {/* LAST, AND THE ONLY TILE THAT ASKS NOTHING OF TODAY. The four above
+            are things the fan can still do; Clash is a thing already being
+            done for them by the four above. A column sorted by urgency puts
+            it here. */}
+        <ClashGameCard
+          tug={clash}
+          loading={clashLoading}
+          failed={clashFailed}
+        />
       </section>
 
       {/* The cadence is spelled out per game rather than averaged: "once a day"
@@ -331,11 +361,18 @@ export default function ArenaPage() {
           BINGO BROKE IT A SECOND WAY — it is nightly, and it is neither a daily
           pick nor a weekly one, so it gets its own clause rather than being
           folded into "the dailies". This line has now been wrong twice for the
-          same reason; the next game gets a clause too. */}
+          same reason; the next game gets a clause too.
+          CLASH BREAKS IT A THIRD WAY, and its clause is the odd one out on
+          purpose: every other clause names a RATE at which the fan does
+          something, and Clash has no rate because the fan does nothing. Saying
+          "the Clash once a week" would describe when it RESOLVES and imply a
+          weekly action that does not exist. So its clause names the input
+          instead — which is also the one sentence that explains what the game
+          is to someone who has not opened it. */}
       <p className="arena-fineprint">
         Points only · no cash value · never redeemable. Arena games are free to
         play, forever — the dailies once a day, bingo every night, the Call once
-        a week.
+        a week, and the Clash off everything you already play.
       </p>
     </main>
   );

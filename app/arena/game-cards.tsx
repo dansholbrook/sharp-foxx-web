@@ -30,12 +30,16 @@ import Link from 'next/link';
 import {
   arenaLockCountdown,
   callPhase,
+  clashResolveCountdown,
+  myClashSide,
+  otherClashSides,
   points,
   trailSideTeam,
   etTime,
   BingoToday,
   CallCurrent,
   CallEntry,
+  ClashTug,
   OracleToday,
   TrailToday,
 } from '../api';
@@ -79,7 +83,7 @@ function GameTile({
   children,
 }: {
   href: string | null;
-  tone: 'oracle' | 'trail' | 'call' | 'bingo';
+  tone: 'oracle' | 'trail' | 'call' | 'bingo' | 'clash';
   mark: React.ReactNode;
   name: string;
   tagline: string;
@@ -769,4 +773,154 @@ function BingoState({ today }: { today: BingoToday }) {
       )}
     </p>
   );
+}
+
+// ---------------------------------------------------------------------------
+// THE BUREAU CLASH CARD — THE ONLY TILE THAT IS NOT A PROPOSITION.
+//
+// LAST IN THE LADDER, and for the same reason the hub orders the other four by
+// cadence: this one asks nothing of the fan today. There is no pick, no entry,
+// no window closing. Every other tile on the hub is a thing you can still do;
+// this one is a thing already being done on your behalf, which is exactly why it
+// sits at the bottom of a column sorted by urgency.
+//
+// IT MUST NEVER SAY "PLAY", and the state ladder below has no call to action in
+// it except in the ONE state where the fan genuinely has something to decide:
+// having no bureau. 38 of 45 accounts are in that state, so for most fans this
+// tile IS a recruiter — and then, once they have a city, it goes quiet and
+// becomes a scoreboard forever. Those are two different tiles and the copy has
+// to switch cleanly between them.
+//
+// THE NUMBER ON THE TILE IS THE AVERAGE, never the raw total — same rule as the
+// board, for the same reason: a fan on the smaller side reading a lower total
+// would conclude they were losing while they were winning. See the long note in
+// arena/clash/board.tsx.
+//
+// NO CREST COLOUR HERE AT ALL. The tile has no room for a disc, and a crest hex
+// on tile text or border is precisely the leak the board's palette note forbids.
+// The hub's tiles are one visual system; Clash does not get to be the exception.
+// ---------------------------------------------------------------------------
+export function ClashGameCard({
+  tug,
+  loading,
+  failed,
+}: {
+  tug: ClashTug | null;
+  loading: boolean;
+  failed: boolean;
+}) {
+  return (
+    <GameTile
+      href="/arena/clash"
+      tone="clash"
+      mark={
+        <>
+          <span className="arena-tile__glyph">🏙️</span>
+          <span className="arena-tile__glyph arena-tile__glyph--sub">🚩</span>
+        </>
+      }
+      name="Bureau Clash"
+      tagline="Your city, pulling against another — powered by everything else you play"
+    >
+      {loading && <TilePlaceholder text="Reading the board…" />}
+      {!loading && failed && (
+        <TilePlaceholder text="Couldn't reach the board — tap to try." />
+      )}
+      {!loading && !failed && tug && <ClashState tug={tug} />}
+    </GameTile>
+  );
+}
+
+function ClashState({ tug }: { tug: ClashTug }) {
+  // ---- NO BUREAU. The one state with an action in it, and the only tile on
+  // this hub phrased as an invitation rather than a status.
+  if (tug.state === 'unaffiliated') {
+    return (
+      <p className="arena-tile__state arena-tile__state--open">
+        Pick your city — six bureaus, and everything you already play starts
+        counting for one of them.
+      </p>
+    );
+  }
+
+  if (tug.state === 'no_week') {
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        {tug.bureau.name} · between weeks. The next board opens Monday.
+      </p>
+    );
+  }
+
+  if (tug.state === 'unpaired') {
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        {tug.bureau.name} sits out week {tug.week.weekNo} — what you earn still
+        counts toward the season.
+      </p>
+    );
+  }
+
+  const mine = myClashSide(tug.sides);
+  const others = otherClashSides(tug.sides);
+
+  if (!mine) {
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        Week {tug.week.weekNo} is live.
+      </p>
+    );
+  }
+
+  // ---- FREE-FOR-ALL, or any board that isn't a straight pairing: no opponent
+  // to name, so the tile reports position rather than inventing a rival.
+  if (tug.state === 'free_for_all' || others.length !== 1) {
+    const ahead = others.filter(
+      (o) => Number(o.score) > Number(mine.score),
+    ).length;
+    return (
+      <p className="arena-tile__state arena-tile__state--quiet">
+        {mine.name} · <strong>{ordinal(ahead + 1)}</strong> of{' '}
+        {tug.sides.length} this week
+        <span className="arena-tile__when">
+          {' · '}
+          {clashResolveCountdown(tug.week.endsAt)}
+        </span>
+      </p>
+    );
+  }
+
+  // ---- THE PAIRING. Leading / trailing / level, off the average.
+  const theirs = others[0];
+  const diff = Number(mine.score) - Number(theirs.score);
+  const level = Math.abs(diff) < 0.005;
+  // GOLD IS FOR LEADING, and nothing else on this tile earns it — the same
+  // discipline the Call's card keeps when it refuses to paint a paid-but-lost
+  // entry as a win.
+  const tone = level ? 'quiet' : diff > 0 ? 'win' : 'quiet';
+
+  return (
+    <p className={`arena-tile__state arena-tile__state--${tone}`}>
+      {mine.code} <strong>{mine.score}</strong> — <strong>{theirs.score}</strong>{' '}
+      {theirs.code}
+      <span className="arena-tile__when">
+        {' · '}
+        {level ? 'level' : diff > 0 ? 'ahead' : 'behind'} on avg per active
+      </span>
+    </p>
+  );
+}
+
+function ordinal(n: number): string {
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
 }
