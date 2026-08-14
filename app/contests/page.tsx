@@ -88,7 +88,13 @@ function ContestCard({ contest }: { contest: Contest }) {
   const payoutRanks = contest.config.payouts?.length ?? 0;
 
   return (
-    <Link href={`/contests/${contest.id}`} className="contest-card">
+    /* The type on the ELEMENT, so a treatment can key off it. There was no
+       per-type hook at all before this -- every one of the six contest types
+       rendered the identical panel with a different word at the top. */
+    <Link
+      href={`/contests/${contest.id}`}
+      className={`contest-card contest-card--${contest.type}`}
+    >
       <div className="contest-card__top">
         <span className="contest-card__type">{contestTypeLabel(contest.type)}</span>
         <span className={`contest-pill contest-pill--${face.tone}`}>

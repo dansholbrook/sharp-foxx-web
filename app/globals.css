@@ -1,6 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 :root {
+  /* ---- SPORT CARD ART. Two values, shared by all five textured sports, and
+     they are TOKENS because they are the two numbers this treatment gets tuned
+     on -- they were literals in 13 places when the first tune came in, which
+     made "push both alphas up" a 13-line edit instead of a 2-line one.
+     --card-chalk       the field markings (lane, yard lines, circles, arc)
+     --card-watermark   the sport glyph behind the matchup
+     `other` uses NEITHER: it is the catch-all for 27 sports and any marking
+     would assert one of them. ---- */
+  --card-chalk: rgba(226, 238, 255, 0.24);
+  --card-watermark: 0.2;
+
   /* Warm near-black background — not pure black */
   --bg: #13110d;
   --panel: #1b1811;
@@ -943,21 +954,173 @@ tfoot td {
 }
 
 /* Per-sport gradients — dark, rich, each its own hue. */
+/* BASKETBALL -- the lane. Two rails and the free-throw line, so it reads as the
+   painted key rather than as baseball's single arc. Same 56px bottom band. */
 .thumb--basketball {
-  background: linear-gradient(145deg, #3a2410, #7a4415 58%, #b8721f);
+  background-image:
+    linear-gradient(90deg, transparent calc(50% - 36px), var(--card-chalk) calc(50% - 36px) calc(50% - 34px), transparent calc(50% - 34px)),
+    linear-gradient(90deg, transparent calc(50% + 34px), var(--card-chalk) calc(50% + 34px) calc(50% + 36px), transparent calc(50% + 36px)),
+    linear-gradient(0deg, transparent 26px, var(--card-chalk) 26px 28px, transparent 28px),
+    linear-gradient(145deg, #3a2410, #7a4415 58%, #b8721f);
+  background-size: 100% 56px, 100% 56px, 100% 56px, cover;
+  background-position: bottom, bottom, bottom, center;
+  background-repeat: no-repeat;
 }
+
+.thumb--basketball::before {
+  content: '🏀';
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  z-index: 0;
+  font-size: 64px;
+  line-height: 1;
+  opacity: var(--card-watermark);
+  pointer-events: none;
+}
+/* FOOTBALL -- yard lines. The one texture that is unmistakable in greyscale,
+   which is the argument for textures in the first place. */
 .thumb--football {
-  background: linear-gradient(145deg, #14261a, #1f4a2e 58%, #2f6b3f);
+  background-image:
+    repeating-linear-gradient(90deg, var(--card-chalk) 0 2px, transparent 2px 34px),
+    linear-gradient(145deg, #14261a, #1f4a2e 58%, #2f6b3f);
+  background-size: 100% 56px, cover;
+  background-position: bottom, center;
+  background-repeat: no-repeat;
 }
+
+.thumb--football::before {
+  content: '🏈';
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  z-index: 0;
+  font-size: 64px;
+  line-height: 1;
+  opacity: var(--card-watermark);
+  pointer-events: none;
+}
+/* ============================================================================
+   SPORT TREATMENT -- BASEBALL. PROTOTYPE; the other five are unchanged until
+   this one has been looked at.
+
+   WHY THE HUE WAS NEVER THE PROBLEM. All six sport gradients are the SAME
+   145deg three-stop ramp differing only in colour, so at 280px in a grid every
+   card reads as "a diagonal dark gradient" and the sport is carried by hue
+   alone. That is the weakest signal available at this size on a dark screen,
+   and the first one to fail for a colour-blind fan -- while the `.thumb-tag`
+   pill above already names the sport in words, so the gradient was doing no
+   work the text was not already doing.
+
+   PATTERN SURVIVES GREYSCALE. HUE DOES NOT. That is the whole argument for
+   adding a texture rather than repainting: yard lines against a centre circle
+   are distinguishable at a glance and in greyscale; amber against green is not.
+   The hue stays exactly as it was.
+
+   TWO LAYERS, AND BOTH ARE KEPT OFF THE MATCHUP.
+   1. The infield arc, confined to a 56px band pinned to the bottom edge by
+      `background-size: 100% 56px` + `background-position: bottom`. The band is
+      what makes this safe: `.thumb` centres `.thumb-team` / `.thumb-vs` /
+      `.thumb-score` both ways, so a texture drawn across the middle would sit
+      under the words. Sized in PIXELS, not a percentage, so it cannot grow into
+      the text when the card widens (274px -> 330px in the feed grid).
+   2. The ball, as a ::before watermark in the bottom-right corner, away from
+      the centred text and from the `.thumb-tag` pill in the top-left.
+   ============================================================================ */
 .thumb--baseball {
-  background: linear-gradient(145deg, #131f2e, #1c3550 58%, #2b567f);
+  background-image:
+    /* the infield arc, inside its bottom band */
+    radial-gradient(
+      circle 260px at 50% 300px,
+      transparent 0 257px,
+      rgba(214, 231, 255, 0.16) 257px 260px,
+      transparent 260px
+    ),
+    linear-gradient(145deg, #131f2e, #1c3550 58%, #2b567f);
+  background-size: 100% 56px, cover;
+  background-position: bottom, center;
+  background-repeat: no-repeat;
 }
+
+/* THE WATERMARK. `::before`, because `.thumb::after` is already the gold sheen
+   that ties every sport back to the accent -- overriding it here would drop the
+   sheen on baseball cards only. z-index 0 puts it above the background and
+   below the text (see the .thumb-team note). */
+.thumb--baseball::before {
+  content: '⚾';
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  z-index: 0;
+  font-size: 64px;
+  line-height: 1;
+  opacity: var(--card-watermark);
+  pointer-events: none;
+}
+
+/* ---- THE TEXT HAS TO OUTRANK BOTH LAYERS, and one of these was already wrong.
+   `.thumb-score` has carried `position: relative; z-index: 1` all along;
+   `.thumb-team` and `.thumb-vs` never did, so they sat UNDER `.thumb::after`'s
+   gold sheen -- a pre-existing tint over the team names that nobody had cause
+   to notice until a second layer went in beside it. Lifting all three fixes
+   that and is what keeps the watermark behind the matchup. ---- */
+.thumb-team,
+.thumb-vs {
+  position: relative;
+  z-index: 1;
+}
+/* HOCKEY -- the two face-off circles. A PAIR, which is what separates it at a
+   glance from soccer's single centre circle and baseball's one wide arc. */
 .thumb--hockey {
-  background: linear-gradient(145deg, #10201f, #1a3c3f 58%, #256b6e);
+  background-image:
+    radial-gradient(circle 18px at 24% 62%, transparent 0 15px, var(--card-chalk) 15px 17px, transparent 17px),
+    radial-gradient(circle 18px at 76% 62%, transparent 0 15px, var(--card-chalk) 15px 17px, transparent 17px),
+    linear-gradient(145deg, #10201f, #1a3c3f 58%, #256b6e);
+  background-size: 100% 56px, 100% 56px, cover;
+  background-position: bottom, bottom, center;
+  background-repeat: no-repeat;
 }
+
+.thumb--hockey::before {
+  content: '🏒';
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  z-index: 0;
+  font-size: 64px;
+  line-height: 1;
+  opacity: var(--card-watermark);
+  pointer-events: none;
+}
+/* SOCCER -- the centre circle crossed by the halfway line. One circle, not
+   hockey's two, and a line through it that neither of the others has. */
 .thumb--soccer {
-  background: linear-gradient(145deg, #1e142e, #3a2350 58%, #5a357f);
+  background-image:
+    radial-gradient(circle 26px at 50% 66%, transparent 0 23px, var(--card-chalk) 23px 25px, transparent 25px),
+    linear-gradient(90deg, transparent calc(50% - 1px), var(--card-chalk) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(145deg, #1e142e, #3a2350 58%, #5a357f);
+  background-size: 100% 56px, 100% 56px, cover;
+  background-position: bottom, bottom, center;
+  background-repeat: no-repeat;
 }
+
+.thumb--soccer::before {
+  content: '⚽';
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  z-index: 0;
+  font-size: 64px;
+  line-height: 1;
+  opacity: var(--card-watermark);
+  pointer-events: none;
+}
+ /* OTHER -- HUE ONLY, NO TEXTURE AND NO WATERMARK, DELIBERATELY.
+   `other` is the catch-all for 27 sports in the `sport` enum (archery, rodeo,
+   rowing, water polo...). Any field marking or glyph would assert ONE of them
+   and be wrong for the other 26 -- a card claiming to be rowing when it is a
+   fencing match is worse than a card claiming nothing. The absence is the
+   correct treatment here, not an unfinished one. */
 .thumb--other {
   background: linear-gradient(145deg, #1b1811, #2e2617 58%, #4a3c1f);
 }
@@ -21810,4 +21973,101 @@ a.scout-reveal__main:hover .scout-reveal__name {
    is the Oracle/Trail's 980. This is its own number for its own reason. ---- */
 .arena-col--bingo {
   grid-template-columns: 1fr min(940px, 100%) 1fr;
+}
+
+
+/* ============================================================================
+   CONTEST TYPE TREATMENT -- BRACKET. PROTOTYPE; the other five types are
+   unchanged until this one has been looked at.
+
+   THE PROBLEM. `.contest-card` had NO per-type differentiation of any kind --
+   grepping for `contest-card--` returned zero. Six games rendered the identical
+   panel with a different word at the top, while the STATUS pill beside it
+   carried the only varying colour on the card. So the lobby was shouting what
+   state a contest is in and whispering what game it is, which is backwards for
+   a page whose job is selling six different games. Status won by default rather
+   than by decision.
+
+   TYPE LEADS NOW: the label comes up in size and weight and takes a mark, and
+   the status pill steps back to a quiet outline. `--live` is deliberately NOT
+   quietened -- a contest playing right now is genuinely urgent and is the one
+   status worth interrupting for.
+
+   DELIBERATELY NOT THE SPORT TEXTURES. A parlay board is not a sport, and
+   borrowing the fixture cards' visual language would imply a relationship that
+   does not exist.
+   ============================================================================ */
+
+/* The mark: the Arena's "a glyph and a ring reads as deliberate" precedent, at
+   label scale. Emoji are TEXT -- no asset is fetched. */
+.contest-card__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.contest-card--bracket {
+  /* The accent rail is the type's signature down the card's edge. ONE hue for
+     now, and see the note below before adding five more. */
+  border-left: 3px solid var(--accent);
+}
+
+/* ---- THE SIX MARKS. Chosen for the MECHANIC rather than the artefact, because
+   the mechanic is what separates the six games from each other.
+
+   🗂️ was here first for the bracket and read as FILES. It came out before a
+   replacement existed: a glyph that misleads is worse than none, since a wrong
+   one is read confidently.
+
+   🥊 was proposed for the bracket and rejected for a better reason than taste --
+   on a SPORTS platform a boxing glove says the sport, not the format. 🏆 says
+   what a bracket is FOR.
+
+   ☑️ was proposed for pick'em and rejected on rendering: it comes out blue on
+   most platforms and fights the gold accent.
+
+   TWO OF THESE ALREADY CARRY A MEANING ELSEWHERE, and that is reuse rather than
+   collision -- but it is on the record so nobody treats it as accidental:
+     🏆  the Trail's pennant book counts trophies with it, and the Oracle's
+         "Oracle Slayers" board is headed with it. There it is a trophy you
+         WON; here it is the shape of a contest that produces one.
+     🎯  arena-streaks.tsx and the Oracle use it for a WIN STREAK. Both senses
+         are "calling it right", which is the argument for it over ☑️.
+     🎟️  the Trail's locked-in badge uses it for a pick you have committed.
+         A claimed square is the same act, which is why squares gets the ticket
+         and the parlay gets the chain.
+   ---- */
+.contest-card--bracket .contest-card__type::before { content: '🏆'; }
+.contest-card--squares .contest-card__type::before { content: '🎟️'; }
+.contest-card--pickem .contest-card__type::before { content: '🎯'; }
+.contest-card--survivor .contest-card__type::before { content: '💀'; }
+.contest-card--overunder .contest-card__type::before { content: '↕️'; }
+.contest-card--parlay_board .contest-card__type::before { content: '🔗'; }
+
+.contest-card__type::before {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+/* Status steps back so type can lead -- except live, which stays loud. */
+.contest-card .contest-pill:not(.contest-pill--live) {
+  opacity: 0.72;
+}
+
+/* ---- ALL SIX RAILS ARE GOLD, AND THAT IS THE DECISION RATHER THAN A DEFAULT.
+   No new palette: six distinct hues would need six tokens this stylesheet does
+   not have, and reusing the sport gradients' hues would tie contest types to
+   sports that have nothing to do with them.
+
+   THE DIVISION OF LABOUR IS WHAT MAKES ONE COLOUR ENOUGH: the RAIL says "this
+   is a contest type" and the MARK says which one. So the six read as a family
+   -- one lobby, six games -- instead of six unrelated cards competing for
+   attention, and no colour decision is needed at all. ---- */
+.contest-card--squares,
+.contest-card--pickem,
+.contest-card--survivor,
+.contest-card--overunder,
+.contest-card--parlay_board {
+  border-left: 3px solid var(--accent);
 }
