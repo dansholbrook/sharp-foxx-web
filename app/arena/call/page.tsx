@@ -50,7 +50,7 @@ import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
-import { CallSheet } from './answer-sheet';
+import { CallSheet, PotBlock } from './answer-sheet';
 import {
   entryRefusal,
   getCallCurrent,
@@ -59,7 +59,7 @@ import {
   CallEntryInput,
   CallEntryResult,
   CoveringThisGameError,
-} from '../../api';
+  callPhase,} from '../../api';
 
 export default function CallPage() {
   const router = useRouter();
@@ -230,6 +230,13 @@ export default function CallPage() {
     }
   }
 
+  // THE PHASE GATE, derived here because the LAYOUT depends on it -- see the
+  // long note at the rail. `callPhase` is the shared pure helper from api.ts
+  // (status + locked, three lines), not a second derivation of the same fact.
+  const potBeside =
+    current?.call != null &&
+    (callPhase(current.call) === 'open' || callPhase(current.call) === 'locked');
+
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
 
@@ -257,7 +264,7 @@ export default function CallPage() {
           The content geometry is unchanged -- these blocks are vertical stacks
           and a centred column is what they want. Nothing here makes the Arena
           stop looking like a column; that is W2. ---- */}
-      <div className="arena-col arena-col--sheet">
+      <div className={`arena-col ${potBeside ? 'arena-col--call' : 'arena-col--sheet'}`}>
 
       <div className="page-head">
         <div>
@@ -282,19 +289,73 @@ export default function CallPage() {
 
       {!loading && !error && current && (
         <>
-          <CallSheet
-            weekStart={current.weekStart}
-            call={current.call}
-            myEntry={current.myEntry}
-            settlement={current.settlement}
-            payouts={current.payouts}
-            now={now}
-            onSubmit={onSubmit}
-            submitting={submitting}
-            submitError={submitError}
-            saved={saved}
-            covering={entryRefusal(current.entry, 'GET /arena/call/current')}
-          />
+          {/* ============================================================
+              THE POT SITS BESIDE THE QUESTIONS, AND ONLY SOMETIMES.
+
+              The sheet is the decision; the purse is what a fan checks WHILE
+              deciding, so it belongs in the rail rather than below a sheet you
+              have to scroll past it to reach.
+
+              !! THE RAIL IS CONDITIONAL, AND THAT IS NOT AN OVERSIGHT !!
+              If you are here to tidy an inconsistent-looking layout into an
+              unconditional two-column grid, read this first.
+
+              THE RULE: the settled purse must never sit beside the fan's
+              receipt. On a GRADED card the sheet becomes an answer key and a
+              scorecard -- what you got right, what you were paid -- and putting
+              the pot next to that turns "here is the purse" into a comment on
+              the fan's own result. The gate this page now carries used to live
+              inside CallSheet, on the line that rendered PotBlock; it moved WITH
+              the block rather than being left behind, because the rule is about
+              WHEN the pot may appear and moving WHERE it appears does not
+              retire it.
+
+              AND SEPARATELY: a rail rendered on a graded card would be EMPTY,
+              which is its own bug even if the rule above did not exist. So the
+              graded and voided cards collapse to one column -- the sheet at its
+              own measure, no empty gutter beside it.
+
+              The column widens only when there are two columns to hold: the
+              sheet keeps the 760px it has today, and the wider `--call` class
+              exists so the rail is added BESIDE it rather than taken out of it.
+              ============================================================ */}
+          {potBeside ? (
+            <div className="fgrid">
+              <div className="fmain">
+                <CallSheet
+                  weekStart={current.weekStart}
+                  call={current.call}
+                  myEntry={current.myEntry}
+                  settlement={current.settlement}
+                  payouts={current.payouts}
+                  now={now}
+                  onSubmit={onSubmit}
+                  submitting={submitting}
+                  submitError={submitError}
+                  saved={saved}
+                  covering={entryRefusal(current.entry, 'GET /arena/call/current')}
+                />
+              </div>
+
+              <div className="frail">
+                <PotBlock pot={current.call!.pot} open={callPhase(current.call!) === 'open'} />
+              </div>
+            </div>
+          ) : (
+            <CallSheet
+              weekStart={current.weekStart}
+              call={current.call}
+              myEntry={current.myEntry}
+              settlement={current.settlement}
+              payouts={current.payouts}
+              now={now}
+              onSubmit={onSubmit}
+              submitting={submitting}
+              submitError={submitError}
+              saved={saved}
+              covering={entryRefusal(current.entry, 'GET /arena/call/current')}
+            />
+          )}
 
           <p className="call-fineprint">
             Points only · no cash value · never redeemable. The Call pays when

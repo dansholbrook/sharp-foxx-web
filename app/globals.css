@@ -21732,3 +21732,22 @@ a.scout-reveal__main:hover .scout-reveal__name {
 .arena-col--hub {
   grid-template-columns: 1fr min(1000px, 100%) 1fr;
 }
+
+
+/* ---- THE CALL'S COLUMN, and it is only used when the pot is beside the sheet.
+   Derived the same way the Oracle's was: /feed's .fgrid is 72/28 with a 40px
+   gap, so 1100px puts main at 763px -- the 760px the sheet has today. The rail
+   lands at 297px, which holds `.call-settle__bands`' `1fr auto` rows without
+   squeezing the band labels.
+
+   THE POINT IS THAT THE SHEET DOES NOT MOVE. The rail is added BESIDE the sheet
+   rather than taken out of it, so answering a card is the same measure it has
+   always been and only the page around it grows.
+
+   The page applies this class CONDITIONALLY -- a graded or voided card keeps
+   `.arena-col--sheet` at 760px and renders one column, because there is no rail
+   to make room for. See the note at the rail in page.tsx for why that is a rule
+   and not an inconsistency. ---- */
+.arena-col--call {
+  grid-template-columns: 1fr min(1100px, 100%) 1fr;
+}

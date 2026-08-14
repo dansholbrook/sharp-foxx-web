@@ -824,7 +824,11 @@ function PayoutStrip({ payouts }: { payouts: CallPayouts }) {
 // nothing is "split three ways" here, and the word "only" never attaches to the
 // money.
 // ----------------------------------------------------------------------------
-function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean }) {
+// EXPORTED, AND RENDERED BY THE PAGE rather than by this sheet -- /arena/call
+// puts it in the rail beside the questions, so the purse is reference WHILE
+// answering instead of something to scroll to. The phase gate that used to sit
+// around its call site here moved with it; see the note at the page's rail.
+export function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean }) {
   const openBands = pot.bands.filter((b) => bandOpen(b, pot.entrants));
   // The next band to open, and how many cards away it is. Only ever spoken about
   // on an OPEN card: after kickoff the field is final, and "6 more cards" beside
@@ -1230,9 +1234,9 @@ export function CallSheet({
           "this one was washed" reads as something owed.
           Not on a GRADE either — there it moves below the answer key so the
           settled purse can never sit beside the fan's receipt. */}
-      {(phase === 'open' || phase === 'locked') && (
-        <PotBlock pot={call.pot} open={phase === 'open'} />
-      )}
+      {/* THE POT MOVED OUT. It is rendered by /arena/call into the rail, under
+          the same phase gate that used to live on this line -- open and locked
+          only. See the note there for why that gate is not optional. */}
 
       {/* ============ OPEN, BUT COVERED BY THIS READER ============
           The correspondent working this game gets the card they always got —
