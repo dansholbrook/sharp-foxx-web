@@ -188,14 +188,9 @@ export default function ClashPage() {
         <AppNav />
       </div>
 
-      <div className="masthead masthead-head">
+      <div className="page-head">
         <div>
-          <span className="masthead-kicker">The Arena</span>
-          <h1 className="masthead-title">Bureau Clash</h1>
-          <p className="masthead-standfirst">
-            Your picks power your city. Every credit you earn in any Arena game
-            counts here too — nothing to enter, nothing to miss.
-          </p>
+          <h1 className="row-title page-head__title">Bureau Clash</h1>
         </div>
         <div className="masthead-actions">
           <Link href="/arena" className="link-btn">

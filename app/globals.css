@@ -19874,10 +19874,6 @@ a.arena-tile:active {
    border or a chip it reads as chaos.
    ========================================================================== */
 
-.clash-page .masthead-standfirst {
-  max-width: 46ch;
-}
-
 /* ---- THE CREST. The one bounded home of a bureau's own colour. ---- */
 .clash-crest {
   display: inline-flex;
@@ -21488,3 +21484,72 @@ a.scout-reveal__main:hover .scout-reveal__name {
   line-height: 1.55;
   color: var(--muted);
 }
+
+
+/* ============================================================================
+   THE ARENA GAME PAGES -- the chrome pass, 2026-08-14.
+
+   All five (call, oracle, trail, bingo, clash) carried a FULL masthead: kicker,
+   a clamp(2.2rem, 6vw, 3.1rem) title, a standfirst and a 69px wrapper (28px
+   padding + 1px rule + 40px margin). That was 327-377px before the game
+   started, on the screens a fan opens most. They now use the shared
+   `.page-head` row -- title left, the page's own action right -- which is what
+   `.masthead-head` was already doing minus the kicker, the display size and the
+   rule.
+   ============================================================================ */
+
+/* ---- THE RULES LINE. What survives of three of the five standfirsts, at body
+   scale instead of standfirst scale.
+
+   KEPT (they are RULES a fan needs to play):
+     bingo   "fifty-six numbers a night, four every twenty minutes" -- the
+             cadence, and the ONLY place the twenty-minute interval is stated.
+     call    "one local game, five questions only someone in the building can
+             answer" -- the game's shape.
+     oracle  "ride with it or fade it -- free, once per day" -- the mechanic and
+             its constraint.
+
+   CUT (they were PITCH, restating what the page already shows):
+     trail   "call it right and the bus rolls on; call it wrong and the bus
+             waits" -- flavour over a leg strip that shows exactly this.
+     clash   "your picks power your city ... nothing to enter, nothing to miss"
+             -- positioning.
+
+   Same test applied to the fan surfaces earlier: does it tell a fan something
+   they need in order to play, or does it sell them the thing they already
+   opened? ---- */
+.arena-rules {
+  max-width: 54ch;
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* ---- CLASH GETS THE CONTAINER IT NEVER HAD. It was the only Arena page with
+   no rule of its own, so it inherited `.feed-home`'s 1200px while every sibling
+   sat at 720-860 -- unintended rather than chosen. Its content argues for the
+   narrow end: `.clash-tug` is a 12px-TALL bar, which at 1200px is a 1200x12
+   sliver that reads as a progress bar rather than a tug of war, and its own
+   prose blocks are already capped at 40-46ch. 860 puts it with the Call, bingo
+   and the hub. ---- */
+.clash-page {
+  max-width: 860px;
+}
+
+/* ---- BINGO AND TRAIL KEEP THEIR WIDTHS, AND BOTH WERE MEASURED RATHER THAN
+   ASSUMED -- the recon guessed both might want more room and both guesses were
+   wrong:
+
+     BINGO  `.bingo-grid` is `max-width: 420px; margin: 0 auto` inside a
+            single-column `.bingo-cards` stack. The board caps and centres
+            ITSELF, so widening the 860px page adds whitespace around a 420px
+            object and nothing else.
+     TRAIL  `.trail-road` is a VERTICAL timeline -- `::before` draws a 2px rail
+            at `left: 20px` running top to bottom, with stops stacked down it
+            and `.trail-town__intro` at 44ch. It is a reading column, not a
+            horizontal journey. Widening 720px would strand the rail in an empty
+            field.
+
+   Neither needs a rule here; this note exists so the next person to look at
+   these numbers does not re-derive the same two answers. ---- */

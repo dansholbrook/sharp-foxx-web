@@ -247,14 +247,13 @@ export default function CallPage() {
         <AppNav />
       </div>
 
-      <div className="masthead masthead-head">
+      <div className="page-head">
         <div>
-          <span className="masthead-kicker">The Arena</span>
-          <h1 className="masthead-title">The Correspondent&apos;s Call</h1>
+          <h1 className="row-title page-head__title">The Correspondent&apos;s Call</h1>
           {/* Deliberately says "each week" rather than "this week" — the read
               can hand back last week's card, and the standfirst is the one line
               on the page that has no dateline to correct it. */}
-          <p className="masthead-standfirst">
+          <p className="arena-rules">
             Each week one local game, and five questions only someone in the
             building can answer. Beat the room and the pot is yours to split.
           </p>

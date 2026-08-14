@@ -348,24 +348,30 @@ export default function BingoPage() {
         <AppNav />
       </div>
 
-      <div className="masthead masthead-head">
+      <div className="page-head">
         <div>
-          <span className="masthead-kicker">The Arena</span>
-          <h1 className="masthead-title">Sports Bingo</h1>
+          <h1 className="row-title page-head__title">Sports Bingo</h1>
           {/* THE CADENCE ONLY. The fairness line that used to close this
               sentence ("your free card faces exactly the same numbers as
               anyone else's") is not gone — it's in the lobby terms further
               down, which is where a fan is actually taking a card and is
               therefore where the question occurs to them. Saying it twice on
               one page made it read as protesting. */}
-          <p className="masthead-standfirst">
+          <p className="arena-rules">
             Fifty-six numbers a night, four every twenty minutes, every one of
             them called off tonight&apos;s slate.
           </p>
         </div>
         <div className="masthead-actions">
-          <Link href="/picks" className="link-btn">
-            My points →
+          {/* ← The Arena on ALL FIVE game pages. This slot used to hold
+              "My points →" here and on bingo, which left two of the five with no
+              way back to the hub -- and the hub is the door to the other four
+              games. The points link was the duplicate one: the ⚡ chip is in the
+              nav on every page (it goes to /profile) and /picks is one tap away
+              in the avatar menu, so nothing is unreachable. The hub link had no
+              such second door. */}
+          <Link href="/arena" className="link-btn">
+            ← The Arena
           </Link>
         </div>
       </div>

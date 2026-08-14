@@ -536,24 +536,30 @@ export default function OraclePage() {
         <AppNav />
       </div>
 
-      <div className="masthead masthead-head">
+      <div className="page-head">
         <div>
-          <span className="masthead-kicker">The Arena</span>
-          <h1 className="masthead-title">Beat the Oracle</h1>
+          <h1 className="row-title page-head__title">Beat the Oracle</h1>
           {/* THE MECHANIC, AND NOTHING ABOUT WHY YOU'RE HERE. This used to end
               "…and the streak is the reason you come back", which is the
               product narrating its own retention hook on the surface doing the
               retaining. What a fan actually needs is what the Oracle IS and
               what it costs; the streak chip a few inches below makes the rest
               of the case by simply being a number that goes up. */}
-          <p className="masthead-standfirst">
+          <p className="arena-rules">
             One call a day from the house engine. Ride with it or fade it —
             free, once per day.
           </p>
         </div>
         <div className="masthead-actions">
-          <Link href="/picks" className="link-btn">
-            My points →
+          {/* ← The Arena on ALL FIVE game pages. This slot used to hold
+              "My points →" here and on bingo, which left two of the five with no
+              way back to the hub -- and the hub is the door to the other four
+              games. The points link was the duplicate one: the ⚡ chip is in the
+              nav on every page (it goes to /profile) and /picks is one tap away
+              in the avatar menu, so nothing is unreachable. The hub link had no
+              such second door. */}
+          <Link href="/arena" className="link-btn">
+            ← The Arena
           </Link>
         </div>
       </div>

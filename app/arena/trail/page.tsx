@@ -555,14 +555,9 @@ export default function TrailPage() {
         <AppNav />
       </div>
 
-      <div className="masthead masthead-head">
+      <div className="page-head">
         <div>
-          <span className="masthead-kicker">The Arena</span>
-          <h1 className="masthead-title">The Foxx Trail</h1>
-          <p className="masthead-standfirst">
-            One town a day, one game, one pennant. Call it right and the bus
-            rolls on; call it wrong and the bus waits.
-          </p>
+          <h1 className="row-title page-head__title">The Foxx Trail</h1>
         </div>
         <div className="masthead-actions">
           <Link href="/arena" className="link-btn">
