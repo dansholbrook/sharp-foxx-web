@@ -120,13 +120,17 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin', 'regional_manager', 'field_rep'],
     group: 'section',
   },
-  // The rep's "business office": logged sales + earned commissions. Open to every
-  // role that can hold a rep profile (a bare admin with no rep row sees the page's
-  // branded access state, since the earnings call 403s).
+  // The rep's "business office": logged sales + earned commissions.
+  //
+  // NOT ADMIN, and the nav has to agree with PAGE_ACCESS below or the link is a
+  // trapdoor: an admin who could see this item would tap it and land on
+  // AccessDenied. The reason it is not admin is written out at the PAGE_ACCESS
+  // entry — briefly, GET /field-reps/me/referral is regional_manager +
+  // field_rep, so every admin 403s on their own rate, rep row or not.
   {
     href: '/my-sales',
     label: 'My sales',
-    roles: ['admin', 'regional_manager', 'field_rep'],
+    roles: ['regional_manager', 'field_rep'],
     group: 'section',
   },
 
@@ -167,8 +171,20 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/national-admin', label: 'National', roles: ['admin', 'regional_manager'], group: 'console' },
   // The Correspondent's Call editorial desk: designate the week's game, name the
   // correspondent, and follow the card from draft to graded. admin +
-  // regional_manager, mirroring the backend's CALL_CREATE_ROLES / CALL_READ_ROLES
-  // -- a field_rep composes and grades, but does not CREATE, and cannot list.
+  // regional_manager, mirroring the backend's CALL_CREATE_ROLES.
+  //
+  // THE GATE IS RIGHT; THE OLD REASON FOR IT WAS NOT. This said a field_rep
+  // "does not CREATE, and cannot list". The first half holds — CALL_CREATE_ROLES
+  // is admin + RM. The second was never true: CALL_READ_ROLES includes field_rep
+  // and GET /arena/call/events narrows a rep to their own cards, drafts
+  // included, returning `mine: true` on the wire.
+  //
+  // What actually keeps a rep off this page is what the page DOES, not what it
+  // can read: two of its calls are POST /arena/call/events (create) and
+  // GET /field-reps (the correspondent picker), both admin + RM. A rep here
+  // would get a create form that 403s and an empty picker. Their door is the
+  // tile on the game's own workspace, which now reads that same narrowed list
+  // and so can finally see a DRAFT. See RESOLVER_TICKETS.md R2.
   //
   // A NAV ITEM RATHER THAN A TILE ON /arena. The Arena hub is a fan surface --
   // three game cards and a streak strip -- and hanging a staff console off it
@@ -285,11 +301,26 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p.startsWith('/my-games/'),
     roles: ['admin', 'regional_manager', 'field_rep'],
   },
-  // Same role gate as My Games; the rep-profile check (which a bare admin fails)
-  // happens at the API on the earnings call, surfaced as the page's access state.
+  // A REP'S OWN BUSINESS OFFICE — their referral link, their commission rate,
+  // their logged sales. regional_manager + field_rep, and NOT admin.
+  //
+  // THE OLD COMMENT HERE NAMED THE WRONG CAUSE, and that is most of why this
+  // took a full PAGE_ACCESS audit to find. It said "the rep-profile check (which
+  // a bare admin fails) happens at the API on the earnings call" — describing a
+  // missing field_reps row. The actual cause is the ROLE GATE:
+  // GET /field-reps/me/referral is @Roles('regional_manager', 'field_rep'), so
+  // EVERY admin 403s, including one who holds a rep row. A comment that
+  // describes a plausible mechanism which is not the one operating is worse than
+  // no comment: it answers the question and stops anyone checking.
+  //
+  // Dropping admin rather than widening the route, because the route is right —
+  // "my referral rate" is a rep fact, an admin is not a rep, and the landing
+  // table sends admins to /dashboard. An admin who genuinely also works a
+  // territory is a question about whether admin-as-rep is a supported identity,
+  // and nothing else in this file assumes it is. See RESOLVER_TICKETS.md R1b.
   {
     match: (p) => p === '/my-sales',
-    roles: ['admin', 'regional_manager', 'field_rep'],
+    roles: ['regional_manager', 'field_rep'],
   },
   // The schedule (/games) — every game, filterable, nav-reached by every role.
   // Must come before the /games/ rule below: that one is a startsWith and would

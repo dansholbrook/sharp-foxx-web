@@ -9515,6 +9515,107 @@ a.follow-sugcard__name:hover {
 /* ---- d. LEADERBOARD TEASER: the top five, each row opening the same fan card
    /leaderboard opens. ---- */
 
+/* ============================================================================
+   THE CORRESPONDENT'S WORK BAND (.fwork) — see app/feed-work.tsx for what it
+   shows and, more importantly, what it refuses to.
+
+   IT BORROWS THE BAND CHROME (.row, .feedpicks__head, .feedpicks__all) so it
+   reads as part of the feed rather than as a console bolted onto it, and adds
+   only what a work row needs that a pick row does not: a tag, a subject, and a
+   deadline. Every colour here is an existing token.
+
+   AT MOST THREE CARDS, enforced in the component. The layout below assumes
+   that and would look thin rather than broken if it changed, which is the
+   right failure direction for a band whose cap is a product decision.
+   ============================================================================ */
+
+/* The container chrome comes from `.card`, which the component applies
+   alongside this — the feed's fan bands have no container of their own, so
+   there would otherwise be no border here to colour. Only the border-color is
+   set: stronger than a plain card even when nothing is due, because this is the
+   one section on the page addressed to a job rather than an appetite. */
+.fwork {
+  border-color: var(--border-strong);
+}
+
+/* Work OWED, not merely coming. Same lit treatment as .calltile--due, and
+   deliberately the same: they are two views of the same card, and a
+   correspondent should recognise the second from the first. */
+.fwork--due {
+  border-color: var(--accent-dim);
+  background: linear-gradient(180deg, rgba(201, 163, 78, 0.06), transparent 60%);
+}
+
+/* MOBILE IS THE BASE: one column, because a work list is read top to bottom. */
+.fwork .feedpicks__list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* From ~720px the three fit side by side. auto-fit rather than auto-fill —
+   with one or two rows, auto-fill would hold empty tracks open and strand a
+   single urgent card at the far left, which is exactly the bug the Trail's
+   pennant book had. */
+@media (min-width: 720px) {
+  .fwork .feedpicks__list {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+.fwork-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 44px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+}
+
+.fwork-card:hover {
+  border-color: var(--border-strong);
+}
+
+/* The one row with money and a clock behind it. Only ever one card in this
+   state at a time in practice -- there is one Call a week -- so the accent
+   stays a signal rather than becoming the band's background. */
+.fwork-card--due {
+  border-color: var(--accent-dim);
+}
+
+.fwork-card--due:hover {
+  border-color: var(--accent);
+}
+
+.fwork-card__tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.fwork-card--due .fwork-card__tag {
+  color: var(--accent);
+}
+
+.fwork-card__what {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.fwork-card__note {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* ---- Below ~1024px: one column. Flatten both wrappers so their sections
    become direct grid items, then `order` alone weaves the points-first
    sequence. Nothing is hidden — the leaderboard teaser, which the brief's
@@ -9539,6 +9640,13 @@ a.follow-sugcard__name:hover {
      changed is that everything after `.frail-inplay` is now BOUNDED: that band
      is a hard 3 rows, so the first game card sits at a fixed offset instead of
      one that grew with how much the fan had riding. */
+  /* WORK LEADS EVERYTHING, including the Oracle. The teaser above earns its
+     place by expiring tonight; this expires tonight AND pays a pot to nobody if
+     it is missed. It is also absent for almost every reader, so it costs the
+     fan sequence nothing on the days it isn't there. */
+  .fwork {
+    order: -1;
+  }
   .frail-arena {
     order: 0;
   }

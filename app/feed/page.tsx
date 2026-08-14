@@ -13,6 +13,7 @@ import { FollowDisc, followHref } from '../follow-carousel';
 import {
   InPlayBand,
 } from '../feed-picks';
+import { CorrespondentBand } from '../feed-work';
 import {
   getPublishedContent,
   getEvents,
@@ -797,6 +798,14 @@ export default function FeedPage() {
       <div className="fgrid">
         {/* ---- MAIN COLUMN ---- */}
         <div className="fmain">
+          {/* WORK BEFORE PLAY, and only for the people who have any. Self-hides
+              for every fan and for staff with nothing owed, so the feed is
+              byte-for-byte unchanged for almost everyone who opens it. It leads
+              the column (and, at order:-1, the mobile weave) because the one
+              thing on it with a deadline is a Call that pays nobody if it is
+              missed — a correspondent should not have to scroll past tonight's
+              Oracle to find out they have four hours left. */}
+          <CorrespondentBand token={token} roles={user?.roles ?? []} />
           {/* HERO: the live/upcoming games are the first thing on the page. The
               sport chips ride with them since they filter the games (and the
               articles down in the tail). */}

@@ -6283,15 +6283,63 @@ export function callErrorSlot(message: string): number | null {
 // myPick.outcome.
 //
 // ORDERED BY WHICH READING STOPS BEING TRUE FIRST. Note what is NOT tested here:
-// `status === 'locked'`. Nothing writes that status (there is no sweep for it),
-// so a card past kickoff still reads 'published' and a status-based test would
-// leave a live submit button over a locked game.
+// `status === 'locked'`. The sweep does write that status now — it is scheduled
+// every ten minutes as of 2026-08-14, where this comment used to say "there is
+// no sweep for it" — but the status still must not be the test, and the reason
+// has only moved: a card is locked the instant kickoff passes, and the sweep is
+// what NOTICES, up to ten minutes later. Trusting the status would leave a live
+// submit button over a locked game for those ten minutes.
 export type CallPhase = 'open' | 'locked' | 'graded' | 'voided';
 
 export function callPhase(call: CallCard): CallPhase {
   if (call.status === 'voided') return 'voided';
   if (call.status === 'graded') return 'graded';
   return call.locked ? 'locked' : 'open';
+}
+
+// How long after kickoff an ungraded card is written off, mirroring
+// CALL_VOID_AFTER_HOURS in sharp-foxx-api/src/modules/arena/call-grading.service.ts.
+//
+// MIRRORED, NOT DERIVED — the client cannot read the server's constant, so this
+// is a copy and copies drift. It lives here as a name rather than as a bare 24
+// in each sentence that quotes it, so the drift is one edit instead of a search.
+// The authority is the backend; if the two ever disagree, the backend is right
+// and this is stale.
+export const CALL_VOID_AFTER_HOURS = 24;
+
+// Hours left before an ungraded card is washed, or null when the card is not on
+// that clock (no kickoff recorded). Negative means the sweep is overdue to take
+// it -- which is a real state, not an impossible one: the sweep runs every ten
+// minutes, so a card can sit a few minutes past its own deadline.
+export function callHoursToVoid(locksAt: string | null): number | null {
+  if (!locksAt) return null;
+  const locked = new Date(locksAt).getTime();
+  if (Number.isNaN(locked)) return null;
+  return (locked + CALL_VOID_AFTER_HOURS * 3600_000 - Date.now()) / 3600_000;
+}
+
+// The same collapse for a STAFF list row, which is a different shape and carries
+// one state the fan card cannot: a DRAFT.
+//
+// The fan read (`CallCard`) has a server-computed `locked` boolean; a list row
+// has `status` + `locksAt` and nothing else, so the kickoff comparison happens
+// here. It is the same rule callPhase applies — the clock decides, not the
+// status — written once for the shape that has to do it itself.
+export type CallStaffPhase = 'draft' | CallPhase;
+
+export function callListPhase(item: {
+  status: CallStatus;
+  locksAt: string | null;
+}): CallStaffPhase {
+  if (item.status === 'draft') return 'draft';
+  if (item.status === 'voided') return 'voided';
+  if (item.status === 'graded') return 'graded';
+  // 'published' or 'locked' — the clock decides, exactly as in callPhase. A null
+  // locksAt cannot happen on a published card (publish sets it) but reads as
+  // "not locked yet" rather than throwing.
+  return item.locksAt !== null && new Date(item.locksAt) <= new Date()
+    ? 'locked'
+    : 'open';
 }
 
 // WHY THE WEEK WAS WASHED, in the fan's terms. The Oracle's oracleOutcomeCopy

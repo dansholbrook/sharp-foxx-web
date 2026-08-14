@@ -37,14 +37,16 @@ import {
   lockPrediction,
   resolvePrediction,
   voidPrediction,
-  getCallCurrent,
+  getCallEvents,
   callWeekLabel,
-  callPhase,
+  callListPhase,
+  callStaffRoute,
   points,
   etDateTime,
+  etDateKey,
   eventStatusLabel,
   etTime,
-  CallCard,
+  CallListItem,
   Prediction,
   PredictionKind,
   MyAssignment,
@@ -654,6 +656,7 @@ function LiveConsole({
   homeLabel,
   awayLabel,
   canAskWinner,
+  canEndGame,
   onEndGame,
 }: {
   token: string;
@@ -666,6 +669,11 @@ function LiveConsole({
   // Both team FKs are set on the event -> a `winner` question can resolve to a
   // real team name. Passed through to the predictions tool.
   canAskWinner: boolean;
+  // Admin or field_rep. End Game writes through PATCH /events/:id/result, which
+  // an RM 403s on -- and it is the ONLY control in this console they cannot use.
+  // Everything else here posts live events, which accept a regional_manager. So
+  // the whole console stays, and one button goes. See RESOLVER_TICKETS.md R1a.
+  canEndGame: boolean;
   // End the game from the console (marks it final with the live scores). The
   // standalone Live & Result section doesn't render while live, so End Game
   // lives here — the console is the page courtside. Resolves once the PATCH
@@ -1064,6 +1072,16 @@ function LiveConsole({
            permanently disabled button and its hint across the bottom of a
            390px screen. Same argument, same shape, as .call-slip--empty and
            .parlay-stub--empty. ------------------------------------------- */}
+      {/* A manager gets the sentence, not the button. The dock keeps its
+          --idle shape so nothing is nailed across the bottom of a phone. */}
+      {!canEndGame ? (
+        <div className="console-endgame-dock console-endgame-dock--idle">
+          <span className="console-endgame-hint">
+            Ending the game is the assigned correspondent&apos;s to do, or an
+            admin&apos;s.
+          </span>
+        </div>
+      ) : (
       <div
         className={`console-endgame-dock${
           scoreEntered ? '' : ' console-endgame-dock--idle'
@@ -1088,6 +1106,7 @@ function LiveConsole({
           </span>
         )}
       </div>
+      )}
 
       {error && <div className="error">{error}</div>}
 
@@ -1420,55 +1439,119 @@ function PhotosSection({
 // not share a scroll with an article draft and a photo uploader.
 //
 // ----------------------------------------------------------------------------
-// HOW THIS FINDS THE CALL ID, AND WHY IT ONLY FINDS PUBLISHED ONES.
+// HOW THIS FINDS THE CALL ID.
 //
-// The grade route is keyed by CALL id; this page holds an EVENT id, and there is
-// no event->call lookup. GET /arena/call/current is the one route a field rep
-// can call that returns a call id at all — it is ungated, and it hands back the
-// week's card with its event attached, so matching `call.event.id` against this
-// page's eventId is the whole derivation.
+// The compose and grade routes are keyed by CALL id; this page holds an EVENT
+// id, and there is no event->call lookup. So the derivation is: ask for the
+// caller's cards and match `event.id` against this page's eventId.
 //
-// It excludes DRAFTS by design (a fan must not see next week's half-written
-// card), so a correspondent still composing has no tile here — they reach the
-// compose tool through the link editorial sends them. That gap closes the moment
-// GET /arena/call/events grows a `mine` scope; see
-// docs/call-staff-backend-spec.md P1, and this component is where it lands.
+// IT READS THE STAFF LIST, NOT THE FAN CARD, and that is the whole point of this
+// component. GET /arena/call/events narrows a field_rep to their OWN cards —
+// DRAFTS INCLUDED — and says so on the wire with `mine: true`. The service
+// comment states why it exists: "a correspondent has no other way to learn the
+// id of their own DRAFT Call."
 //
-// ONE READ, BEST-EFFORT, SELF-HIDING. Most games are not the week's Call, so the
-// common outcome is "no tile" and a failure must look exactly like it: nothing
-// on screen and nothing in the error box. The workspace has a dozen other jobs
-// and none of them should break because the Arena is down.
+// This used to read GET /arena/call/current, the FAN card, which excludes drafts
+// by design (a fan must not see next week's half-written card). The comment here
+// said that gap "closes the moment GET /arena/call/events grows a `mine` scope"
+// — it had already grown one. The capability shipped, this comment went on
+// saying it hadn't, and a correspondent's only route to their own draft stayed a
+// link handed to them out of band. See RESOLVER_TICKETS.md R2.
+//
+// WHAT THE SWITCH ALSO CHANGES, stated because it is a real behaviour change and
+// not a side effect worth discovering later: the fan card is the WEEK'S card
+// whoever owns it, so any staff user on this game used to see this tile once it
+// published. The staff list is scoped — a rep sees their own, an RM their
+// roster's, an admin everything. So a rep who is NOT the correspondent no longer
+// sees a tile here. That is correct: its CTA opens a tool that would 403 for
+// them (CallService.assertCanCompose), and a door that cannot open is worse than
+// no door.
+//
+// TWO SCOPES, AND THE SECOND ONE IS NOT OPTIONAL. 'upcoming' is this ET week and
+// later; 'past' is everything before. A Sunday-night game whose card is still
+// ungraded on Monday morning has ALREADY MOVED to 'past' — while the
+// correspondent still has until Monday evening before the 24-hour sweep washes
+// it. Reading only 'upcoming' would take the tile away at the exact moment the
+// deadline is closest. The second read is conditional on the kickoff actually
+// being before this week, so the common case stays one request.
+//
+// BEST-EFFORT, SELF-HIDING. Most games are not the week's Call, so the common
+// outcome is "no tile" and a failure must look exactly like it: nothing on
+// screen and nothing in the error box. The workspace has a dozen other jobs and
+// none of them should break because the Arena is down.
 // ----------------------------------------------------------------------------
-function CallTile({ token, eventId }: { token: string; eventId: string }) {
-  const [call, setCall] = useState<CallCard | null>(null);
+function CallTile({
+  token,
+  eventId,
+  kickoff,
+}: {
+  token: string;
+  eventId: string;
+  // The game's scheduledAt, used ONLY to decide whether the 'past' scope is
+  // worth a second request. Not for display and not for phase — the card's own
+  // locksAt owns that.
+  kickoff: string | null;
+}) {
+  const [call, setCall] = useState<CallListItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const current = await getCallCurrent(token);
+        // 'upcoming' first — this week and later, which is where a live card
+        // almost always is.
+        const upcoming = await getCallEvents(token, 'upcoming');
         if (cancelled) return;
-        // The current card is for SOME game; it is this game's tile only if it
-        // is for THIS one.
-        if (current.call && current.call.event.id === eventId) setCall(current.call);
+        const hit = upcoming.items.find((i) => i.event.id === eventId);
+        if (hit) {
+          setCall(hit);
+          return;
+        }
+        // The Monday-morning case. `thisWeek` comes from the RESPONSE, not from
+        // a Date() here: the backend computes the ET week and a browser in
+        // another timezone would disagree about which Monday it is — the same
+        // refusal CallList's own comment makes.
+        //
+        // AND THE KICKOFF IS COMPARED AS AN ET DAY, not by slicing the ISO
+        // string. A Sunday-night ET game is already MONDAY in UTC, so a raw
+        // comparison would read the exact card this branch exists for as
+        // "this week", skip the second request, and drop the tile — the failure
+        // it was written to prevent, reintroduced by the comparison itself.
+        if (!kickoff || etDateKey(kickoff) >= upcoming.thisWeek) return;
+        const past = await getCallEvents(token, 'past');
+        if (cancelled) return;
+        const older = past.items.find((i) => i.event.id === eventId);
+        if (older) setCall(older);
       } catch {
-        /* no tile — this game almost certainly isn't the week's Call */
+        /* no tile — this game almost certainly isn't one of the caller's Calls */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [token, eventId]);
+  }, [token, eventId, kickoff]);
 
   if (!call) return null;
 
-  const phase = callPhase(call);
-  const entrants = call.pot.entrants;
+  const phase = callListPhase(call);
+  const entrants = call.entryCount;
   const filed = `${entrants} card${entrants === 1 ? '' : 's'} filed`;
 
   // What the correspondent is being asked for, per phase. Only the locked one is
   // urgent — that is the parking lot, and it is the only tile that leads.
   const copy: Record<typeof phase, { note: string; cta: string }> = {
+    // THE STATE THIS TILE COULD NOT SEE UNTIL NOW. A draft is the only phase
+    // where the card is not yet anybody's but the correspondent's, so it names
+    // the work rather than the deadline — and it counts questions, because
+    // 0-of-5 versus 4-of-5 is the whole difference between "not started" and
+    // "nearly there". No entrant count: nobody can have entered a draft.
+    draft: {
+      note:
+        call.questionCount === 0
+          ? 'Yours to write. Five questions, then it goes to the fans.'
+          : `Draft — ${call.questionCount} of 5 questions written. It publishes when you say so.`,
+      cta: call.questionCount === 0 ? 'Write the card' : 'Finish the card',
+    },
     open: {
       note: `Published — fans can still answer until kickoff. ${filed} so far.`,
       cta: 'Open the card',
@@ -1500,9 +1583,13 @@ function CallTile({ token, eventId }: { token: string; eventId: string }) {
           The Correspondent&apos;s Call · {callWeekLabel(call.weekStart)}
         </span>
         {phase === 'locked' && <span className="pill pill--review">Needs grading</span>}
+        {phase === 'draft' && <span className="pill">Draft</span>}
       </div>
       <p className="calltile__note">{copy[phase].note}</p>
-      <Link href={`/arena/call/grade/${call.id}`} className="calltile__cta">
+      {/* callStaffRoute owns the compose-vs-grade split — a draft opens the
+          compose tool, everything else the grade sheet. The desk already uses
+          it; the route must not be spelled out twice. */}
+      <Link href={callStaffRoute(call)} className="calltile__cta">
         {copy[phase].cta} →
       </Link>
     </section>
@@ -1614,6 +1701,7 @@ function GameWorkspace({
   authorId,
   canSponsor,
   canPublishDirectly,
+  canFileResult,
   myOrders,
   advertisersById,
 }: {
@@ -1626,6 +1714,10 @@ function GameWorkspace({
   // directly. A field_rep author instead submits for review (and never sees
   // Unpublish -- that's staff-only now on the backend).
   canPublishDirectly: boolean;
+  // Admin or field_rep. Gates every control that writes through
+  // PATCH /events/:id/result -- the score form, Go Live and End Game -- because
+  // an RM 403s on all three. See the derivation in the page component.
+  canFileResult: boolean;
   myOrders: AdOrder[];
   advertisersById: Record<string, string>;
 }) {
@@ -2009,8 +2101,22 @@ function GameWorkspace({
   // Result: score inputs + video URL + Save, plus Go Live pre-game. The live
   // running-score / End Game controls live in the console instead, so this body
   // only renders in the scheduled and final shapes (never while live).
+  //
+  // A REGIONAL MANAGER GETS A SENTENCE INSTEAD OF A FORM. They can hold an
+  // assignment and so can reach this workspace, but PATCH /events/:id/result is
+  // admin + field_rep, so every control below would 403 for them. Saying which
+  // door is closed beats a form that fails on submit AND beats hiding the
+  // section outright — a missing section reads as a bug, and the section is
+  // still where the filed result is displayed.
   const resultBody = (
     <>
+      {!canFileResult && (
+        <p className="game-hint">
+          Filing the result is the assigned correspondent&apos;s to do (or an
+          admin&apos;s). The score shows here once it&apos;s in.
+        </p>
+      )}
+      {canFileResult && (
       <div className="result-row">
         <div className="result-scores">
           <input
@@ -2079,14 +2185,18 @@ function GameWorkspace({
           </button>
         )}
       </div>
-      {(isPostponed || isCanceled) && (
+      )}
+      {/* The hints below belong to the CONTROLS, so they follow them behind the
+          same gate. What survives for a manager is the filed score and any
+          error the page is already showing. */}
+      {canFileResult && (isPostponed || isCanceled) && (
         <p className="game-hint">
           This game is marked {eventStatusLabel(currentStatus).toLowerCase()}.
           You can still file a result or write it up
           {isPostponed ? ', and Go Live when it’s played.' : '.'}
         </p>
       )}
-      {needsUrl && (
+      {canFileResult && needsUrl && (
         <p className="game-hint">
           Paste the stream URL above first — it needs to be set before the game
           goes live.
@@ -2360,6 +2470,7 @@ function GameWorkspace({
           canAskWinner={
             !!assignment.event.homeTeamId && !!assignment.event.awayTeamId
           }
+          canEndGame={canFileResult}
           onEndGame={endGame}
         />
       )}
@@ -2399,7 +2510,11 @@ function GameWorkspace({
            every lifecycle shape: the tile is only urgent post-game, but a
            correspondent checking on their published card pre-game should not
            have to hunt for it either. Self-hides on every other game. ---- */}
-      <CallTile token={token} eventId={eventId} />
+      <CallTile
+        token={token}
+        eventId={eventId}
+        kickoff={assignment.event.scheduledAt}
+      />
 
       {/* ---- PRE-GAME (scheduled, postponed, canceled): filing the result is
            the job, and Go-Live starts it. Notes + Sponsor open for prep;
@@ -2531,6 +2646,27 @@ export default function GameWorkspacePage() {
   const canPublishDirectly = (user?.roles ?? []).some(
     (r) => r === 'admin' || r === 'regional_manager',
   );
+  // WHO MAY FILE A RESULT — admin or field_rep, mirroring the backend's
+  // @Roles('admin', 'field_rep') on PATCH /events/:id/result. NOT a regional
+  // manager, and the omission there is deliberate: a finalized score is the one
+  // value on this platform whose consumers disagree about what to do when it
+  // moves (half re-derive, half refuse, nothing reconciles them), so the result
+  // columns have exactly one door and it is kept narrow. See CLAUDE.md.
+  //
+  // MIRRORED HERE SO THE PAGE STOPS OFFERING WHAT THE API REFUSES. An RM can
+  // legitimately open this workspace — they can hold an assignment, because
+  // event_assignments.rep_id points at field_reps and an RM has a rep row — and
+  // until now they got the full result form, the Go Live button and the End Game
+  // button, all three of which PATCH that same route and all three of which
+  // 403'd. Found by the PAGE_ACCESS audit, RESOLVER_TICKETS.md R1a.
+  //
+  // THIS IS THE INTERIM AND IT IS LABELLED AS ONE. Hiding the controls stops the
+  // page lying, but it does not answer the question underneath: an RM-covered
+  // game now has nobody who can file its result, and quietly degrades to the
+  // covered-sweep auto-close. R3 is that question.
+  const canFileResult = (user?.roles ?? []).some(
+    (r) => r === 'admin' || r === 'field_rep',
+  );
 
   // Load the caller's assignments and match this event id (the ownership guard),
   // plus the events lookup used to pre-fill the result form. A failed events
@@ -2639,6 +2775,7 @@ export default function GameWorkspacePage() {
           authorId={user?.id ?? ''}
           canSponsor={isFieldRep}
           canPublishDirectly={canPublishDirectly}
+          canFileResult={canFileResult}
           myOrders={myOrders}
           advertisersById={advertisersById}
         />
