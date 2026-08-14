@@ -336,6 +336,34 @@ tfoot td {
   display: none;
 }
 
+/* ---- The desktop nav: a wrapping row of links, and a cluster that does not
+   wrap. Two children, and the split is the point -- see the note in nav.tsx.
+   `align-items: baseline` matches .nav-links so the cluster sits on the link
+   row's baseline rather than floating against a wrapped block's centre. ---- */
+.nav-desk {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 22px;
+  min-width: 0;
+}
+
+/* min-width: 0 lets the link row actually shrink to its wrap width inside the
+   flex parent instead of forcing the cluster off the end -- without it a long
+   staff bar pushes the cluster out of the container rather than wrapping. */
+.nav-desk .nav-links--desktop {
+  min-width: 0;
+}
+
+/* NEVER WRAPS, NEVER SHRINKS. This is the whole fix: the fan's balance,
+   notifications and account menu stay on the first line at every width. */
+.nav-desk__cluster {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-shrink: 0;
+}
+
 .nav-links {
   display: flex;
   align-items: baseline;
@@ -9708,8 +9736,10 @@ a.follow-sugcard__name:hover {
     width: 280px;
   }
 
-  /* Swap desktop nav row for the mobile cluster. */
-  .nav-links--desktop {
+  /* Swap desktop nav row for the mobile cluster. TARGETS THE WRAPPER: the
+     controls are a sibling of .nav-links now, so hiding only .nav-links--desktop
+     would leave a second chip + bell + avatar on screen beside .nav-mobile's. */
+  .nav-desk {
     display: none;
   }
   .nav-mobile {

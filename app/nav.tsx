@@ -437,17 +437,40 @@ export function AppNav() {
       {/* Desktop (>=768px): the wide uppercase link row. Sections first, then
           Console, then the three controls at the right end — the chip and bell
           used to lead the row, which put two icons in front of every
-          destination. Identity belongs at the end of a bar, not the start. */}
-      <div className="nav-links nav-links--desktop">
-        {sections.map((l) => (
-          <Link key={l.href} href={l.href} className="link-btn">
-            {l.label}
-          </Link>
-        ))}
-        {consoleMenu}
-        <PointsChip />
-        <NotificationBell />
-        <AvatarMenu onLogout={onLogout} />
+          destination. Identity belongs at the end of a bar, not the start.
+
+          ---- THE CONTROLS ARE A PINNED SIBLING, NOT THE TAIL OF THE LINK ROW.
+          .nav-links wraps on purpose (see its rule: "the row breaks between
+          items or not at all" — a nowrap row would shrink flex items and break
+          a LABEL in half instead). But while the chip, bell and avatar lived
+          INSIDE that row they were wrap candidates too, so a bar that ran long
+          dropped the fan's balance, notifications and account menu onto a
+          second line on their own — a stranded cluster under a right-aligned
+          nav, which reads as broken rather than as a tidy second row.
+
+          Now the links wrap among themselves and the cluster never moves. The
+          original rule's argument still holds and now applies to the things it
+          was written about: whole words, wrapping between items.
+
+          THIS DOES NOT STOP THE LINKS WRAPPING, and it is not meant to. On a
+          720px page (/arena/trail, /arena/oracle) a fan's six sections plus the
+          cluster need ~684px against ~546px of nav space, so they wrap and
+          should. The nav's space depending on a PAGE'S editorial width is the
+          real bug — see RESOLVER_TICKETS.md W1. ---- */}
+      <div className="nav-desk">
+        <div className="nav-links nav-links--desktop">
+          {sections.map((l) => (
+            <Link key={l.href} href={l.href} className="link-btn">
+              {l.label}
+            </Link>
+          ))}
+          {consoleMenu}
+        </div>
+        <div className="nav-desk__cluster">
+          <PointsChip />
+          <NotificationBell />
+          <AvatarMenu onLogout={onLogout} />
+        </div>
       </div>
 
       {/* Mobile (<768px): a slim cluster of the points chip, the bell, the
