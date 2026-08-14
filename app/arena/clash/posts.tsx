@@ -33,8 +33,8 @@
 import { ClashPost, etDateTime } from '../../api';
 
 // The result post's body arrives as one prose sentence with the numbers inside
-// it ("10.00 average per active member — 10 Clash Points from 1 active
-// member..."). It is rendered WHOLE rather than parsed apart: the server owns
+// it ("10 Clash Points from 1 active member..."). It is rendered WHOLE rather
+// than parsed apart: the server owns
 // that sentence, and a client that split it on an em-dash would break the first
 // time the copy changed. The loot row in the spec is drawn from the fields the
 // client already has instead — see the board — not by mining this string.

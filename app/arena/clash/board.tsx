@@ -80,15 +80,21 @@ function Crest({
 // ---------------------------------------------------------------------------
 // THE TUG — two sides, one bar.
 //
-// THE SUB-LABEL SAYS "avg pts / active" AND IT IS NOT DECORATION. `score` is
-// clashPoints ÷ actives, and it is what wins the week: a 400-member bureau and a
-// 40-member one are compared per head, so "big bureaus don't auto-win, ghosts
-// don't drag you down" (spec §5.4). That makes the raw `clashPoints` the single
-// most misreadable number on this screen — a fan on the smaller side sees their
-// total sitting below the opponent's and concludes they are losing while they
-// are in fact ahead. The average is therefore what the bar is drawn from AND
-// what gets the big type; the total is demoted to a sub-line that names its own
-// denominator. Do not promote clashPoints back up here.
+// THE BIG NUMBER IS THE WEEK'S SCORE, AND SINCE 2026-08-14 THAT IS THE TOTAL.
+//
+// `score` was clashPoints ÷ actives, and this comment used to argue at length
+// that the raw total was the most misreadable number on the screen — a fan on
+// the smaller side seeing their total below the opponent's and concluding they
+// were losing while in fact ahead. That argument died with the divisor: the
+// score IS the total now, so the two numbers cannot disagree and there is
+// nothing left to misread.
+//
+// WHAT CHANGED ON SCREEN, and why the sub-line lost its "pts": the totals row
+// used to name the denominator ("1,400 pts · 7 active") because the big number
+// was a ratio and needed its inputs shown. With score == clashPoints that row
+// would print the same number twice, so it now carries only the half the score
+// does NOT say — how many people turned out. Turnout is still the story; it is
+// just no longer the divisor.
 // ---------------------------------------------------------------------------
 function Tug({ mine, theirs }: { mine: ClashSide; theirs: ClashSide }) {
   const pct = clashSplitPct(mine, theirs);
@@ -103,7 +109,7 @@ function Tug({ mine, theirs }: { mine: ClashSide; theirs: ClashSide }) {
         aria-label={
           dead
             ? 'Neither bureau has scored yet this week'
-            : `${mine.name} ${mine.score} average per active member, ` +
+            : `${mine.name} ${mine.score} Clash Points, ` +
               `${theirs.name} ${theirs.score}`
         }
       >
@@ -114,21 +120,21 @@ function Tug({ mine, theirs }: { mine: ClashSide; theirs: ClashSide }) {
       <div className="clash-tug__scores">
         <span className="clash-tug__score clash-tug__score--mine">
           <b>{mine.score}</b>
-          <small>avg pts / active</small>
+          <small>Clash Points</small>
         </span>
         <span className="clash-tug__score clash-tug__score--theirs">
           <b>{theirs.score}</b>
-          <small>avg pts / active</small>
+          <small>Clash Points</small>
         </span>
       </div>
 
-      {/* The totals, demoted and denominated. See the header above. */}
+      {/* Turnout, which is the one thing the score does not say. See above. */}
       <div className="clash-tug__totals">
         <span>
-          {points(Number(mine.clashPoints))} pts · {mine.actives} active
+          {mine.actives} active {mine.actives === 1 ? 'member' : 'members'}
         </span>
         <span>
-          {points(Number(theirs.clashPoints))} pts · {theirs.actives} active
+          {theirs.actives} active {theirs.actives === 1 ? 'member' : 'members'}
         </span>
       </div>
     </>
@@ -219,7 +225,7 @@ function FreeForAll({ sides, weekNo }: { sides: ClashSide[]; weekNo: number }) {
             </span>
             <span className="clash-ffa__score">
               {s.score}
-              <small>avg / active</small>
+              <small>Clash Points</small>
             </span>
           </li>
         ))}

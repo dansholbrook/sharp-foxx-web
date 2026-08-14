@@ -7563,7 +7563,7 @@ export interface ClashWeek {
   status: string;
 }
 
-// One bureau on this week's board. `score` is clashPoints / actives to 2dp and
+// One bureau on this week's board. `score` is the week's TOTAL Clash Points to 2dp and
 // is THE NUMBER THAT DECIDES THE WEEK — see the sub-label rule in the board.
 export interface ClashSide {
   bureauId: string;
@@ -7738,10 +7738,17 @@ export function otherClashSides(sides: ClashSide[]): ClashSide[] {
   return sides.filter((s) => !s.isMine);
 }
 
-// The tug's split, as a percentage of the bar for the fan's own side. Built off
-// `score` (the average) rather than `clashPoints`, because the average is what
-// decides the week: a smaller bureau out-earning a bigger one per head is
-// WINNING, and a bar drawn from raw totals would show it losing.
+// The tug's split, as a percentage of the bar for the fan's own side.
+//
+// BUILT OFF `score`, AND STILL WORTH SAYING WHY NOW THAT score == clashPoints.
+// This comment used to argue that the bar had to be drawn from the average
+// because a smaller bureau out-earning a bigger one per head was winning and a
+// bar drawn from raw totals would show it losing. Since 2026-08-14 the score IS
+// the total, so the two draw the same bar — but the rule stands and is the
+// reason this reads `score` rather than `clashPoints`: `score` is whatever
+// decides the week, and the day a tier handicap or any other rule makes it
+// differ from the raw total again, this bar follows the rule instead of
+// silently going on drawing the input.
 //
 // 50 when neither side has scored — an honest dead heat, not a fake lead.
 export function clashSplitPct(mine: ClashSide, theirs: ClashSide): number {

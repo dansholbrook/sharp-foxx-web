@@ -905,7 +905,7 @@ function ClashState({ tug }: { tug: ClashTug }) {
       {theirs.code}
       <span className="arena-tile__when">
         {' · '}
-        {level ? 'level' : diff > 0 ? 'ahead' : 'behind'} on avg per active
+        {level ? 'level' : diff > 0 ? 'ahead' : 'behind'} on Clash Points
       </span>
     </p>
   );

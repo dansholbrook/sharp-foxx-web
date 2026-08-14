@@ -316,9 +316,9 @@ export default function ClashPage() {
               Clash was the outlier: this is a page footnote about how the game
               scores, not board content. */}
           <p className="clash-fineprint">
-            Highest <strong>average per active member</strong> takes the week —
-            big bureaus don&apos;t auto-win, and quiet members don&apos;t drag
-            you down. Win and every active member banks a bonus; lose and
+            Most <strong>Clash Points</strong> takes the week — every credit
+            anyone earns adds to your city&apos;s total, and nobody can drag you
+            down by playing. Win and every active member banks a bonus; lose and
             there&apos;s a consolation.{' '}
             <Link href="/arena">Everything you play in the Arena</Link> counts
             here.
