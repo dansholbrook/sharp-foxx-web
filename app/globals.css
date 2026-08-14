@@ -21362,6 +21362,22 @@ a.scout-slot__main:hover .scout-slot__name {
   border-color: var(--border);
 }
 
+/* THE COUNTDOWN TO LOYALTY — a promise, so it is drawn as one: the accent, but
+   dimmed and outlined rather than filled. It must read as the SAME BADGE the
+   gold one becomes, because that is exactly what happens to it in week 5; a
+   different-coloured pill would look like a different fact arriving rather than
+   the same one landing.
+
+   Deliberately NOT --gold: a filled gold chip on a holding that is earning ×1.0
+   today would overstate it, and the point of the countdown is that it is honest
+   about not having arrived yet. Dashed, like --closed, for the same reason
+   dashed reads correctly there — the state is provisional. */
+.scout-tag--wait {
+  border-style: dashed;
+  border-color: var(--accent-dim);
+  color: var(--accent-dim);
+}
+
 /* ---- The market ---- */
 .scout-chips {
   display: flex;
@@ -21686,6 +21702,24 @@ a.scout-reveal__main:hover .scout-reveal__name {
 /* The three zero-states, in the row where they explain a number. */
 .scout-reveal__lines {
   font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* THE LOYALTY BREAKDOWN — the multiplier attached to the number it multiplies.
+   Reads as arithmetic rather than as a badge, which is the point: a pill says
+   "this happened", a line with an arrow in it says WHAT it happened to. Accent
+   so the gain is visible, at the meta line's size so it does not compete with
+   the week's total on the right. */
+.scout-reveal__loyalty {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--accent-dim);
+}
+
+/* The half loyalty did NOT touch, marked as such in the same breath. Muted
+   against the accent above so the eye reads them as two different kinds of
+   money on one line. */
+.scout-reveal__flat {
   color: var(--muted);
 }
 

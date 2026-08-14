@@ -69,11 +69,25 @@ export function BookBand({
               narrowed branch for that reason. */}
           {book.season !== null && <SwapLine book={book} />}
 
+          {/* THE SAME NARROWING, ONE LEVEL DOWN. The slot list needs
+              `book.loyalty` for the countdown chip, and that field only exists
+              on the in-season arm — so the list is rendered inside the narrowing
+              rather than handed a fabricated { weeks: 0 } default. On the
+              no-season arm `slots` is [] anyway, so the branch below renders the
+              empty-slot placeholders and nothing is lost.
+
+              A DEFAULT WOULD HAVE BEEN THE BUG THIS UNION EXISTS TO PREVENT:
+              "×1.2 in 0 weeks" on a book with no season is a promise about a
+              week that does not exist. */}
           <ol className="scout-slots">
-            {slots.map((s) => (
+            {book.season !== null && slots.map((s) => (
               <FilledSlot
                 key={s.slotId}
                 slot={s}
+                // The threshold and the rate, off the WIRE rather than written
+                // down here: they are the book's terms, and a countdown that
+                // hardcoded 4 would start lying the day the house retunes.
+                loyalty={book.loyalty}
                 swapOpen={book.season !== null && book.swapWindowOpen}
                 swapAvailable={book.season !== null ? book.swapAvailable : 0}
                 onDrop={onDrop}
@@ -129,12 +143,14 @@ function SwapLine({ book }: { book: Extract<ScoutBook, { season: string }> }) {
 
 function FilledSlot({
   slot,
+  loyalty,
   swapOpen,
   swapAvailable,
   onDrop,
   dropping,
 }: {
   slot: ScoutSlot;
+  loyalty: { weeks: number; multiplier: number };
   swapOpen: boolean;
   swapAvailable: number;
   onDrop: (cardId: string) => void;
@@ -142,6 +158,13 @@ function FilledSlot({
 }) {
   const name = `${slot.firstName} ${slot.lastName}`;
   const closed = slot.status === 'retired';
+  // THE SAME SUBTRACTION THE SCORER USES, which is what keeps the countdown and
+  // the payout from ever disagreeing by a week. `weeksHeld` is
+  // currentWeekNo - draftedWeekNo, computed server-side; loyalty lands when it
+  // REACHES the threshold, so a week-1 pick is held 4 weeks in week 5 and first
+  // scores at ×1.2 there — not in week 4. Clamped at 1 because a slot that is
+  // one week short must never render "in 0 weeks" while still un-loyal.
+  const weeksToLoyalty = Math.max(1, loyalty.weeks - slot.weeksHeld);
 
   return (
     <li className={`scout-slot scout-slot--filled${closed ? ' scout-slot--closed' : ''}`}>
@@ -157,14 +180,37 @@ function FilledSlot({
             Held {slot.weeksHeld} week{slot.weeksHeld === 1 ? '' : 's'}
           </span>
           {/* ---------------------------------------------------------------
-              THE ×1.2 CHIP APPEARS ONLY WHEN IT IS TRUE, AND THERE IS NO ×1.0.
-              The spec renders a "×1.0" chip on every un-loyal holding. A badge
-              whose content is "you get nothing extra" is a deduction wearing a
-              multiplier's clothes, and this game does not have deductions — the
-              worst week is zero, by rule. Absence of a bonus is not a penalty
-              and must not be given a pill to sit in.
+              THE ×1.2 CHIP APPEARS ONLY WHEN IT IS TRUE, AND THERE IS STILL NO
+              ×1.0. The spec renders a "×1.0" chip on every un-loyal holding. A
+              badge whose content is "you get nothing extra" is a deduction
+              wearing a multiplier's clothes, and this game does not have
+              deductions — the worst week is zero, by rule. Absence of a bonus is
+              not a penalty and must not be given a pill to sit in.
+
+              THAT RULE IS INTACT. THE COUNTDOWN IS NOT AN EXCEPTION TO IT, and
+              the distinction is the whole reason the chip below is allowed:
+
+                "×1.0"          states a NIL RETURN as though it were a rate.
+                                It describes the present and describes it as a
+                                shortfall.
+                "×1.2 in 2 wks" states a PROMISE, with the date it lands. It
+                                describes the future and describes it as a gain.
+
+              Same pill, opposite sentence. A fan reading "×1.0" learns they are
+              getting nothing; a fan reading "×1.2 in 2 weeks" learns what to
+              hold for. Do not read this as the ×1.0 rule having been abandoned —
+              it would still be refused today.
               --------------------------------------------------------------- */}
-          {slot.loyal && <span className="scout-tag scout-tag--gold">&times;{slot.multiplier} loyal</span>}
+          {slot.loyal ? (
+            <span className="scout-tag scout-tag--gold">
+              &times;{slot.multiplier} loyal
+            </span>
+          ) : (
+            <span className="scout-tag scout-tag--wait">
+              &times;{loyalty.multiplier} in {weeksToLoyalty}{' '}
+              {weeksToLoyalty === 1 ? 'week' : 'weeks'}
+            </span>
+          )}
           {slot.status === 'called_up' && (
             <span className="scout-tag scout-tag--gold">Called up</span>
           )}

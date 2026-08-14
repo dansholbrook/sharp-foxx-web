@@ -159,8 +159,58 @@ function RevealRow({ slot }: { slot: ScoutRevealSlot }) {
             -------------------------------------------------------------- */}
         <span className="scout-reveal__lines">{scoutLinesLine(slot.lines)}</span>
 
+        {/* --------------------------------------------------------------
+            THE MULTIPLIER, ATTACHED TO THE NUMBER IT MULTIPLIES.
+            
+            This was a "Loyalty applied" chip in the row below, sitting beside
+            the WEEK'S TOTAL — and that total contains bonuses, which loyalty
+            never touches. Team win, conference honour and Called Up are added
+            flat (spec 6.5: "applies to performance points only, not bonuses"),
+            so a tag on the total said the multiplier covered money it does not.
+            It was the exact misreading the paragraph in the rules was written to
+            prevent, restated by the layout.
+
+            SO IT MOVED RATHER THAN BEING REWORDED. A sentence has to say the
+            scope in words and be misread anyway; a figure with "×1.2" on its
+            left and the bonus called "flat" on its right says it positionally,
+            once, to someone skimming. This is the only surface where that is
+            possible at all — the recap is the one payload carrying performance
+            before, performance after, and bonuses as three separate numbers.
+
+            RENDERS ONLY WHEN LOYAL, for the same reason there is no ×1.0 chip on
+            My Book: a line reading "×1.0 on 12 performance = 12" is a nil return
+            dressed as arithmetic. An un-loyal week shows its total and nothing
+            else, which is the truth about it.
+            -------------------------------------------------------------- */}
+        {slot.loyal && (
+          <span className="scout-reveal__loyalty">
+            {/* NO "×1.2" ON THIS SURFACE, AND THAT IS NOT AN OMISSION.
+                The recap is HISTORY: it reports a week that has already been
+                scored and paid. The rate is config, so printing today's constant
+                against a week scored under a previous one would misstate it —
+                the whole reason SCOUT_SCORING_VERSION is stamped on every stored
+                row. And it cannot be recovered from the stored pair either:
+                applyLoyalty is roundHalfUp(perf × 120 / 100), so 7 becomes 8 and
+                the implied rate reads ×1.14.
+
+                So the effect is shown in the WEEK'S OWN NUMBERS, which are
+                stored, exact, and true whatever the constant does later. The
+                rate belongs on My Book, where it is a forward-looking promise
+                and today's config is the right answer. */}
+            Loyalty: {scoutPoints(slot.perfCenti)} performance &rarr;{' '}
+            {scoutPoints(slot.perfAfterLoyaltyCenti)}
+            {slot.bonusCenti > 0 && (
+              <>
+                {' · '}
+                <span className="scout-reveal__flat">
+                  +{scoutPoints(slot.bonusCenti)} bonus, flat
+                </span>
+              </>
+            )}
+          </span>
+        )}
+
         <span className="scout-reveal__chips">
-          {slot.loyal && <span className="scout-tag scout-tag--gold">Loyalty applied</span>}
           {slot.bonuses.map((b) => (
             <span key={b} className="scout-tag">
               {scoutBonusLabel(b)}
