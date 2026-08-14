@@ -558,7 +558,7 @@ export default function MyGamesPage() {
   if (ownRep?.status === 'onboarding') return <TrainingGate />;
 
   return (
-    <main className="feed-home">
+    <main className="feed-home--bleed feed-home">
       <div className="header-row">
         <div>
           <span className="wordmark">Sharp Foxx</span>
@@ -570,7 +570,7 @@ export default function MyGamesPage() {
         <AppNav />
       </div>
 
-      <div className="masthead">
+      <div className="masthead masthead--compact">
         <div className="masthead-head">
           <div>
             <span className="masthead-kicker">Your assignments</span>

@@ -701,3 +701,181 @@ export function OpenGamesBand({
     </section>
   );
 }
+
+// ============================================================================
+// IN PLAY -- the feed rail's third and last band, and the one that replaces
+// four.
+//
+// WHAT IT REPLACES AND WHY. The rail used to carry Your Picks, the National
+// Board, Contests, a Leaderboard teaser and Open Games. Two of those grew
+// without bound (YourPicksBand mapped every pending pick; OpenGamesBand mapped
+// every open game), which is how a rail that is meant to be a sidebar became an
+// infinite scroll of things nobody asked for -- worst on a phone, where
+// `.frail` is `display: contents` and the desktop max-height does not apply.
+//
+// PICKS FIRST, BACKFILLED -- NOT AN EVEN FOLD OF THREE FEEDS. Pending picks are
+// the only rail content where the fan ALREADY HAS SOMETHING AT STAKE; contests
+// and open questions are acquisition, and /contests and /picks own those. So
+// picks take the slots they need and the rest are filled only if picks leave
+// room. A fan with three live picks sees three live picks. A fan with none sees
+// three things they could do.
+//
+// THE CAP IS THE POINT, and it is a HARD slice with no expander: this band is
+// the same height whether the fan holds twelve picks or none, which is what
+// actually bounds the rail on mobile. An expander would put the unbounded
+// behaviour back one tap away.
+// ============================================================================
+export const IN_PLAY_CAP = 3;
+
+type InPlayRow =
+  | { kind: 'pick'; key: string; pick: MyPick }
+  | { kind: 'contest'; key: string; contest: Contest }
+  | { kind: 'game'; key: string; game: OpenPickGame };
+
+export function InPlayBand({
+  token,
+  events,
+}: {
+  token: string;
+  events: EventListItem[];
+}) {
+  // The pick signal, unchanged from YourPicksBand: the balance only moves when
+  // a pick's response comes back carrying the new wallet, so depending on it is
+  // how this band avoids claiming to show what a fan is holding while missing
+  // the pick they just made.
+  const { balance } = usePoints();
+  const [picks, setPicks] = useState<MyPick[] | null>(null);
+  const [contests, setContests] = useState<Contest[] | null>(null);
+  const [enteredIds, setEnteredIds] = useState<Set<string> | null>(null);
+  const [games, setGames] = useState<OpenPickGame[] | null>(null);
+
+  // THREE BEST-EFFORT READS, EACH INDEPENDENT. Same contract the bands this
+  // replaces had: a read that fails costs its own rows and nothing else. They
+  // are not awaited together, so a slow /contests cannot hold the fan's own
+  // picks hostage.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const report = await getMyPicks(token);
+        if (!cancelled) setPicks(report.picks);
+      } catch {
+        /* the rows just don't appear */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, balance]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const page = await getContests(token, { status: 'open', limit: 10 });
+        if (!cancelled) setContests(page.items);
+      } catch {
+        /* ditto */
+      }
+    })();
+    (async () => {
+      try {
+        const page = await getMyContests(token, { status: 'open', limit: 50 });
+        if (!cancelled) setEnteredIds(new Set(page.items.map((c) => c.id)));
+      } catch {
+        /* the ✓ is lost, the rows are not */
+      }
+    })();
+    (async () => {
+      try {
+        const rows = await getOpenPickGames(token);
+        if (!cancelled) setGames(rows);
+      } catch {
+        /* ditto */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const eventsById = useMemo(() => {
+    const m = new Map<string, EventListItem>();
+    for (const e of events) m.set(e.id, e);
+    return m;
+  }, [events]);
+
+  const rows = useMemo(() => {
+    const out: InPlayRow[] = [];
+    // 1. THE FAN'S OWN STAKE. Pending only -- a settled pick is a result, and
+    //    results belong on /picks rather than in a band called "In play".
+    for (const p of picks ?? []) {
+      if (out.length >= IN_PLAY_CAP) break;
+      if (p.outcome !== 'pending') continue;
+      out.push({ kind: 'pick', key: `pick:${p.pickId}`, pick: p });
+    }
+    // 2. BACKFILL: contests they could enter...
+    for (const c of contests ?? []) {
+      if (out.length >= IN_PLAY_CAP) break;
+      out.push({ kind: 'contest', key: `contest:${c.id}`, contest: c });
+    }
+    // 3. ...then games with a question open right now.
+    for (const g of games ?? []) {
+      if (out.length >= IN_PLAY_CAP) break;
+      out.push({ kind: 'game', key: `game:${g.eventId}`, game: g });
+    }
+    return out;
+  }, [picks, contests, games]);
+
+  // Nothing in play and nothing to offer -> the band does not exist, rather
+  // than a heading over an empty box.
+  if (rows.length === 0) return null;
+
+  // THE HEAD LINK FOLLOWS THE FIRST ROW. A band showing three contests must not
+  // send the fan to /picks, and vice versa -- a "see all" that goes somewhere
+  // other than where the rows came from is worse than no link.
+  const lead = rows[0].kind;
+  const all =
+    lead === 'pick'
+      ? { href: '/picks', label: 'All your picks →' }
+      : lead === 'contest'
+        ? { href: '/contests', label: 'All contests →' }
+        : { href: '/games', label: 'All games →' };
+
+  return (
+    <section className="row feedpicks">
+      <div className="feedpicks__head">
+        <h2 className="row-title">In play</h2>
+        <Link href={all.href} className="feedpicks__all">
+          {all.label}
+        </Link>
+      </div>
+      <div className="feedpicks__list">
+        {rows.map((r) =>
+          r.kind === 'pick' ? (
+            <PendingPickCard
+              key={r.key}
+              pick={r.pick}
+              // NULL on a national pick, which carries no event at all -- the
+              // same explicit branch YourPicksBand used, not a `?? undefined`.
+              event={r.pick.eventId ? (eventsById.get(r.pick.eventId) ?? null) : null}
+            />
+          ) : r.kind === 'contest' ? (
+            <ContestRailRow
+              key={r.key}
+              contest={r.contest}
+              entered={enteredIds ? enteredIds.has(r.contest.id) : null}
+            />
+          ) : (
+            <OpenGameCard
+              key={r.key}
+              game={r.game}
+              isFeed={isFeedEvent(eventsById.get(r.game.eventId)?.source)}
+            />
+          ),
+        )}
+      </div>
+    </section>
+  );
+}

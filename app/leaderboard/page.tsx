@@ -215,7 +215,7 @@ function Leaderboard() {
         <AppNav />
       </div>
 
-      <div className="masthead masthead-head">
+      <div className="masthead masthead--compact masthead-head">
         <div>
           <span className="masthead-kicker">Points</span>
           <h1 className="masthead-title">Leaderboard</h1>

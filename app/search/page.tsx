@@ -201,7 +201,7 @@ function SearchResults() {
   if (!token) return null;
 
   return (
-    <main className="feed-home">
+    <main className="feed-home--bleed feed-home">
       <div className="header-row">
         <div>
           <span className="wordmark">Sharp Foxx</span>

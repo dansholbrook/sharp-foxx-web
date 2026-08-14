@@ -7,22 +7,17 @@ import { useAuth } from '../auth-context';
 import { useFollows } from '../follows-context';
 import { usePoints } from '../points-context';
 import { FollowButton } from '../follow-button';
-import { FanCard } from '../fan-card';
 import { AppNav } from '../nav';
 import { ArenaTeaser } from '../arena-teaser';
 import { CarouselItem, FollowDisc, followHref } from '../follow-carousel';
 import {
-  YourPicksBand,
-  NationalBoardBand,
-  ContestsBand,
-  OpenGamesBand,
+  InPlayBand,
 } from '../feed-picks';
 import {
   getPublishedContent,
   getEvents,
   getFollowFeed,
   getFollowSuggestions,
-  getPointsLeaderboard,
   followTargetId,
   followTargetName,
   isCoveredEvent,
@@ -34,8 +29,6 @@ import {
   FollowMineEntry,
   FollowSuggestion,
   FollowFeedEntry,
-  LeaderboardEntry,
-  PointsLeaderboard,
 } from '../api';
 
 // Format the timestamptz string the API returns, in ET; fall back to the raw
@@ -447,16 +440,6 @@ function FollowingSection({
 // New markup, no new data — the rail is a layout of things this page (and its
 // shared contexts) already hold.
 
-// Medal for the podium, plain number otherwise. Same treatment /leaderboard
-// uses on its own rows, kept local since it's three lines and the board page's
-// copy isn't exported.
-function railRank(rank: number | null): string {
-  if (rank === 1) return '🥇';
-  if (rank === 2) return '🥈';
-  if (rank === 3) return '🥉';
-  return rank === null ? '—' : `${rank}`;
-}
-
 // POINTS HERO: the fan's balance, large, with the lifetime score under it and
 // the two doors into the points surfaces. Balance + lifetime both come from the
 // shared wallet (points-context), which loaded them together from the one
@@ -546,14 +529,13 @@ function PointsHero() {
 // already knows the only thing a "seen it" flag would have tracked. And it
 // stays hidden while lifetimeEarned is null (in flight), so a returning fan
 // never sees it flash in and out. ---- */
-function FeedMasthead() {
+function FeedIntro() {
   const { lifetimeEarned } = usePoints();
+  if (lifetimeEarned !== 0) return null;
   return (
-    <div className="masthead">
-      <span className="masthead-kicker">Your feed</span>
-      <h1 className="masthead-title">Tonight&apos;s games</h1>
+    <div className="feed-intro">
       {lifetimeEarned === 0 && (
-        <p className="masthead-standfirst">
+        <p className="feed-intro__text">
           Sharp Foxx covers the local games the big networks skip, with a
           correspondent in the building. Follow your teams, call the games with
           free points, and play the Arena daily — one score, no cash value, and
@@ -561,57 +543,6 @@ function FeedMasthead() {
         </p>
       )}
     </div>
-  );
-}
-
-// LEADERBOARD TEASER: the top five off the global board, each row opening the
-// same fan card the full /leaderboard opens (the component is exported and
-// self-contained, so it's cheap to reuse here). Hides entirely when the board
-// hasn't loaded or nobody's on it yet.
-function LeaderboardTeaser({
-  board,
-  meId,
-  onOpen,
-}: {
-  board: PointsLeaderboard | null;
-  meId: string | undefined;
-  onOpen: (entry: LeaderboardEntry) => void;
-}) {
-  if (!board || board.top.length === 0) return null;
-  const top5 = board.top.slice(0, 5);
-  return (
-    <section className="frail-lb">
-      <div className="feedpicks__head">
-        <h2 className="row-title">Leaderboard</h2>
-        <Link href="/leaderboard" className="feedpicks__all">
-          Full leaderboard →
-        </Link>
-      </div>
-      <ol className="frail-lb__list">
-        {top5.map((entry) => (
-          <li
-            key={entry.userId}
-            className={`frail-lb__row${
-              entry.userId === meId ? ' frail-lb__row--me' : ''
-            }`}
-          >
-            <span className="frail-lb__rank">{railRank(entry.rank)}</span>
-            <button
-              type="button"
-              className="frail-lb__name fancard-open"
-              aria-haspopup="dialog"
-              onClick={() => onOpen(entry)}
-            >
-              {entry.displayName ?? 'You'}
-            </button>
-            <span className="frail-lb__score">
-              {points(entry.score)}
-              <span className="frail-lb__unit">pts</span>
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
   );
 }
 
@@ -631,13 +562,15 @@ export default function FeedPage() {
   const [followFeed, setFollowFeed] = useState<FollowFeedEntry[] | null>(null);
   const [suggestions, setSuggestions] = useState<FollowSuggestion[] | null>(null);
 
-  // The rail's leaderboard teaser: the global board, best-effort (a failure just
+  // REMOVED WITH THE TEASER: the global board state, its fetch, the open-fan
+  // state and the FanCard slide-over. Nothing else on this page opened a fan
+  // card, so all four went together rather than leaving a fetch feeding a
+  // component nothing can reach.
+  // (was: the global board, best-effort (a failure just
   // hides the teaser). Held whole so its `me.userId` can flag the caller's own
   // row and title the fan card the way /leaderboard does.
-  const [board, setBoard] = useState<PointsLeaderboard | null>(null);
   // The fan whose card is open from a teaser row, held as the entry so the card
   // titles itself instantly. Mounting the card IS opening it — null = closed.
-  const [openFan, setOpenFan] = useState<LeaderboardEntry | null>(null);
 
   // Active sport filter (ALL = show everything). Client-side over fetched data.
   const [sport, setSport] = useState<string>(ALL);
@@ -714,23 +647,6 @@ export default function FeedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, followsLoaded, followsSignature]);
 
-  // The rail's leaderboard teaser. Best-effort and independent of the browse
-  // load — a slow or failed board never holds up the games, and just leaves the
-  // teaser hidden. Global scope only; the event board is a game-page concern.
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    getPointsLeaderboard(token, 'global')
-      .then((data) => {
-        if (!cancelled) setBoard(data);
-      })
-      .catch(() => {
-        // Silent: the teaser is an addition to a feed that works without it.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
 
   // Sports present across BOTH rows — the union drives which chips to show.
   // Games carry a non-null sport enum; articles carry a nullable eventSport.
@@ -783,8 +699,16 @@ export default function FeedPage() {
   if (!token) return null;
 
   return (
-    <main className="feed-home feed-dash">
-      <div className="header-row">
+    <main className="feed-home--bleed feed-home feed-dash">
+      {/* ONE BAR OF CHROME, and search now rides inside it rather than below.
+          At >=768px it sits between the wordmark and the nav -- the reference
+          layout's single row. Below that it wraps to a second line INSIDE the
+          same bar (see .header-row in globals.css): the mobile cluster is
+          already at capacity at 390px, which is why the ⚡ chip drops out under
+          400px, so there is no room to put a field beside it. A wrapped line in
+          the chrome block costs ~56px; the old .feed-search block cost 100px
+          plus a 146px masthead above it. */}
+      <div className="header-row header-row--search">
         <div>
           <span className="wordmark">Sharp Foxx</span>
           <span className="muted">
@@ -793,12 +717,20 @@ export default function FeedPage() {
             {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
           </span>
         </div>
+        <SearchBar />
         <AppNav />
       </div>
 
-      <FeedMasthead />
-
-      <SearchBar />
+      {/* THE MASTHEAD IS GONE -- kicker, display title and rule. It cost ~146px
+          on a phone and ~161px on a laptop to say "Your feed / Tonight's games"
+          above a page whose content already says both. What it also held was
+          this page's ONLY <h1>, so the heading survives as an sr-only one: a
+          document with no heading is worse than one with a heading nobody sees.
+          The standfirst it used to carry is unchanged in behaviour -- it was
+          already gated on lifetimeEarned === 0, so a returning fan never saw it
+          and it was never part of their scroll. */}
+      <h1 className="sr-only">Tonight&apos;s games</h1>
+      <FeedIntro />
 
       {error && <div className="error">{error}</div>}
 
@@ -906,75 +838,35 @@ export default function FeedPage() {
           </section>
         </div>
 
-        {/* ---- RIGHT RAIL: the points economy. Sticky with its own scroll on
-            desktop; interleaves into the single column on mobile. Every section
-            below self-hides when empty, so the rail is never a column of gaps. */}
-        <aside className="frail" aria-label="Your points">
-          {/* a0. THE ARENA — the daily-habit hook, first in the rail because
-              it's the only band here that EXPIRES (at first pitch). ONE card
-              across every Arena game, cycling by urgency: an unplayed open
-              daily beats a settled one, and the Oracle leads the Trail among
-              equals. Stays up after the fan plays, showing their side and the
-              lock time; self-hides only when no game has anything true to
-              say. */}
+        {/* ---- RIGHT RAIL: THREE BANDS, EACH BOUNDED. -------------------
+            It was seven, two of which grew without bound -- YourPicksBand
+            mapped every pending pick and OpenGamesBand mapped every open game.
+            On desktop `.frail` has a max-height and its own scroll, so that was
+            survivable; below 1024px `.frail` is `display: contents` and those
+            bands became the page, sitting between the fan and the first game
+            card.
+
+            The three that remain are the three that earn the space:
+              1. THE ORACLE -- the only band that EXPIRES (at first pitch).
+              2. POINTS -- their number, one value, the two doors.
+              3. IN PLAY -- what they have riding, backfilled with what they
+                 could do. Hard-capped at 3 with no expander.
+
+            The leaderboard teaser is gone: it is a nav item away, and it was
+            fetching a whole board to render five rows. ------------------- */}
+        <aside className="frail" aria-label="Your points and what you have in play">
           <div className="frail-arena">
             <ArenaTeaser token={token} />
           </div>
 
-          {/* a. POINTS HERO — balance large, lifetime under, the two doors. */}
           <PointsHero />
 
-          {/* b. YOUR PICKS — the pending + just-settled cards, stacked to rail
-              width by the .frail-picks scope. Same self-fetching band as before;
-              hides itself when there's nothing riding. */}
-          <div className="frail-picks">
-            <YourPicksBand token={token} events={events ?? []} />
-          </div>
-
-          {/* c. NATIONAL BOARD — house questions, pickable right here. The
-              PickCards stack one-per-row at rail width; cap-4 + expander kept. */}
-          <div className="frail-natboard">
-            <NationalBoardBand token={token} />
-          </div>
-
-          {/* c2. CONTESTS — open pick'em contests as compact rows, linking into
-              /contests/[id]. Self-hides when nothing's open. */}
-          <div className="frail-contests">
-            <ContestsBand token={token} />
-          </div>
-
-          {/* d. LEADERBOARD TEASER — top five, rows open the real fan card. */}
-          <LeaderboardTeaser
-            board={board}
-            meId={board?.me.userId}
-            onOpen={setOpenFan}
-          />
-
-          {/* e. MAKE YOUR PICKS — games with a question open now, as compact
-              rail rows. Followed teams sort first (no extra fetch). */}
-          <div className="frail-open">
-            <OpenGamesBand
-              token={token}
-              follows={followsLoaded ? mine : []}
-              events={events ?? []}
-            />
+          <div className="frail-inplay">
+            <InPlayBand token={token} events={events ?? []} />
           </div>
         </aside>
       </div>
 
-      {/* Mounting is opening (SlideOver's contract). Keyed by fan so a second
-          click remounts rather than leaving the previous fan under a new title. */}
-      {openFan && (
-        <FanCard
-          key={openFan.userId}
-          userId={openFan.userId}
-          fallbackName={openFan.displayName}
-          isMe={openFan.userId === board?.me.userId}
-          // This band is the earned board, so the card shows the earned pair.
-          board="earned"
-          onClose={() => setOpenFan(null)}
-        />
-      )}
     </main>
   );
 }

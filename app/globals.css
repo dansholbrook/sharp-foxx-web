@@ -310,6 +310,14 @@ tfoot td {
   border-bottom: 1px solid var(--border);
 }
 
+/* ---- THE ONE BAR OF CHROME. A header row that also carries search: wordmark,
+   field, nav, on a single line at laptop width. `align-items: center` overrides
+   the baseline alignment the plain row uses, because a 48px-tall field and a
+   text wordmark have no useful shared baseline. ---- */
+.header-row--search {
+  align-items: center;
+}
+
 /* THE PER-PAGE "Signed in as … · role" LINE, HIDDEN EVERYWHERE.
    That fact now lives in the avatar menu, where it costs no width and sits
    next to the initials that carry the same answer at a glance. It was never in
@@ -506,6 +514,25 @@ tfoot td {
 }
 
 .masthead-standfirst {
+  max-width: 54ch;
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* ---- THE FEED'S FIRST-RUN LINE. What the feed masthead's standfirst was,
+   without the masthead. Its GATE IS UNCHANGED (lifetimeEarned === 0), so it is
+   still shown only to a fan who has never earned anything and still retires
+   itself for good on their first earn -- it was never part of a returning
+   fan's scroll, and removing the masthead did not change who sees it. It keeps
+   the reading measure the standfirst had: this is prose, and prose gets a
+   measure even on a page that is otherwise full-bleed. ---- */
+.feed-intro {
+  margin: 0 0 24px;
+}
+
+.feed-intro__text {
   max-width: 54ch;
   margin: 0;
   font-size: 1.02rem;
@@ -718,12 +745,21 @@ tfoot td {
   max-width: 1200px;
 }
 
-/* ---- Search bar: prominent rounded field + gold submit pill ---- */
+/* ---- Search: a control INSIDE the chrome bar, not a block beneath it.
+   It used to be `margin: 6px 0 44px` under a 146px masthead -- 100px of page
+   spent on a field. It now sits in .header-row and owns no vertical margin at
+   all; the bar's own padding is its spacing. ---- */
 .feed-search {
   position: relative;
   display: flex;
   gap: 10px;
-  margin: 6px 0 44px;
+  margin: 0;
+  /* Grows into the space between the wordmark and the nav, but never runs the
+     full width of a wide laptop -- a 1400px search field is not a search field,
+     it is a horizon. The reference caps it at roughly this measure too. */
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 520px;
 }
 
 .feed-search__icon {
@@ -9069,13 +9105,10 @@ a.follow-sugcard__name:hover {
 }
 
 /* A wrapped band that self-hid (returned null) leaves an empty wrapper; drop it
-   so the rail is a stack of cards, never a column of gaps. PointsHero and the
-   teaser hide themselves (no box), so only the three wrapped bands need this. */
-.frail-picks:empty,
-.frail-natboard:empty,
-.frail-contests:empty,
-.frail-arena:empty,
-.frail-open:empty {
+   so the rail is a stack of cards, never a column of gaps. PointsHero hides
+   itself (no box), so only the two wrapped bands need this. */
+.frail-inplay:empty,
+.frail-arena:empty {
   display: none;
 }
 
@@ -9095,39 +9128,33 @@ a.follow-sugcard__name:hover {
   margin-bottom: 12px;
 }
 
-/* YOUR PICKS + MAKE YOUR PICKS: unroll the horizontal track into a full-width
-   vertical stack. */
-.frail-picks .feedpicks__track,
-.frail-open .feedpicks__track {
+/* IN PLAY: one vertical stack at full rail width, holding up to three rows that
+   may be ANY of the three card types (a pick, a contest, an open game). The
+   selectors below are therefore keyed on the CARD rather than on a per-band
+   wrapper -- the band no longer knows which kind it is rendering, so styling it
+   per-band would leave whichever type it happened to backfill with unstyled. */
+.frail-inplay .feedpicks__list {
+  display: flex;
   flex-direction: column;
-  overflow: visible;
   gap: 10px;
-  padding-bottom: 0;
 }
 
-.frail-picks .feedpicks-card,
-.frail-open .feedpicks-game {
+.frail-inplay .feedpicks-card,
+.frail-inplay .feedpicks-game,
+.frail-inplay .railcontest {
   flex: 0 0 auto;
   min-width: 0;
   width: 100%;
 }
 
-/* Make-your-picks rows read tighter in the rail — same card, calmer. */
-.frail-open .feedpicks-game {
+/* Open-game rows read tighter in the rail — same card, calmer. */
+.frail-inplay .feedpicks-game {
   gap: 6px;
   padding: 12px 14px;
 }
 
-.frail-open .feedpicks-game__matchup {
+.frail-inplay .feedpicks-game__matchup {
   font-size: 0.95rem;
-}
-
-/* NATIONAL BOARD: one PickCard per row at rail width. The auto-fit grid would
-   already collapse to a single column here, but pin it so a wide-ish rail can
-   never split the board in two. */
-.frail-natboard .natboard__list {
-  grid-template-columns: 1fr;
-  gap: 12px;
 }
 
 /* ---- a. POINTS HERO: the balance, large, over the lifetime score and the two
@@ -9205,58 +9232,6 @@ a.follow-sugcard__name:hover {
 
 /* ---- d. LEADERBOARD TEASER: the top five, each row opening the same fan card
    /leaderboard opens. ---- */
-.frail-lb__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.frail-lb__row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 4px;
-  border-bottom: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-
-.frail-lb__row:last-child {
-  border-bottom: none;
-}
-
-.frail-lb__rank {
-  flex: 0 0 26px;
-  text-align: center;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.frail-lb__name {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 0.9rem;
-}
-
-/* The caller's own row leans gold, the way /leaderboard highlights "you". */
-.frail-lb__row--me .frail-lb__name {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.frail-lb__score {
-  flex: 0 0 auto;
-  font-weight: 600;
-  color: var(--accent);
-  white-space: nowrap;
-}
-
-.frail-lb__unit {
-  margin-left: 3px;
-  font-size: 0.66rem;
-  color: var(--accent-dim);
-}
 
 /* ---- Below ~1024px: one column. Flatten both wrappers so their sections
    become direct grid items, then `order` alone weaves the points-first
@@ -9276,35 +9251,29 @@ a.follow-sugcard__name:hover {
   /* The Oracle teaser leads on mobile, ahead of even the points hero: it is
      the one band that expires, and a phone user who opens the feed at 6pm
      needs to see tonight's call before their balance. */
+  /* THREE RAIL BANDS NOW, so the mobile weave is five items rather than ten.
+     The Oracle still leads -- it is the one band that expires, and a phone user
+     opening the feed at 6pm needs tonight's call before their balance. What
+     changed is that everything after `.frail-inplay` is now BOUNDED: that band
+     is a hard 3 rows, so the first game card sits at a fixed offset instead of
+     one that grew with how much the fan had riding. */
   .frail-arena {
     order: 0;
   }
   .frail-points {
     order: 1;
   }
-  .frail-picks {
+  .frail-inplay {
     order: 2;
   }
   .fmain-hero {
     order: 3;
   }
-  .frail-natboard {
+  .follow-section {
     order: 4;
   }
-  .follow-section {
-    order: 5;
-  }
-  .frail-contests {
-    order: 6;
-  }
-  .frail-open {
-    order: 7;
-  }
-  .frail-lb {
-    order: 8;
-  }
   .fmain-tail {
-    order: 9;
+    order: 5;
   }
 }
 
@@ -9641,6 +9610,24 @@ a.follow-sugcard__name:hover {
     gap: 12px;
     margin-bottom: 22px;
     padding-bottom: 14px;
+  }
+
+  /* ---- SEARCH WRAPS TO ITS OWN LINE, INSIDE THE BAR. It cannot sit beside the
+     cluster: that row is already at capacity at 390px -- the ⚡ chip is dropped
+     under 400px precisely because "the wordmark cannot wrap and the three 44px
+     tap targets cannot shrink". So the field takes a full-width second line of
+     the SAME chrome block, which costs ~56px and keeps the page's first content
+     band directly beneath the chrome rather than beneath a separate search
+     section. `order: 3` puts it after the nav cluster in visual order while
+     leaving it second in the DOM, so a keyboard user reaches search before the
+     menu. ---- */
+  .header-row--search {
+    flex-wrap: wrap;
+  }
+  .header-row--search .feed-search {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
   }
   /* THE WORDMARK IS THE FIXED THING AND EVERYTHING ELSE FITS AROUND IT. It
      can't shrink (white-space: nowrap) and it can't be allowed to compress the
@@ -21283,4 +21270,68 @@ a.scout-reveal__main:hover .scout-reveal__name {
   .scout-empty__title {
     font-size: 1.55rem;
   }
+}
+
+/* ==========================================================================
+   COMPACT MASTHEAD + FULL-BLEED PAGES
+   Appended last on purpose: both are MODIFIERS that must beat the base
+   .masthead / .feed-home / .feed-dash / .gamesdir-page rules, and they carry
+   the same specificity as the rules they override, so source order is what
+   decides. Moving this block earlier silently disables it.
+   ========================================================================== */
+
+/* ---- .masthead--compact --------------------------------------------------
+   A list page still has to say WHICH list you are on -- that was never the
+   problem. The problem was saying it in a 3.1rem serif display line under an
+   uppercase kicker over a full-width rule, for ~161px, above content that is
+   itself the answer.
+   So: the h1 stays and drops to row-title scale, the kicker goes, the rule
+   goes. Roughly 161px becomes roughly 46px.
+
+   THE KICKER IS HIDDEN RATHER THAN DELETED, and that is a deliberate trade
+   across seven pages with seven different masthead structures (some wrap it in
+   .masthead-head with action buttons beside it). Editing each one's JSX to
+   remove a span risked more than it bought. It is `display: none`, so it is
+   gone from the accessibility tree too, not merely invisible -- and every one
+   of them duplicated the h1 beneath it in one word.
+   -------------------------------------------------------------------------- */
+.masthead--compact {
+  margin-bottom: 20px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.masthead--compact .masthead-kicker {
+  display: none;
+}
+
+.masthead--compact .masthead-title {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  margin: 0 0 4px;
+}
+
+/* A standfirst that survives on a compact masthead keeps its measure but comes
+   down to body scale -- it is a subtitle now, not a standfirst. */
+.masthead--compact .masthead-standfirst {
+  font-size: 0.95rem;
+}
+
+/* ---- .feed-home--bleed ---------------------------------------------------
+   Edge to edge, keeping the 24px gutter `main` already sets (16px under 767px).
+   Applied ONLY to card-grid surfaces -- the ones where more width means more
+   cards visible per row.
+
+   IT DOES NOT MAKE THE CARDS BIGGER, and nothing here pretends otherwise:
+   .tcard is `flex: 0 0 280px` (380px for the live row) inside a snap scroller,
+   so width is fixed and widening the page reveals more of them. Growing the
+   card is a separate change to .tcard and is deliberately not made here.
+
+   NOT applied to: profile/team/school/conference (1080 -- mixed profile
+   surfaces whose header blocks stretch badly), arena (860), articles (820),
+   reader (720), apply (760), or the admin console pages (the 920 base). Those
+   want a measure and keep one.
+   -------------------------------------------------------------------------- */
+.feed-home--bleed {
+  max-width: none;
 }

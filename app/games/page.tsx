@@ -450,7 +450,7 @@ function Games() {
   const fallbackItems = fallback ?? [];
 
   return (
-    <main className="feed-home gamesdir-page">
+    <main className="feed-home--bleed feed-home gamesdir-page">
       <div className="header-row">
         <div>
           <span className="wordmark">Sharp Foxx</span>
@@ -463,7 +463,7 @@ function Games() {
         <AppNav />
       </div>
 
-      <header className="masthead">
+      <header className="masthead masthead--compact">
         <span className="masthead-kicker">Games</span>
         <h1 className="masthead-title">What&apos;s on</h1>
         {/* NO STANDFIRST. "Every game we cover — live now, coming up, and just

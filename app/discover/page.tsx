@@ -897,7 +897,7 @@ function Discover() {
   const busy = loading && rowCount > 0;
 
   return (
-    <main className="feed-home discover-page">
+    <main className="feed-home--bleed feed-home discover-page">
       <div className="header-row">
         <div>
           <span className="wordmark">Sharp Foxx</span>
@@ -910,7 +910,7 @@ function Discover() {
         <AppNav />
       </div>
 
-      <header className="masthead">
+      <header className="masthead masthead--compact">
         <span className="masthead-kicker">Discover</span>
         {/* NOT "The college map", which the Teams tab makes untrue: GET /teams
             is not filtered to institutions, so pro teams come back with it —

@@ -187,7 +187,7 @@ export default function ContestsPage() {
   const canShowMore = contests.length < total;
 
   return (
-    <main className="feed-home">
+    <main className="feed-home--bleed feed-home">
       <div className="header-row">
         <div>
           <span className="wordmark">Sharp Foxx</span>
@@ -200,7 +200,7 @@ export default function ContestsPage() {
         <AppNav />
       </div>
 
-      <header className="masthead">
+      <header className="masthead masthead--compact">
         <span className="masthead-kicker">Contests</span>
         <h1 className="masthead-title">Contests</h1>
         {/* THE SECOND SENTENCE ONLY. "Enter with points, fill your sheet, climb
