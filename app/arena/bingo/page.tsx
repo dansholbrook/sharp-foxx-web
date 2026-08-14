@@ -358,7 +358,7 @@ export default function BingoPage() {
           The content geometry is unchanged -- these blocks are vertical stacks
           and a centred column is what they want. Nothing here makes the Arena
           stop looking like a column; that is W2. ---- */}
-      <div className="arena-col">
+      <div className="arena-col arena-col--bingo">
 
       <div className="page-head">
         <div>

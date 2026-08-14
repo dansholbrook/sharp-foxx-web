@@ -19429,9 +19429,40 @@ a.arena-tile:active {
 
 /* ---- THE CARD ------------------------------------------------------------ */
 
+/* ---- YOUR CARDS, SIDE BY SIDE RATHER THAN STACKED.
+   ---------------------------------------------------------------------------
+   WHY WIDTH EARNS ITS PLACE ON THIS PAGE, and it has nothing to do with the
+   main/rail pattern the other Arena pages took. A fan holds up to three cards
+   (one free, two bought), and when a ball is called they must check it against
+   EVERY card before the next one lands. Stacked, that means scrolling between
+   your own cards on a clock. Side by side it is one glance. That is the whole
+   argument, and it is specific to the one Arena game whose tempo is set by
+   someone else.
+
+   !! FIXED TRACKS + auto-fit, NOT minmax(..., 1fr) + auto-fill. !!
+   This is the second time this shape has come up and the first time cost a bug,
+   so it is written down rather than left to be rediscovered:
+
+     auto-fill  KEEPS its empty tracks. A sparse collection therefore sits in
+                track 1 with the empties beside it -- which stranded a lone
+                pennant at the far left of the page, hundreds of pixels from the
+                heading that named it (see the .trail-book note).
+     1fr        would stretch a single card to the full column, blowing past the
+                420px its board is deliberately capped at.
+     auto-fit   COLLAPSES the empty tracks, and with a FIXED track width the
+                surviving ones keep their size. `justify-content: center` then
+                centres whatever is actually there.
+
+   So: one card centres, two centre as a pair, three fill the row. THE COMMON
+   CASE IS ONE CARD -- that is the case this rule is chosen for.
+
+   454px = the 420px `.bingo-grid` cap + 32px of `.bingo-card` padding + 2px of
+   border, so a track holds a card exactly and the board inside never resizes.
+   ---- */
 .bingo-cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, 454px);
+  justify-content: center;
   gap: 16px;
   margin: 0 0 20px;
 }
@@ -21765,4 +21796,18 @@ a.scout-reveal__main:hover .scout-reveal__name {
    there. Same rule as .arena-col--call. ---- */
 .arena-col--clash {
   grid-template-columns: 1fr min(890px, 100%) 1fr;
+}
+
+
+/* ---- BINGO'S COLUMN. 940px, derived from the cards rather than picked: two
+   454px card tracks plus a 16px gap need 924px. At the shared 640px column only
+   one track fits and the grid above changes nothing; at 940 a fan holding two
+   cards sees both at once, which is the point (see the note on .bingo-cards).
+   A third card needs ~1400px and wraps to a second row below that, which is the
+   correct degradation -- two visible beats three scrolled.
+
+   NOT folded into an existing class: `--sheet` is the Call's 760 and `--split`
+   is the Oracle/Trail's 980. This is its own number for its own reason. ---- */
+.arena-col--bingo {
+  grid-template-columns: 1fr min(940px, 100%) 1fr;
 }
