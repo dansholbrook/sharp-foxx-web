@@ -21735,8 +21735,17 @@ a.scout-reveal__main:hover .scout-reveal__name {
    rule.
    ============================================================================ */
 
-/* ---- THE RULES LINE. What survives of three of the five standfirsts, at body
-   scale instead of standfirst scale.
+/* ---- THE RULES LINE. What survives of a standfirst once the descriptive half
+   is cut: the sentence a user needs in order to play, at body scale.
+
+   NAMED `.page-rules`, NOT `.arena-rules`. It was Arena-only until /nil needed
+   the same thing, and a fourth consumer outside the Arena is the point at which
+   a namespaced name starts lying -- the same reason `.gamesdir-head` became
+   `.page-head` when its third page arrived.
+
+   THE TEST, applied every time: does the sentence tell a user something they
+   need in order to act, or does it describe the controls beneath it? The second
+   kind is furniture and goes.
 
    KEPT (they are RULES a fan needs to play):
      bingo   "fifty-six numbers a night, four every twenty minutes" -- the
@@ -21755,7 +21764,7 @@ a.scout-reveal__main:hover .scout-reveal__name {
    Same test applied to the fan surfaces earlier: does it tell a fan something
    they need in order to play, or does it sell them the thing they already
    opened? ---- */
-.arena-rules {
+.page-rules {
   max-width: 54ch;
   margin: 6px 0 0;
   font-size: 0.95rem;

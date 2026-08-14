@@ -401,14 +401,21 @@ export default function NilReviewPage() {
         <AppNav />
       </div>
 
-      <div className="masthead">
-        <span className="masthead-kicker">Name · Image · Likeness</span>
-        <h1 className="masthead-title">NIL Review</h1>
-        <p className="masthead-standfirst">
-          Deliverables athletes have submitted for review. Check the proof, then
-          approve to release funds from the school&apos;s pool, or send one back
-          with a note.
-        </p>
+      {/* ---- Same treatment as /nil, and here the standfirst goes ENTIRELY --
+          both halves failed the test.
+
+          "Deliverables athletes have submitted for review" described the table
+          beneath it. Furniture.
+
+          "Approve to release funds from the school's pool, or send one back
+          with a note" looks like rules and is not: the approve modal already
+          says "on approval and paid from the school's pool" and itemises
+          Platform fee and Net to athlete, AT THE MOMENT OF APPROVING. A rule
+          restated where it matters does not also need stating where it does
+          not. That is the difference from /nil, where the flow sentence had no
+          second home. ---- */}
+      <div className="page-head">
+        <h1 className="row-title page-head__title">NIL Review</h1>
       </div>
 
       {notice && <div className="success">{notice}</div>}

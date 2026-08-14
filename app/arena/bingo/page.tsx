@@ -369,7 +369,7 @@ export default function BingoPage() {
               down, which is where a fan is actually taking a card and is
               therefore where the question occurs to them. Saying it twice on
               one page made it read as protesting. */}
-          <p className="arena-rules">
+          <p className="page-rules">
             Fifty-six numbers a night, four every twenty minutes, every one of
             them called off tonight&apos;s slate.
           </p>

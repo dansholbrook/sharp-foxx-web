@@ -557,7 +557,7 @@ export default function OraclePage() {
               retaining. What a fan actually needs is what the Oracle IS and
               what it costs; the streak chip a few inches below makes the rest
               of the case by simply being a number that goes up. */}
-          <p className="arena-rules">
+          <p className="page-rules">
             One call a day from the house engine. Ride with it or fade it —
             free, once per day.
           </p>

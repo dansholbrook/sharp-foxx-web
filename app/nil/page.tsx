@@ -488,20 +488,36 @@ export default function NilPage() {
         <AppNav />
       </div>
 
-      <div className="masthead">
-        <span className="masthead-kicker">Name · Image · Likeness</span>
-        <h1 className="masthead-title">My NIL</h1>
-        <p className="masthead-standfirst">
-          The money your NIL deliverables have earned, and the assignments still
-          on your plate. Submit proof for each one; once an editor approves it,
-          the release lands in your wallet.
-        </p>
+      {/* ---- Title and the one action on a row; kicker, display size and rule
+          gone. "Name · Image · Likeness" sat above an h1 reading "My NIL",
+          which is the same three words expanded.
+
+          THE STANDFIRST WAS SPLIT, NOT KEPT OR CUT WHOLE.
+          "The money your NIL deliverables have earned, and the assignments
+          still on your plate" DESCRIBED the two sections directly beneath it --
+          a wallet and a list of assignments, both of which say so themselves.
+          Furniture, and gone.
+
+          "Submit proof for each one; once an editor approves it, the release
+          lands in your wallet" is RULES and stays. It is the only place on this
+          page the FLOW is stated: `editor` appears elsewhere only as the
+          "Editor's note" label on a sent-back card, and while "wallet" and
+          "release" appear throughout, nothing else joins submit -> approval ->
+          payment into a sentence. An athlete who does not know that submitting
+          is what starts the money cannot infer it from a button. ---- */}
+      <div className="page-head">
+        <h1 className="row-title page-head__title">My NIL</h1>
         {myAthleteId && (
           <Link href={`/athletes/${myAthleteId}`} className="nil-profile-link">
             View my public profile →
           </Link>
         )}
       </div>
+
+      <p className="page-rules">
+        Submit proof for each assignment; once an editor approves it, the
+        release lands in your wallet.
+      </p>
 
       {/* ---- (a) My Wallet — the money first ---- */}
       <section className="card game">

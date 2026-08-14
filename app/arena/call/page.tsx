@@ -272,7 +272,7 @@ export default function CallPage() {
           {/* Deliberately says "each week" rather than "this week" — the read
               can hand back last week's card, and the standfirst is the one line
               on the page that has no dateline to correct it. */}
-          <p className="arena-rules">
+          <p className="page-rules">
             Each week one local game, and five questions only someone in the
             building can answer. Beat the room and the pot is yours to split.
           </p>
