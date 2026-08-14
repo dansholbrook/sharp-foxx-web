@@ -83,7 +83,6 @@ import {
   getTrailToday,
   followTargetId,
   itemMeta,
-  ledgerActionLabel,
   trailTrophyMeta,
   points,
   signedPoints,
@@ -508,11 +507,29 @@ function ActivitySection({ token }: { token: string }) {
           <ul className="ledger-list">
             {events.map((e) => (
               <li key={e.id} className="ledger-row">
+                {/* LABEL, THEN THE RULE, THEN THE SPECIFICS -- three different
+                    questions, answered in the order a fan asks them: what was
+                    this, why was I paid it, and which one was it.
+
+                    `detail` is the half a rules page would have carried. It is
+                    null where the label is already the whole story (a check-in
+                    needs no gloss), so most rows are unchanged.
+
+                    THE NOTE IS SUPPRESSED WHEN IT ONLY REPEATS THE LABEL. Some
+                    verbs write a fixed note that restates themselves -- all 30
+                    'daily_checkin' rows on cloud carry the single note "Daily
+                    check-in" -- and printing that under a label reading "Daily
+                    check-in" is a line of nothing. Where the note is specific
+                    (39 distinct notes across 39 square claims) it is the most
+                    useful text on the row. */}
                 <div className="ledger-row__main">
-                  <span className="ledger-row__action">
-                    {ledgerActionLabel(e.actionType)}
-                  </span>
-                  {e.note && <span className="ledger-row__note">{e.note}</span>}
+                  <span className="ledger-row__action">{e.reason.label}</span>
+                  {e.reason.detail && (
+                    <span className="ledger-row__why">{e.reason.detail}</span>
+                  )}
+                  {e.note && e.note !== e.reason.label && (
+                    <span className="ledger-row__note">{e.note}</span>
+                  )}
                 </div>
                 <div className="ledger-row__side">
                   <span

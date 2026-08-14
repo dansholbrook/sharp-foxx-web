@@ -22,7 +22,6 @@ import {
   getPointsLedger,
   contestCost,
   contestTypeLabel,
-  ledgerActionLabel,
   points,
   signedPoints,
   etDateTime,
@@ -302,11 +301,18 @@ function RecentActivitySection({ token }: { token: string }) {
       <ul className="ledger-list">
         {events.map((e) => (
           <li key={e.id} className="ledger-row">
+            {/* Same three lines as /profile's ledger, and deliberately the
+                same shape: this is the same row on a second surface, and a fan
+                who learned to read one should not have to learn the other. See
+                the note there on why a note matching the label is dropped. */}
             <div className="ledger-row__main">
-              <span className="ledger-row__action">
-                {ledgerActionLabel(e.actionType)}
-              </span>
-              {e.note && <span className="ledger-row__note">{e.note}</span>}
+              <span className="ledger-row__action">{e.reason.label}</span>
+              {e.reason.detail && (
+                <span className="ledger-row__why">{e.reason.detail}</span>
+              )}
+              {e.note && e.note !== e.reason.label && (
+                <span className="ledger-row__note">{e.note}</span>
+              )}
             </div>
             <div className="ledger-row__side">
               <span

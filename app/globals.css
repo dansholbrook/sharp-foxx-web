@@ -11043,6 +11043,19 @@ a.follow-sugcard__name:hover {
   color: var(--text);
   font-size: 0.9rem;
 }
+/* THE RULE, between the label and the specifics. It WRAPS where the note
+   below does not, and that asymmetry is deliberate: a note is an identifier
+   ("Board 1 square (0,0): Mets Squares") and truncating one costs a fan the
+   tail of a string they can still recognise, while `detail` is a SENTENCE and
+   half a sentence is worse than none. Slightly dimmer than the label, slightly
+   brighter than the note -- it is the middle question. */
+.ledger-row__why {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text);
+  opacity: 0.75;
+}
+
 .ledger-row__note {
   font-size: 0.78rem;
   color: var(--muted);

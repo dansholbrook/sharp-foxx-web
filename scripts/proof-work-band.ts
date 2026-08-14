@@ -87,7 +87,8 @@ function call(
     // pot -- but a fixture that lies about the type is a fixture that stops
     // failing when the type changes, which is most of what these are for.
     pot: {
-      snapshotted: true, basePoints: 500, perEntrantPoints: 2, bands: [],
+      snapshotted: true, basePoints: 500, perEntrantPoints: 2,
+      baseCeilingPoints: 5000, bands: [],
     },
     ...extra,
   };

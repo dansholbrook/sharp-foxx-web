@@ -3742,6 +3742,27 @@ export interface PointEvent {
   referenceId: string | null;
   note: string | null;
   createdAt: string;
+  // WHY THIS ROW EXISTS, resolved by the server. Never absent on a row from
+  // GET /points/ledger: the backend throws at boot if a verb it can write has
+  // no sentence, so a missing reason is a deployment mismatch rather than a
+  // normal state -- which is why this is not optional. See
+  // sharp-foxx-api/src/modules/contests/ledger-reasons.ts.
+  reason: LedgerReason;
+}
+
+// The server's answer to "what was I paid for". `detail` is the RULE, in a
+// sentence -- the half a rules page would otherwise carry, and the half that
+// goes stale the moment a rule is added.
+//
+// `source` says where the sentence came from: 'reference' means it was resolved
+// from what the row points AT (an adjustment referencing a voided pick is a
+// stake coming back, not an operator credit); 'verb' means from what the row IS.
+// Rendered nowhere today -- it is on the wire so a regression shows up in the
+// payload rather than only as prose that still reads plausibly.
+export interface LedgerReason {
+  label: string;
+  detail: string | null;
+  source: 'award' | 'reference' | 'verb' | 'unknown';
 }
 
 // GET /contests filters (status/type/limit/offset), same server-paging shape as
@@ -3926,113 +3947,26 @@ export function squaresPerSquareLabel(config: ContestConfig): string {
   const c = config.squareCost;
   return typeof c === 'number' && c > 0 ? `${points(c)} pts/square` : 'Squares';
 }
-
-// A human line for one ledger row's action_type. ONE function, every surface
-// that renders the ledger — /picks' Recent activity and /profile's Activity —
-// so a fan's statement reads identically wherever they open it.
+// THE VERB->LABEL SWITCH THAT USED TO LIVE HERE IS GONE (2026-08-14).
 //
-// THE DEFAULT IS A SAFETY NET, NOT A STRATEGY. An unknown type degrades to its
-// slug de-underscored, which is why a missing case doesn't crash — and also why
-// it doesn't announce itself: it just renders "arena trail win" in a column of
-// properly written labels, and nobody notices until a fan does. This map was
-// short of THIRTEEN verbs on that basis (every Arena payout, both parlay verbs,
-// both prediction verbs, the squares claim). If you add a verb below, add it as
-// a case; don't rely on the default reading acceptably.
+// It hand-wrote 26 action types and let TWELVE fall through to
+// `actionType.replace(/_/g, ' ')`, so a Bureau Clash bye rendered in a fan's
+// statement as the string "arena clash bye" -- and all five Clash verbs, all
+// five Bingo verbs, pickem_participation and arena_scout_recap did the same.
 //
-// ----------------------------------------------------------------------------
-// THE GROUPING BELOW IS FOR READERS AND IS NOT AN ALLOWLIST. Ten of these verbs
-// are the backend's SKILL_ACTION_TYPES — the exact definition of the "won"
-// board (predictions.service.ts) — but that list lives on the server and is
-// enforced there, in SQL, and this client has no copy of it and needs none:
-// nothing here computes what a fan has WON, it only names rows.
+// It was a THIRD place the platform's verb vocabulary was enumerated, after the
+// writers that declare it and ledger-games.ts that buckets it, and being third
+// it drifted: nothing made adding a verb require adding a label, so nobody did.
 //
-// So DO NOT turn these cases into an exported array and call it the skill set.
-// That would be a second copy of a server-owned allowlist, in a repo that can't
-// see the first one, silently drifting the moment a payout verb ships. The
-// backend's own note is explicit that the list fails CLOSED on purpose — a copy
-// over here would give it a way to fail open. The label map's job is different
-// and strictly wider: it must name attendance verbs and stakes too, and those
-// are deliberately NOT on that allowlist.
+// The sentence now arrives on the row as `reason`, resolved by the server, where
+// the vocabulary is declared and where a verb with no sentence is a BOOT
+// FAILURE rather than a debug string in front of a stranger. See
+// sharp-foxx-api/src/modules/contests/ledger-reasons.ts.
 //
-// ----------------------------------------------------------------------------
-// BOTH SPELLINGS of the engagement actions are here on purpose. The canonical
-// keys (article_read, watch_live_game, …) are what the economy writes today; the
-// engagement_* names are what the pre-economy ledger wrote, and point_events is
-// APPEND-ONLY, so those historical rows are still in a fan's statement and still
-// need a label. See LEGACY_ACTION_ALIASES in engagement-actions.ts.
-export function ledgerActionLabel(actionType: string): string {
-  switch (actionType) {
-    // ---- Corrections. 'adjustment' is the platform's ONE refund verb: every
-    // stake-return and manual correction uses it, because `action_type <>
-    // 'adjustment'` is the only thing separating a lifetime-raising earn from a
-    // balance-only credit. The row's own note carries which kind it was.
-    case 'adjustment':
-      return 'Adjustment';
-
-    // ---- Stakes and spends. Balance down, lifetime_earned untouched.
-    case 'contest_entry':
-      return 'Contest entry';
-    case 'prediction_stake':
-      return 'Pick stake';
-    case 'parlay_stake':
-      return 'Parlay stake';
-    case 'square_claim':
-      return 'Square claimed';
-
-    // ---- Winnings. Predictions, the contest chassis (pick'em, survivor,
-    // over/under and squares all settle through one verb), and parlays.
-    case 'prediction_payout':
-      return 'Pick won';
-    case 'contest_payout':
-      return 'Contest payout';
-    case 'parlay_payout':
-      return 'Parlay won';
-
-    // ---- The Arena, by game. Each game splits its SKILL earns from its
-    // ATTENDANCE earns onto separate verbs (the 2026-08-08 split in
-    // arena-rewards.service.ts), and the labels keep them apart too: a fan
-    // reading their statement should be able to see what they were paid for
-    // being right and what they were paid for turning up.
-    case 'arena_oracle_win':
-      return 'Oracle win';
-    case 'arena_streak_bonus':
-      return 'Oracle streak bonus';
-    case 'arena_trail_win':
-      return 'Trail pennant';
-    case 'arena_trail_trophy':
-      return 'Trail trophy';
-    case 'arena_trail_chest':
-      return 'Scenic Route chest';
-    case 'arena_call_win':
-      return 'Call answers';
-    case 'arena_call_whistle':
-      return 'Golden Whistle';
-    case 'arena_call_pot':
-      return 'Call pot share';
-    case 'arena_call_bonus':
-      return 'Call card filed';
-
-    // ---- Engagement, canonical keys + the retired engagement_* spellings.
-    case 'daily_checkin':
-      return 'Daily check-in';
-    case 'team_follow':
-      return 'Followed a team';
-    case 'referral_bonus':
-      return 'Referral bonus';
-    case 'article_read':
-    case 'engagement_article_read':
-      return 'Read an article';
-    case 'watch_live_game':
-    case 'engagement_game_watch':
-      return 'Watched a game';
-    case 'national_pick':
-    case 'engagement_national_pick':
-      return 'National pick';
-
-    default:
-      return actionType.replace(/_/g, ' ');
-  }
-}
+// Do not reintroduce a client-side fallback for it. A fallback here is a fourth
+// enumeration, and it would hide exactly the deployment mismatch it appears to
+// protect against.
+// ============================================================================
 
 // ============================================================================
 // SQUARES (v2 — MULTI-BOARD) — the 10x10 grid gameplay on a type='squares'
@@ -5877,8 +5811,20 @@ export type CallResult = 'correct' | 'push' | 'wrong';
 // snapshot WILL take rather than the ones it took.
 export interface CallPotTerms {
   snapshotted: boolean;
+  // THE BASE, AND WHICH BASE DEPENDS ON WHO IS ASKING — read the comment on
+  // CallPot below before using it. On a TERMS payload (a draft's preview, a
+  // staff list) this is the FLOOR: where the pot starts, because those surfaces
+  // have no field size to resolve against. On the fan read it is the base the
+  // field has actually reached.
   basePoints: number;
   perEntrantPoints: number;
+  // THE MOST THIS CARD'S BASE CAN GROW TO — the top of the ramp it froze at
+  // publish. Sent as a number rather than derived here from the ladder shape:
+  // the fan copy quotes it ("grows with the field up to 5,000"), and a figure
+  // written into the client would be a lie the first time the house retunes,
+  // exactly as the per-entrant rate would be. Equal to basePoints on a flat
+  // card, so the sentence degrades correctly rather than needing a branch.
+  baseCeilingPoints: number;
   // THE ADVERTISED SPLIT, AND THE CONFIGURED PERCENTAGES. Band 1 is everyone
   // tied at the top score, band 2 the next distinct score down, band 3 the one
   // after, and these total 100.
@@ -5905,6 +5851,14 @@ export interface CallPotTerms {
 // The weekly purse AS THE FAN READ SENDS IT — the terms plus the live counts.
 // GET /arena/call/current is the ONLY endpoint that returns this shape; every
 // other pot on this surface is CallPotTerms or a plain number.
+// THE FAN READ'S POT. Everything in CallPotTerms plus the counts — and one
+// field changes meaning here, which is the only reason this note exists:
+//
+//   `basePoints` ON THIS SHAPE IS RESOLVED AT THE CURRENT FIELD, not the floor.
+//   It is the whole reason the sub-line adds up: basePoints + perEntrantPoints x
+//   entrants === points, on every card, in every state. Under the old step
+//   ladder it was the floor while `points` already resolved the rung, so a
+//   600-entrant card printed a 3,700 purse above a line that summed to 1,700.
 export interface CallPot extends CallPotTerms {
   entrants: number;
   // Which kind of card this pot is on. Sent so no client has to infer "is this

@@ -43,7 +43,6 @@ import {
   deletePointPromotion,
   promotionWindowState,
   formatMultiplier,
-  ledgerActionLabel,
   etDateTime,
   etWallClockToIso,
   isoToEtWallClock,
@@ -612,7 +611,14 @@ function PromotionRow({
   const appliesLabel = useMemo(() => {
     if (!promo.appliesTo || promo.appliesTo.length === 0) return 'All engagement earns';
     const byType = new Map(actions.map((a) => [a.actionType, a.label]));
-    return promo.appliesTo.map((t) => byType.get(t) ?? ledgerActionLabel(t)).join(' · ');
+    // FALLS BACK TO THE RAW VERB, and for this surface that is right. A
+    // promotion's appliesTo holds action_type strings an ADMIN chose, and an
+    // admin reading 'article_read' is reading the vocabulary they configure in.
+    // This used to borrow the fan-facing label map, which is what let one
+    // function serve two audiences with opposite needs -- a fan must never see a
+    // verb, a staff member often should. The fan-facing sentence now comes off
+    // the row from the server (PointEvent.reason) and has no business here.
+    return promo.appliesTo.map((t) => byType.get(t) ?? t).join(' · ');
   }, [promo.appliesTo, actions]);
 
   async function run(fn: () => Promise<void>) {

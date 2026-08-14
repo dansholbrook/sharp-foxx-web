@@ -845,9 +845,21 @@ export function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean })
         <span className="call-pot__value">{points(pot.points)}</span>
         <span className="call-pot__unit">pts</span>
       </div>
+      {/* THE RULE, NOT THE ARITHMETIC — and the difference is why this changed.
+          This line used to read "{basePoints} to start, +{perEntrant} for every
+          card filed", which was a sum a fan could check and which stopped adding
+          up the moment the old step ladder crossed a rung: a 600-entrant card
+          printed a 3,700 purse above a line that summed to 1,700. A rule
+          statement cannot fall out of step with the number above it, because it
+          is not claiming to reproduce it.
+
+          BOTH FIGURES COME OFF THE WIRE. The ceiling and the per-card rate are
+          snapshotted per card, so a house retune changes what future cards say
+          without making this sentence a lie on the ones already published. */}
       <p className="call-pot__sub">
-        {points(pot.basePoints)} to start, +{points(pot.perEntrantPoints)} for
-        every card filed · {points(pot.entrants)}{' '}
+        The pot grows with the size of the field up to{' '}
+        {points(pot.baseCeilingPoints)}, plus {points(pot.perEntrantPoints)}{' '}
+        credits for every card entered · {points(pot.entrants)}{' '}
         {pot.entrants === 1 ? 'entrant' : 'entrants'}
         {open && ' — it keeps growing until kickoff'}
       </p>
