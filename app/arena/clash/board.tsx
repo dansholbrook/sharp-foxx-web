@@ -237,7 +237,15 @@ function FreeForAll({ sides, weekNo }: { sides: ClashSide[]; weekNo: number }) {
 // contribution stops — and the copy says so, because a meter reading "200 / 200"
 // with no explanation reads as "stop playing".
 // ---------------------------------------------------------------------------
-function ContributionCard({ contribution }: { contribution: ClashContribution }) {
+// EXPORTED AND RENDERED BY THE PAGE, into the rail beside the tug. Named
+// ...Card rather than ClashContribution because that name is already the API
+// TYPE it takes, and a component sharing a name with its own prop type is a
+// collision under isolatedModules, not just a readability problem. "Your
+// contribution" is the fan's own standing, which is what you check WHILE
+// looking at the week's board rather than something to scroll past it to reach.
+// It used to render inside two of ClashBoard's state branches; the page now
+// carries that condition. See the note at the rail in page.tsx.
+export function ClashContributionCard({ contribution }: { contribution: ClashContribution }) {
   const { points: got, cap, capped } = contribution;
   const pct = cap > 0 ? Math.min(100, Math.round((got / cap) * 100)) : 0;
 
@@ -407,27 +415,19 @@ function ownBureauId(tug: ClashTug): string | null {
 // ---------------------------------------------------------------------------
 // THE ASSEMBLED BOARD, one state at a time.
 // ---------------------------------------------------------------------------
+// THE WEEK'S BOARD -- the tug and the states it can be in. It no longer renders
+// the season table or the fineprint: the page puts the standings full width
+// below and the fineprint below that, which is where every other Arena page
+// keeps its footnote.
 export function ClashBoard({
   tug,
-  standings,
-  season,
   meId,
   now,
 }: {
   tug: ClashTug;
-  standings: ClashStanding[];
-  season: string;
   meId: string | undefined;
   now: number;
 }) {
-  // The fan's own bureau id, for marking their row in the season table. It
-  // arrives from two different places depending on state — off `sides[]` on a
-  // live board, off the `bureau` row otherwise — which is why this is a switch
-  // rather than a chain of ternaries: the paired branch's discriminant is itself
-  // a union ('paired' | 'free_for_all') and TypeScript will not narrow the
-  // negative case of that through a conditional.
-  const mineId = ownBureauId(tug);
-
   return (
     <>
       {/* ---- NO LIVE WEEK. A real state, not a broken one: the board is dark
@@ -452,7 +452,7 @@ export function ClashBoard({
       {(tug.state === 'paired' || tug.state === 'free_for_all') && (
         <>
           <BoardCard tug={tug} now={now} />
-          <ContributionCard contribution={tug.contribution} />
+          
           <EngineRoom
             room={tug.engineRoom}
             caption={tug.engineRoomCaption}
@@ -481,19 +481,34 @@ export function ClashBoard({
               {clashResolveCountdown(tug.week.endsAt, now)}
             </span>
           </section>
-          <ContributionCard contribution={tug.contribution} />
+          
         </>
       )}
 
-      <Standings items={standings} mineId={mineId} season={season} />
-
-      <p className="clash-fineprint">
-        Highest <strong>average per active member</strong> takes the week — big
-        bureaus don&apos;t auto-win, and quiet members don&apos;t drag you down.
-        Win and every active member banks a bonus; lose and there&apos;s a
-        consolation.{' '}
-        <Link href="/arena">Everything you play in the Arena</Link> counts here.
-      </p>
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// THE SEASON TABLE, exported for the page to render full width BELOW the board.
+//
+// IT TAKES `tug`, NOT `mineId`, AND THAT IS THE POINT OF THE SPLIT. Marking the
+// fan's own row needs a bureau id that arrives from two different places
+// depending on state -- off `sides[]` on a live board, off the `bureau` row
+// otherwise -- which is what ownBureauId's switch is for (a chain of ternaries
+// will not narrow, because the paired branch's discriminant is itself a union).
+// Passing `mineId` in would put that derivation at the page and teach it what a
+// bureau id is; passing `tug` keeps the helper private and its only consumer
+// right beside it.
+// ---------------------------------------------------------------------------
+export function ClashStandings({
+  standings,
+  tug,
+  season,
+}: {
+  standings: ClashStanding[];
+  tug: ClashTug;
+  season: string;
+}) {
+  return <Standings items={standings} mineId={ownBureauId(tug)} season={season} />;
 }

@@ -21751,3 +21751,18 @@ a.scout-reveal__main:hover .scout-reveal__name {
 .arena-col--call {
   grid-template-columns: 1fr min(1100px, 100%) 1fr;
 }
+
+
+/* ---- THE CLASH'S COLUMN, used only when the contribution sits beside the
+   board. Derived like the Oracle's and the Call's: .fgrid is 72/28 with a 40px
+   gap, so 890px puts main at 612px -- the ~640px the board has today, near
+   enough that the tug does not change size. The rail lands at 238px, which is
+   plenty for a label, a figure and a meter.
+
+   Applied CONDITIONALLY: on `no_week` (and `unaffiliated`, excluded earlier)
+   there is no contribution, so the page renders one column and keeps
+   `.arena-col`'s 640px rather than widening to make room for a rail that is not
+   there. Same rule as .arena-col--call. ---- */
+.arena-col--clash {
+  grid-template-columns: 1fr min(890px, 100%) 1fr;
+}

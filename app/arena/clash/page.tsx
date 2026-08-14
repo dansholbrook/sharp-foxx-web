@@ -47,7 +47,7 @@ import {
   getClashStandings,
   getClashTug,
 } from '../../api';
-import { ClashBoard } from './board';
+import { ClashBoard, ClashContributionCard, ClashStandings } from './board';
 import { JoinBoard } from './join-board';
 import { ClashPostsFeed } from './posts';
 
@@ -198,7 +198,15 @@ export default function ClashPage() {
           The content geometry is unchanged -- these blocks are vertical stacks
           and a centred column is what they want. Nothing here makes the Arena
           stop looking like a column; that is W2. ---- */}
-      <div className="arena-col">
+      {/* The wide column only when there is a rail to fill it. `tug != null` is
+          not defensive noise: this wrapper sits ABOVE the loading guard, so
+          `tug?.state !== 'no_week'` would be TRUE while the board is still
+          loading and would widen the page around a spinner. */}
+      <div
+        className={`arena-col${
+          tug != null && tug.state !== 'no_week' ? ' arena-col--clash' : ''
+        }`}
+      >
 
       <div className="page-head">
         <div>
@@ -252,13 +260,69 @@ export default function ClashPage() {
               the standings read, then the live week, then the membership row —
               because the standings call is the one allowed to fail and its
               header should not read "Season" with a hole in it when it does. */}
-          <ClashBoard
-            tug={tug}
+          {/* ============================================================
+              THE TUG IN MAIN, YOUR CONTRIBUTION BESIDE IT, THE SEASON TABLE
+              BELOW.
+
+              The board is the week's subject; "Your contribution" is the fan's
+              own standing, which is what you check WHILE watching the tug. The
+              season table is a COMPARISON with other bureaus -- read instead of
+              the board, not alongside it -- so it goes full width underneath,
+              the same place the Oracle's boards went for the same reason.
+
+              !! THE RAIL IS CONDITIONAL, AND THAT IS NOT AN OVERSIGHT !!
+              Same rule as /arena/call: if you are here to tidy this into an
+              unconditional two-column grid, read this first.
+
+              `ClashTug` is a four-way union and `contribution` exists on only
+              two of its arms. On `no_week` and `unaffiliated` there is no
+              contribution to show -- the board is dark between weeks, and a
+              meter with nothing behind it invents a number (board.tsx says so
+              at the quiet card). So those states render ONE column: the sheet
+              at its own measure, no empty gutter beside it. An empty rail is
+              its own bug even where no rule forbids the content.
+
+              TYPESCRIPT ENFORCES THIS, AND THE CHECK IS INLINE FOR THAT REASON.
+              A `const contributionBeside = ...` boolean does NOT narrow the
+              union -- the first attempt here used one and `tug.contribution`
+              was unreachable through it. Written inline, the negative arm is
+              narrowed away and the property is only reachable where it exists,
+              so the gate cannot be removed without the compiler objecting.
+              (`unaffiliated` is already excluded by the guard above; the only
+              arm left to exclude here is `no_week`.)
+              ============================================================ */}
+          {tug.state !== 'no_week' ? (
+            <div className="fgrid">
+              <div className="fmain">
+                <ClashBoard tug={tug} meId={user?.id} now={now} />
+              </div>
+              <div className="frail">
+                <ClashContributionCard contribution={tug.contribution} />
+              </div>
+            </div>
+          ) : (
+            <ClashBoard tug={tug} meId={user?.id} now={now} />
+          )}
+
+          <ClashStandings
             standings={standings}
+            tug={tug}
             season={season || seasonFrom(tug)}
-            meId={user?.id}
-            now={now}
           />
+
+          {/* The footnote moved OUT of board.tsx to sit here, below both
+              columns -- which is where every other Arena page keeps its
+              fineprint (oracle, trail, bingo and call all render their own).
+              Clash was the outlier: this is a page footnote about how the game
+              scores, not board content. */}
+          <p className="clash-fineprint">
+            Highest <strong>average per active member</strong> takes the week —
+            big bureaus don&apos;t auto-win, and quiet members don&apos;t drag
+            you down. Win and every active member banks a bonus; lose and
+            there&apos;s a consolation.{' '}
+            <Link href="/arena">Everything you play in the Arena</Link> counts
+            here.
+          </p>
 
           {/* The way out, and it is a quiet link rather than a button: changing
               your bureau is a real commitment and should not sit on the page
