@@ -348,6 +348,18 @@ export default function BingoPage() {
         <AppNav />
       </div>
 
+      {/* ---- THE CONTENT COLUMN. The page itself now runs the full width and
+          THIS carries the measure, which is the whole point: the header row
+          above is outside it, so the global nav gets the window rather than
+          whatever cap this page's content happens to want. That coupling is
+          RESOLVER_TICKETS.md W1, and moving the cap off `main` retires it for
+          these pages.
+
+          The content geometry is unchanged -- these blocks are vertical stacks
+          and a centred column is what they want. Nothing here makes the Arena
+          stop looking like a column; that is W2. ---- */}
+      <div className="arena-col">
+
       <div className="page-head">
         <div>
           <h1 className="row-title page-head__title">Sports Bingo</h1>
@@ -470,6 +482,7 @@ export default function BingoPage() {
           </p>
         </>
       )}
+      </div>
     </main>
   );
 }

@@ -13945,7 +13945,7 @@ a.follow-sugcard__name:hover {
    ============================================================================ */
 
 .oracle-page {
-  max-width: 720px;
+  max-width: none;
 }
 
 /* ---- The card ------------------------------------------------------------ */
@@ -15019,7 +15019,7 @@ button.oracle-offer--fade:hover:not(:disabled) {
    ============================================================================ */
 
 .arena-page {
-  max-width: 860px;
+  max-width: none;
 }
 
 /* ---- The marquee --------------------------------------------------------- */
@@ -15504,7 +15504,7 @@ a.arena-tile:active {
    ============================================================================ */
 
 .trail-page {
-  max-width: 720px;
+  max-width: none;
 }
 
 .trail-section__head {
@@ -16617,7 +16617,7 @@ a.arena-tile:active {
    ============================================================================ */
 
 .call-page {
-  max-width: 860px;
+  max-width: none;
 }
 
 /* ---- The card shell ------------------------------------------------------ */
@@ -19189,7 +19189,7 @@ a.arena-tile:active {
    ============================================================================ */
 
 .bingo-page {
-  max-width: 860px;
+  max-width: none;
 }
 
 /* ---- THE CALLER — the last tick, and when the next one lands. ------------- */
@@ -21564,7 +21564,7 @@ a.scout-reveal__main:hover .scout-reveal__name {
    prose blocks are already capped at 40-46ch. 860 puts it with the Call, bingo
    and the hub. ---- */
 .clash-page {
-  max-width: 860px;
+  max-width: none;
 }
 
 /* ---- BINGO AND TRAIL KEEP THEIR WIDTHS, AND BOTH WERE MEASURED RATHER THAN
@@ -21583,3 +21583,77 @@ a.scout-reveal__main:hover .scout-reveal__name {
 
    Neither needs a rule here; this note exists so the next person to look at
    these numbers does not re-derive the same two answers. ---- */
+
+
+/* ============================================================================
+   THE ARENA CONTENT COLUMN -- the cap moves off the page and onto an inner
+   wrapper, 2026-08-14.
+
+   WHY, and it is not about how the content looks. Every Arena page capped
+   `main` itself (720px on the Oracle and Trail, 860 elsewhere), and the header
+   row -- wordmark and the global nav -- was INSIDE that cap. So a decision about
+   how wide the Trail's vertical road should read was also deciding how much
+   room the site navigation got, and on a 720px page a fan's own six links
+   wrapped. See RESOLVER_TICKETS.md W1.
+
+   Now `main` runs wide, `.header-row` sits outside the column, and `.arena-col`
+   carries the measure. The content geometry is UNCHANGED -- these blocks are
+   vertical stacks (`.arena-games`, `.oracle-offers`, `.clash-standings__list`,
+   `.call-settle__bands`, `.scout-slots` are all flex columns; `.trail-road` is
+   a vertical rail) and a centred column is what they want. What changed is that
+   the nav is no longer inside it.
+
+   TWO VALUES, NOT SEVEN. The seven pages' content needs measured out between
+   ~560px and ~760px, which is inside the error bars of estimating text widths
+   without a browser. Seven bespoke numbers would be false precision, so:
+     640px  decision-shaped -- oracle (a card and two stacked buttons), trail
+            (a rail with 44ch prose), clash (a 12px tug and a stacked standings
+            list), bingo (a board that already self-caps at 420px).
+     760px  sheet-shaped -- the Call's five-question sheet, and the hub's tiles.
+
+   /arena/scout is deliberately ABSENT: it already renders <AppNav /> outside
+   its <main>, so its nav was never inside a content cap. It is the one page
+   that already had the shape this change gives the other six.
+   ============================================================================ */
+
+/* THE THREE-COLUMN GRID, not `max-width` + `margin: 0 auto`, so that a block can
+   opt OUT of the measure without a negative-margin trick. Children land in the
+   middle track by default; `grid-column: 1 / -1` spans the lot. Deliberately
+   NOT the `calc(50% - 50vw)` full-bleed pattern: `vw` includes the scrollbar,
+   so that version overflows by ~15px and can produce a horizontal scrollbar --
+   on pages I cannot render to check. */
+.arena-col {
+  display: grid;
+  grid-template-columns: 1fr min(640px, 100%) 1fr;
+}
+
+.arena-col > * {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.arena-col--sheet {
+  grid-template-columns: 1fr min(760px, 100%) 1fr;
+}
+
+/* ---- THE ONE BLOCK THAT WANTS THE ROOM. `.trail-pennants` is
+   `repeat(auto-fill, minmax(140px, 1fr))` -- a collection where more width
+   genuinely means more per row, and the only such thing on any Arena page
+   (everything else is a vertical stack). The book spans the full width and
+   repeats the column grid inside itself, so the pennants run wide while the
+   book's own heading and its stacked `.trail-trophies` list stay on the
+   measure. ---- */
+.arena-col > .trail-book {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr min(640px, 100%) 1fr;
+}
+
+.trail-book > * {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.trail-book > .trail-pennants {
+  grid-column: 1 / -1;
+}
