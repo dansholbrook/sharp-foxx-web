@@ -15197,9 +15197,25 @@ a.arena-medallion:hover {
 
 /* ---- The game tiles ------------------------------------------------------ */
 
+/* ---- THE HUB'S DOORS. `auto-fill` with a 280px floor, so the track count
+   follows the width instead of a breakpoint: ONE column on a phone (358px of
+   content cannot hold two 280px tiles), TWO at the old 760px column, THREE at
+   the 1000px this page now gets.
+
+   THIS REPLACES A `1fr 1fr` AT >=720px, and that rule's argument is preserved
+   rather than overruled -- read it below. Its objection was to `flex: 1 1 260px`,
+   where a leftover tile is STRETCHED FULL-WIDTH by flex-grow: with four games
+   that was a permanent 3 + 1 with the orphan spanning the page. That failure is
+   a FLEX failure. In a grid a leftover tile stays exactly one track wide and
+   simply sits in the first column, which is untidy at odd counts but never
+   deformed -- so auto-fill is safe here in a way it was not there.
+
+   The count-independence the old comment asks for still holds where it matters:
+   six tiles divide evenly into both 2 and 3, and any future count that does not
+   divide leaves a normal-width tile rather than a stretched one. ---- */
 .arena-games {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 14px;
   margin: 0 0 22px;
 }
@@ -15444,7 +15460,9 @@ a.arena-tile:active {
   text-align: center;
 }
 
-/* ---- Wider than a phone: the games sit side by side. ---------------------
+/* ---- SUPERSEDED 2026-08-14 by the auto-fill grid on .arena-games above; the
+   reasoning is kept because it is why that grid is a GRID and not a flex wrap.
+   ---------------------------------------------------------------------------
    TWO ACROSS, AND A GRID RATHER THAN WRAPPING FLEX, because the fourth game
    changed the arithmetic. At `flex: 1 1 260px` three tiles fit the moment the
    content box holds 3 × 260 + 2 × 14 = 808px — which .arena-page's 860px cap
@@ -15458,11 +15476,6 @@ a.arena-tile:active {
    particular count is a rule that breaks on the next game. */
 
 @media (min-width: 720px) {
-  .arena-games {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
   .arena-hero__title {
     font-size: 2.3rem;
   }
@@ -21704,4 +21717,18 @@ a.scout-reveal__main:hover .scout-reveal__name {
    ---- */
 .arena-col--split {
   grid-template-columns: 1fr min(980px, 100%) 1fr;
+}
+
+
+/* ---- THE HUB'S COLUMN. 1000px, and it is derived: three 280px tiles plus two
+   14px gaps need 868px, so 1000 clears three tracks with 324px each -- room for
+   a mark, a name, a tagline and a status line, which 760px's two-up did not need
+   to worry about but three-up does. Six tiles then read as 2 x 3 rather than
+   3 x 2, which is the shape a hub of equal doors wants.
+
+   NOT folded into .arena-col--sheet: the Call shares that class and its
+   five-question sheet is sized for 760px. Widening the hub must not widen a
+   sheet nobody asked to widen. ---- */
+.arena-col--hub {
+  grid-template-columns: 1fr min(1000px, 100%) 1fr;
 }
