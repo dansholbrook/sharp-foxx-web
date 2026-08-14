@@ -546,7 +546,7 @@ export default function OraclePage() {
           The content geometry is unchanged -- these blocks are vertical stacks
           and a centred column is what they want. Nothing here makes the Arena
           stop looking like a column; that is W2. ---- */}
-      <div className="arena-col arena-col--oracle">
+      <div className="arena-col arena-col--split">
 
       <div className="page-head">
         <div>

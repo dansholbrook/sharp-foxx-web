@@ -21673,9 +21673,10 @@ a.scout-reveal__main:hover .scout-reveal__name {
 
 
 
-/* ---- THE ORACLE'S COLUMN, wider than the other Arena pages because it is the
-   only one carrying two of them. W2's prototype; the other five are unchanged
-   and the pattern is not adopted until this one has been looked at.
+/* ---- THE SPLIT COLUMN, wider than the single-column Arena pages because it
+   carries two. Used by the Oracle and the Trail: both have the SAME shape --
+   one decision block and one streak block -- so both take the same
+   measurements rather than each getting a bespoke number.
 
    980px IS DERIVED, NOT PICKED. /feed's .fgrid is 72/28 with a 40px gap, so a
    980px column puts main at 677px -- within 5px of the 672px the card fills
@@ -21701,6 +21702,6 @@ a.scout-reveal__main:hover .scout-reveal__name {
         the page, which is the failure this split is trying to avoid: a rail
         with everything in it is just a second column of stack.
    ---- */
-.arena-col--oracle {
+.arena-col--split {
   grid-template-columns: 1fr min(980px, 100%) 1fr;
 }

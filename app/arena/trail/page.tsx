@@ -565,7 +565,7 @@ export default function TrailPage() {
           The content geometry is unchanged -- these blocks are vertical stacks
           and a centred column is what they want. Nothing here makes the Arena
           stop looking like a column; that is W2. ---- */}
-      <div className="arena-col">
+      <div className="arena-col arena-col--split">
 
       <div className="page-head">
         <div>
@@ -583,19 +583,42 @@ export default function TrailPage() {
 
       {!loading && !error && today && (
         <>
-          <TownCard
-            season={today.season}
-            day={today.day}
-            progress={today.progress}
-            date={today.date}
-            justPicked={justPicked}
-            onPick={onPick}
-            picking={picking}
-            pickError={pickError}
-            covering={entryRefusal(today.entry, 'GET /arena/trail/today')}
-          />
+          {/* ---- TWO COLUMNS, the Oracle's split, and W2 GOT THIS PAGE WRONG.
+              The ticket said "road stays vertical in main, today's town and leg
+              progress in the rail" -- written from a distance, and the code says
+              otherwise. TrailRail is `.trail-rail__streaks` / `.trail-stat`: it
+              is the Trail's STREAK BLOCK, the exact analogue of the Oracle's
+              StreaksRail, not a leg-progress widget. TownCard is where the fan
+              calls the day.
 
-          <TrailRail today={today} />
+              So the Trail has the Oracle's shape exactly -- one decision, one
+              piece of standing to read while deciding -- and takes the Oracle's
+              split: the call in main, the streak beside it, everything else
+              below. W2's version would have put the decision in a 263px rail and
+              the map in main, inverting the principle that made the Oracle work.
+
+              The map, the pennant book and the boards stay full width below --
+              and the pennant book sits INSIDE the measure after the opt-out was
+              reverted; see the note in globals.css. ---- */}
+          <div className="fgrid">
+            <div className="fmain">
+              <TownCard
+                season={today.season}
+                day={today.day}
+                progress={today.progress}
+                date={today.date}
+                justPicked={justPicked}
+                onPick={onPick}
+                picking={picking}
+                pickError={pickError}
+                covering={entryRefusal(today.entry, 'GET /arena/trail/today')}
+              />
+            </div>
+
+            <div className="frail">
+              <TrailRail today={today} />
+            </div>
+          </div>
 
           {map && (
             <TrailMap
