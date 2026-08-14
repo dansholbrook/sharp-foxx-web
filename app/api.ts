@@ -145,13 +145,22 @@ export interface FieldRep {
   // From a leftJoin to users on the backend list(); null if the user is
   // unlinked (mirrors the ManagerRoster/CommissionsReport name fields).
   displayName: string | null;
-  email: string | null;
+  // Redacted alongside commissionRate -- see the note there.
+  email?: string | null;
   kind: 'field_rep' | 'regional_manager';
   status: string;
   managerId: string | null;
   homeMarketId: string | null;
   cohortLabel: string | null;
-  commissionRate: string;
+  // ---- TERMS. OPTIONAL BECAUSE THE SERVER OMITS THEM, not because they are
+  // sometimes unset. GET /field-reps redacts per caller: an admin gets these on
+  // every row, a regional_manager only on their own roster, and on any other
+  // row the KEYS ARE ABSENT from the payload entirely.
+  //
+  // `?` rather than `| null` is the whole point -- null would mean "this rep has
+  // no rate", which is a different and false claim. Absent means "not yours to
+  // see". Render the difference; do not collapse it with `?? 0`.
+  commissionRate?: string;
   onboardedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1265,6 +1274,11 @@ export const getFieldReps = (token: string) =>
 export interface RepReferral {
   referralCode: string;
   shareUrl: string;
+  // THE CALLER'S OWN commission rate, as a string (pg numeric). Present for
+  // every caller this endpoint serves, because it resolves the rep row by the
+  // caller's own user_id -- unlike FieldRep.commissionRate, which is OPTIONAL
+  // because GET /field-reps redacts other people's terms.
+  commissionRate: string;
   totalReferred: number;
   referredThisMonth: number;
   // joinedAt is users.referred_at (timestamptz ISO); newest-first, capped at 10.

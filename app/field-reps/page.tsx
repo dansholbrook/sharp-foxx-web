@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AppNav, AccessDenied } from '../nav';
-import { AddGameForm } from '../add-game-form';
 import { canAccess } from '../roles';
 import {
   getFieldReps,
@@ -38,10 +37,34 @@ export default function FieldRepsPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
   // The manual create form is demoted behind a toggle -- reps normally arrive via
   // the public application funnel, so it stays hidden until explicitly opened.
   const [showAddRep, setShowAddRep] = useState(false);
+
+  // ---- WHICH LIST YOU ARE LOOKING AT -------------------------------------
+  // Three views of one payload, not three fetches: GET /field-reps returns
+  // every row a caller may see (with terms redacted per row, server-side), so
+  // the tabs are a filter over data already in hand.
+  const isAdmin = (user?.roles ?? []).includes('admin');
+  // An admin manages nobody, so "My roster" is meaningless for them and they
+  // land on the directory instead. An RM lands on their own team.
+  const [tab, setTab] = useState<'mine' | 'reps' | 'managers'>(
+    isAdmin ? 'reps' : 'mine',
+  );
+
+  // The caller's OWN field_reps row, found in the list rather than fetched:
+  // every caller who may read this page can see their own row in it.
+  const myRep = useMemo(
+    () => (reps ?? []).find((r) => r.userId === user?.id) ?? null,
+    [reps, user?.id],
+  );
+
+  const shown = useMemo(() => {
+    const all = reps ?? [];
+    if (tab === 'mine') return myRep ? all.filter((r) => r.managerId === myRep.id) : [];
+    if (tab === 'managers') return all.filter((r) => r.kind === 'regional_manager');
+    return all.filter((r) => r.kind === 'field_rep');
+  }, [reps, tab, myRep]);
 
   // No token in memory (e.g. after a page refresh) -> back to login.
   useEffect(() => {
@@ -121,54 +144,67 @@ export default function FieldRepsPage() {
         <AppNav />
       </div>
 
-      <div className="masthead">
-        <div className="masthead-head">
-          <div>
-            <span className="masthead-kicker">Team &amp; roster</span>
-            <h1 className="masthead-title">Field Reps</h1>
-            <p className="masthead-standfirst">
-              Add field reps and regional managers, and browse the current roster
-              with their kind, status, cohort, and commission rate.
-            </p>
-          </div>
+      {/* ---- ONE ROW: what this page is, which list you are on, and the one
+          action that belongs here.
+
+          GONE: the kicker, the display-size title, the standfirst ("add field
+          reps and regional managers, and browse the current roster with their
+          kind, status, cohort and commission rate" -- a description of the
+          table directly beneath it), and the "+ Add Game" button, which opened
+          AddGameForm and created an EVENT. Nothing on a roster screen concerns
+          games; it sat in the masthead reading as this page's primary action.
+          Game creation lives on /games and /my-games, which both already have
+          it.
+
+          The create-a-rep card is demoted to the button on the right -- it was
+          232px of kicker, heading and "reps normally join via /apply" prose
+          wrapped around a form that is collapsed by default. ---- */}
+      <div className="gamesdir-head">
+        <h1 className="row-title gamesdir-title">Field Reps</h1>
+        <div className="gamesdir-tabs" role="group" aria-label="Which roster to show">
+          {([
+            ...(isAdmin ? [] : [['mine', 'My roster'] as const]),
+            ['reps', 'Field Reps'] as const,
+            ['managers', 'Regional Managers'] as const,
+          ]).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`chip${tab === value ? ' chip--on' : ''}`}
+              aria-pressed={tab === value}
+              onClick={() => setTab(value)}
+            >
+              {label}
+            </button>
+          ))}
           <button
             type="button"
-            className="btn-inline add-game-btn"
-            onClick={() => setShowAdd(true)}
+            className="btn-inline"
+            onClick={() => setShowAddRep((v) => !v)}
           >
-            + Add Game
+            + Add a field rep
           </button>
         </div>
       </div>
 
-      {showAdd && (
-        <AddGameForm
-          token={token}
-          selfClaim={false}
-          onClose={() => setShowAdd(false)}
-        />
-      )}
+      {/* ---- Create a field rep. The card now appears ONLY when the button in
+          the header row opens it: its kicker, heading and reveal button were
+          232px of chrome standing permanently in front of a table, wrapped
+          around a form that was collapsed anyway.
 
-      {/* ---- Create a field rep (demoted: reps normally arrive via /apply) ---- */}
+          THE /apply LINE SURVIVES, as one line inside the form rather than a
+          paragraph above a closed card. It is the reason this form is demoted
+          at all -- reps normally arrive through the funnel -- and losing it
+          would make the manual path look like the intended one. ---- */}
+      {showAddRep && (
       <section className="card game">
-        <span className="game-kicker">Onboard</span>
-        <h2>Add a field rep</h2>
-        <p className="muted" style={{ marginTop: -6, marginBottom: 18, fontSize: '0.9rem' }}>
+        <p className="muted" style={{ marginTop: 0, marginBottom: 18, fontSize: '0.9rem' }}>
           Reps normally join via the application funnel (
           <Link href="/apply" className="rep-roster-link">
             /apply
           </Link>
-          ).
+          ). Use this to add one by hand.
         </p>
-        {!showAddRep ? (
-          <button
-            type="button"
-            className="btn-inline"
-            onClick={() => setShowAddRep(true)}
-          >
-            + Add manually
-          </button>
-        ) : (
         <form onSubmit={onCreate} className="rep-form">
           <div className="field">
             <label htmlFor="displayName">Display name</label>
@@ -232,16 +268,34 @@ export default function FieldRepsPage() {
           {formError && <div className="error rep-form-msg">{formError}</div>}
           {notice && <div className="success rep-form-msg">{notice}</div>}
         </form>
-        )}
       </section>
+      )}
 
-      {/* ---- Existing field reps ---- */}
+      {/* ---- The roster. The kicker and "All field reps" heading are gone: the
+          active tab names the table, and a heading that says "All" above a
+          filtered view was going to be wrong two thirds of the time. ---- */}
       <section className="card game">
-        <span className="game-kicker">Roster</span>
-        <h2>All field reps</h2>
         {loading && <p className="muted">Loading field reps…</p>}
         {error && <div className="error">{error}</div>}
-        {!loading && !error && reps && reps.length > 0 ? (
+
+        {/* ---- MY ROSTER, WHEN IT IS SMALL OR EMPTY. Five of six regional
+            managers currently manage exactly one rep, so this is the normal
+            case rather than an edge one, and a bare one-row table reads like a
+            bug. The line says whose roster it is and how big, which is the
+            context a single row cannot carry by itself. ---- */}
+        {!loading && !error && tab === 'mine' && (
+          <p className="muted" style={{ marginTop: 0, marginBottom: 16, fontSize: '0.95rem' }}>
+            {!myRep
+              ? 'You have no regional manager profile, so no reps are assigned to you.'
+              : shown.length === 0
+                ? 'No reps are assigned to you yet. Reps are linked to a manager when '
+                  + 'they are onboarded — until then they appear under Field Reps.'
+                : `${shown.length} rep${shown.length === 1 ? '' : 's'} report to you. `
+                  + 'Commission is shown for your roster only.'}
+          </p>
+        )}
+
+        {!loading && !error && shown.length > 0 ? (
           <table className="report-table rep-table">
             <thead>
               <tr>
@@ -255,7 +309,7 @@ export default function FieldRepsPage() {
               </tr>
             </thead>
             <tbody>
-              {reps.map((rep) => (
+              {shown.map((rep) => (
                 <tr key={rep.id}>
                   <td>{rep.displayName ?? '—'}</td>
                   <td className="mono">{rep.id}</td>
@@ -265,7 +319,14 @@ export default function FieldRepsPage() {
                   </td>
                   <td>{rep.cohortLabel ?? '—'}</td>
                   <td className="num">
-                    {(Number(rep.commissionRate) * 100).toFixed(2)}%
+                    {/* ABSENT IS NOT ZERO. The server omits commissionRate on
+                        rows outside the caller's own roster, so `Number(undefined)`
+                        would render NaN and `?? 0` would render "0.00%" -- a
+                        confident claim that a peer earns nothing. The dash says
+                        what is true: this is not yours to see. */}
+                    {rep.commissionRate === undefined
+                      ? <span className="muted" title="Visible on your own roster only">—</span>
+                      : `${(Number(rep.commissionRate) * 100).toFixed(2)}%`}
                   </td>
                   <td>
                     {rep.kind === 'regional_manager' ? (

@@ -18,7 +18,7 @@ import {
   getMyAdOrders,
   getAdvertisers,
   getAdPackages,
-  getFieldReps,
+  getMyReferral,
   getMyEarnings,
   etDateTime,
   AdOrder,
@@ -153,19 +153,19 @@ export default function MySalesPage() {
     if (!allowed) return;
     loadSales(token);
     loadEarnings(token);
-    // Resolve the rep's own commission rate for the Log a Sale confirmation.
-    // Best-effort: a plain rep may not be able to list field-reps, in which case
-    // the confirmation just falls back to "Sale logged."
-    const uid = user?.id;
-    if (uid) {
-      getFieldReps(token)
-        .then((reps) => {
-          const mine = reps.find((r) => r.userId === uid);
-          if (mine) setCommissionRate(mine.commissionRate);
-        })
-        .catch(() => {});
-    }
-  }, [token, router, allowed, loadSales, loadEarnings, user?.id]);
+    // The rep's own commission rate for the Log a Sale confirmation, from the
+    // endpoint that resolves THEIR OWN row by their own user_id. This used to
+    // list every field rep and filter for self, which is why closing that
+    // route's leak briefly took this number with it; me/referral now carries it
+    // and there is no directory read in the path at all.
+    //
+    // Still best-effort: a caller with no field_reps row 403s here (the share
+    // card treats that the same way), and the confirmation falls back to
+    // "Sale logged." without a rate.
+    getMyReferral(token)
+      .then((r) => setCommissionRate(r.commissionRate))
+      .catch(() => {});
+  }, [token, router, allowed, loadSales, loadEarnings]);
 
   const advertiserName = (s: AdOrder) =>
     advertisersById[s.advertiserId] ?? 'Advertiser';
