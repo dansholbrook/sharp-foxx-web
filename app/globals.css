@@ -797,8 +797,32 @@ tfoot td {
      full width of a wide laptop -- a 1400px search field is not a search field,
      it is a horizon. The reference caps it at roughly this measure too. */
   flex: 1 1 auto;
-  min-width: 0;
   max-width: 520px;
+  /* ---- THE FLOOR IS DELIBERATE NOW. IT USED TO BE AN ACCIDENT. -------------
+     This read `min-width: 0`, which advertised the form as fully shrinkable --
+     and it was not. `.feed-search__input` is `flex: 1` with no min-width of its
+     own, so its `min-width: auto` resolved to an <input>'s INTRINSIC minimum
+     (the default ~20-character size at 1.02rem) plus its 64px of asymmetric
+     padding: about 228px that would not compress. With the 10px gap and the
+     flex-shrink: 0 button, the form had a hard floor near 344px while claiming
+     it could go to zero.
+
+     WHAT THAT COST, because it was not theoretical. /feed is the only page with
+     a search box in the chrome bar, and it is full-bleed -- so the nav's space
+     there is `viewport - 48 - wordmark - gaps - THIS`. A field rep's eight-link
+     bar needs ~920px; at 1440 that left a ~16px overrun, and since flex wrap is
+     per-item, exactly one link dropped to a second line. The form was taking
+     width it had declared it would yield, and the nav broke instead of it.
+
+     260px is a real floor rather than a fudge: it is the narrowest this stays a
+     usable field, and it only binds when the row is already tight (at 1440 the
+     form sits at ~330px, well clear of it). Below 768px the mobile block gives
+     it a full-width line of its own, where this floor is far under the ~358px
+     of content width a 390px phone has.
+
+     THIS DOES NOT FIX THE STAFF BAR AT 1280, and no CSS here will -- see the
+     ceiling recorded in RESOLVER_TICKETS.md W1. ------------------------------ */
+  min-width: 260px;
 }
 
 .feed-search__icon {
@@ -812,6 +836,13 @@ tfoot td {
 
 .feed-search__input {
   flex: 1;
+  /* THE HALF OF THE FIX THAT DOES THE WORK. Without this the input's
+     `min-width: auto` is its intrinsic ~20-character minimum and the form
+     cannot reach the floor its parent sets -- the parent's min-width would be
+     overridden from the inside by a child that never agreed to shrink. Any flex
+     child that is expected to compress needs this; an <input> needs it most,
+     because its intrinsic minimum comes from a default `size` nobody wrote. */
+  min-width: 0;
   padding: 15px 18px 15px 46px;
   font-size: 1.02rem;
   background: var(--panel);
@@ -10047,6 +10078,14 @@ a.follow-sugcard__name:hover {
     order: 3;
     flex-basis: 100%;
     max-width: none;
+    /* AND THE DESKTOP FLOOR COMES OFF. The 260px min-width in the base rule
+       exists for one reason: on a shared row, stop the form taking width the
+       nav needs. Here the form HAS its own row, so the floor buys nothing and
+       could only do harm -- below a ~292px viewport it would be wider than the
+       content box and push the bar into a horizontal scroll. Narrower than any
+       phone this supports, but a floor that serves no purpose at this width
+       should not be left armed. */
+    min-width: 0;
   }
   /* THE WORDMARK IS THE FIXED THING AND EVERYTHING ELSE FITS AROUND IT. It
      can't shrink (white-space: nowrap) and it can't be allowed to compress the
