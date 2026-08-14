@@ -623,19 +623,42 @@ export default function FeedPage() {
     (async () => {
       try {
         // Both rows load together; if only one fails we still show the other.
+        //
+        // allSettled, NOT all -- AND THE DIFFERENCE IS THE WHOLE POINT OF THIS
+        // BLOCK. The comment above has always said this; the code said
+        // Promise.all, which rejects on the FIRST failure and throws both rows
+        // away. That is not a theoretical gap: GET /content refused the athlete
+        // role until 2026-08-14, so every athlete who opened the platform's main
+        // surface got the error box instead of a feed -- one 403 on the
+        // decorative row taking down the row that IS the page. The role list is
+        // fixed, but the shape that turned a missing row into a broken page
+        // outlives any one endpoint's gate, so it is fixed here too.
+        //
         // Fetch every event (not just scheduled) so finished games -- the ones
         // that carry a replay videoUrl -- reach the "Recent Results" row and
         // render as clickable video cards. Filtering to scheduled here would
         // strip out every game with a video (they're all status 'final').
-        const [ev, art] = await Promise.all([
+        const [evResult, artResult] = await Promise.allSettled([
           getEvents(token),
           getPublishedContent(token),
         ]);
         if (!cancelled) {
-          setEvents(ev);
-          setArticles(art);
+          if (evResult.status === 'fulfilled') setEvents(evResult.value);
+          if (artResult.status === 'fulfilled') setArticles(artResult.value);
+          // THE ERROR BOX IS FOR A FEED WITH NOTHING IN IT, which is the only
+          // state a reader cannot tell apart from a quiet night. One row down is
+          // a thinner page and says so by being thinner; both rows down is a
+          // failure and has to be named. Reporting the events failure first:
+          // it's the row that carries the page.
+          if (evResult.status === 'rejected' && artResult.status === 'rejected') {
+            const err = evResult.reason;
+            setError(err instanceof Error ? err.message : 'Failed to load feed');
+          }
         }
       } catch (err) {
+        // allSettled does not reject, so this now catches only a genuine bug in
+        // the block above rather than either row's 4xx. Kept: an unhandled
+        // rejection here would leave the page stuck on its loading state.
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load feed');
         }
