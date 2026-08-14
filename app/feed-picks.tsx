@@ -38,6 +38,7 @@ import {
   parlayStakeRangeLabel,
   points,
   signedPoints,
+  teamDisplay,
   etDateTime,
   Contest,
   EventListItem,
@@ -385,8 +386,11 @@ export function NationalBoardBand({ token }: { token: string }) {
 // api.ts. The link still points at /games/[id], which renders the lean
 // feed-variant page for these.
 function OpenGameCard({ game, isFeed }: { game: OpenPickGame; isFeed: boolean }) {
-  const home = game.homeTeamName ?? 'TBD';
-  const away = game.awayTeamName ?? 'TBD';
+  // DISPLAY ONLY -- and note that the raw names are still what the follows sort
+  // in OpenGamesBand below matches on. Stripping before that comparison would
+  // stop every followed team matching, silently.
+  const home = teamDisplay(game.homeTeamName).name || 'TBD';
+  const away = teamDisplay(game.awayTeamName).name || 'TBD';
   return (
     <Link
       href={`/games/${game.eventId}`}

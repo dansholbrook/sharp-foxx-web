@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, FormEvent } from 'react';
+import { Children, useEffect, useMemo, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
@@ -9,7 +9,7 @@ import { usePoints } from '../points-context';
 import { FollowButton } from '../follow-button';
 import { AppNav } from '../nav';
 import { ArenaTeaser } from '../arena-teaser';
-import { CarouselItem, FollowDisc, followHref } from '../follow-carousel';
+import { FollowDisc, followHref } from '../follow-carousel';
 import {
   InPlayBand,
 } from '../feed-picks';
@@ -24,6 +24,7 @@ import {
   isUpcomingEvent,
   points,
   etDateTime,
+  teamDisplay,
   FeedItem,
   EventListItem,
   FollowMineEntry,
@@ -111,9 +112,40 @@ function SearchBar() {
   );
 }
 
-// ---- A YouTube-style row: title + horizontally scrolling track of cards. The
-// optional className lets the games hero flag its Live/Upcoming rows for the
-// larger, first-impression sizing without a second component. ----
+// How many cards a feed row shows before the Show-all expander. Two grid rows
+// at 1280 and 1440 (three columns each), one and a half at 1728.
+const ROW_CAP = 6;
+
+// ---- A row: title + a GRID OF CARDS THAT FILLS THE WIDTH.
+//
+// IT WAS A FIXED-WIDTH HORIZONTAL SCROLLER, and at the widths people actually
+// use that was the wrong component. `.tcard` was `flex: 0 0 280px` (380px on the
+// live row) inside an overflow-x track, so the row laid out to a whole number of
+// fixed cards and left the remainder as dead space -- measured against the real
+// column: 2 cards and 280px of air at 1280, and the LIVE row showed two cards
+// with up to 247px of air all the way to 1512, because 380px is simply too wide
+// for a 72fr column. Widening the page moved that remainder around; it could not
+// remove it.
+//
+// `repeat(auto-fill, minmax(260px, 1fr))` fills exactly at every width instead:
+// 3 x 274px at 1280 (where the scroller managed two), 3 x 312px at 1440, 3 x
+// 330px at 1512, 4 x 282px at 1728. The card is now RESPONSIVE rather than
+// fixed, which is also why the 380px live-row special case is gone -- a row that
+// needs to read bigger gets it from the column count, not from a hardcoded
+// width that stops fitting.
+//
+// THE PRECEDENT IS ALREADY IN THIS FILE'S STYLESHEET: /games has laid its
+// results out with `repeat(auto-fill, minmax(240px, 1fr))` and a
+// `.results-grid .tcard { flex: initial; width: auto }` reset since it shipped.
+// This is that, at the feed's slightly wider minimum.
+//
+// A GRID WRAPS WHERE A SCROLLER OVERFLOWED, so the vertical direction now needs
+// the bound the horizontal one used to provide for free -- hence ROW_CAP and the
+// expander, the shape FOLLOW_FEED_CAP already uses below. /games stays uncapped:
+// browsing every game is that page's whole job.
+//
+// The optional className still lets a row flag itself; it no longer carries a
+// size. ----
 function Row({
   title,
   children,
@@ -123,10 +155,25 @@ function Row({
   children: React.ReactNode;
   className?: string;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  // toArray rather than a count prop, so every existing call site is unchanged
+  // and a row rendering a single `.row-empty` notice counts as one item and
+  // never trips the expander.
+  const items = Children.toArray(children);
+  const shown = expanded ? items : items.slice(0, ROW_CAP);
   return (
     <section className={`row${className ? ` ${className}` : ''}`}>
       <h2 className="row-title">{title}</h2>
-      <div className="row-track">{children}</div>
+      <div className="row-grid">{shown}</div>
+      {items.length > ROW_CAP && (
+        <button
+          type="button"
+          className="show-all"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'Show less' : `Show all (${items.length})`}
+        </button>
+      )}
     </section>
   );
 }
@@ -136,8 +183,16 @@ function Row({
 // "vs" and a FINAL badge shows; when a replay link is set, a watch indicator
 // appears. The whole card links to the game's watch page at /games/[id]. ----
 function GameCard({ event }: { event: EventListItem }) {
-  const home = event.homeTeam ?? 'TBD';
-  const away = event.awayTeam ?? 'TBD';
+  // The stored names carry the sport (and often a gender) as a suffix, which the
+  // corner tag already says -- see teamDisplay in api.ts. Display only: the raw
+  // event.homeTeam is untouched and is still what OpenGamesBand sorts on.
+  const h = teamDisplay(event.homeTeam);
+  const a = teamDisplay(event.awayTeam);
+  const home = h.name || 'TBD';
+  const away = a.name || 'TBD';
+  // Both sides of a fixture share a gender, so it belongs on the event's tag
+  // rather than on each team -- one pill, no second absolutely-positioned tag.
+  const genderTag = h.gender ?? a.gender;
   const hasScore = event.homeScore !== null && event.awayScore !== null;
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';
@@ -151,7 +206,10 @@ function GameCard({ event }: { event: EventListItem }) {
         aria-label={`View ${home} vs ${away}`}
       >
         <div className={thumbClass(event.sport)}>
-          <span className="thumb-tag">{event.sport ?? 'event'}</span>
+          <span className="thumb-tag">
+            {event.sport ?? 'event'}
+            {genderTag ? ` · ${genderTag}` : ''}
+          </span>
           {isLive ? (
             <LiveBadge className="thumb-live" />
           ) : (
@@ -224,37 +282,6 @@ function ArticleThumb({ item }: { item: FeedItem }) {
   );
 }
 
-// ---- Follows experience ----------------------------------------------------
-// The homepage's personalized band: a carousel of who you follow + a "From your
-// follows" content row, or a "Suggested for you" row when you follow nobody yet.
-//
-// FollowDisc / CarouselItem / followHref live in ../follow-carousel: /profile
-// renders the same carousel off the same shared membership, so they're one
-// component rather than two that can drift.
-
-// A compact suggestion in the "Suggested" strip shown beneath the carousel.
-function SuggestionChip({ s }: { s: FollowSuggestion }) {
-  const name = followTargetName(s);
-  const href = followHref(s);
-  return (
-    <div className="follow-sugchip">
-      <FollowDisc entry={s} size="sm" />
-      <div className="follow-sugchip__body">
-        {href ? (
-          <Link href={href} className="follow-sugchip__name">
-            {name}
-          </Link>
-        ) : (
-          <span className="follow-sugchip__name">{name}</span>
-        )}
-        <span className="follow-sugchip__reason">{s.reason}</span>
-      </div>
-      <FollowButton entry={s} showCount={false} size="sm" />
-    </div>
-  );
-}
-
-// A full suggestion card for the empty-state "Suggested for you" row.
 function SuggestionCard({ s }: { s: FollowSuggestion }) {
   const name = followTargetName(s);
   const href = followHref(s);
@@ -341,9 +368,27 @@ function FollowArticleCard({
 // How many "From your follows" cards to show before the Show-more expander.
 const FOLLOW_FEED_CAP = 8;
 
-// The whole personalized band. Chooses Following vs Suggested from the shared
-// follows membership; renders nothing until that has loaded, and nothing in the
-// empty state when there aren't even suggestions to offer.
+// THE PERSONALIZED BAND, cut down to what a fan actually comes back for.
+//
+// WHAT WENT, AND WHY. Two bands of avatars sat here between Upcoming Games and
+// Recent Results, costing about a screen height:
+//
+//   FOLLOWING  -- a carousel of every account the fan follows. That is a NAV
+//     concern, not a feed one: /profile already lists their follows, and a fan
+//     does not manage their follow set on the way to tonight's games.
+//   SUGGESTED  -- a strip of accounts to follow, shown forever. Onboarding is
+//     real in week one and clutter in week fifty.
+//
+// SUGGESTED SURVIVES IN THE EMPTY STATE ONLY, which is where it was always
+// doing its job: a fan with zero follows sees it exactly where the Following
+// band would have been. It retires itself on the fan's first follow -- the
+// points-hero standfirst's shape (a gate on a fact the app already knows),
+// holding no state of its own and needing no "seen it" flag.
+//
+// "FROM YOUR FOLLOWS" STAYS, and it is NOT one of the avatar bands -- it is
+// game and article CARDS from the teams a fan chose, which is the whole payoff
+// of following anything. It reads from getFollowFeed, its OWN endpoint, so
+// nothing above it feeds it and cutting the carousel cannot empty it.
 function FollowingSection({
   mine,
   followFeed,
@@ -377,60 +422,40 @@ function FollowingSection({
     );
   }
 
-  // Following state -> carousel + optional Suggested strip + content row.
+  // Following state -> the content row, and nothing else.
   const feed = followFeed ?? [];
   const shown = expanded ? feed : feed.slice(0, FOLLOW_FEED_CAP);
-  const stripSuggestions = (suggestions ?? []).slice(0, 5);
+
+  // Nothing from their follows yet -> no section at all, rather than a heading
+  // over a void. Same rule the band already applied to its inner track.
+  if (shown.length === 0) return null;
 
   return (
     <section className="row follow-section">
-      <h2 className="row-title">Following</h2>
-      <div className="row-track follow-carousel">
-        {mine.map((e) => (
-          <CarouselItem key={`${e.targetType}:${followTargetId(e)}`} entry={e} />
-        ))}
+      {/* The emptiness rule moved UP to an early return: with the carousel gone
+          this row is the section's only content, so "nothing to show" now means
+          "no section", not "a titled box with an empty track in it". */}
+      <h2 className="row-title">From your follows</h2>
+      {/* The same grid as the rows above it. This band keeps its OWN cap
+          (FOLLOW_FEED_CAP, 8) rather than borrowing ROW_CAP -- it is not a
+          Row, and its expander already existed. */}
+      <div className="row-grid">
+        {shown.map((entry) =>
+          entry.kind === 'game' ? (
+            <FollowGameCard key={`g-${entry.id}`} entry={entry} />
+          ) : (
+            <FollowArticleCard key={`a-${entry.id}`} entry={entry} />
+          ),
+        )}
       </div>
-
-      {stripSuggestions.length > 0 && (
-        <div className="follow-sugstrip">
-          <span className="follow-sugstrip__label">Suggested</span>
-          <div className="follow-sugstrip__track">
-            {stripSuggestions.map((s) => (
-              <SuggestionChip
-                key={`${s.targetType}:${followTargetId(s)}`}
-                s={s}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* "From your follows" only exists when there's something in it. The old
-          placeholder copy is gone on purpose — on a dashboard an empty section
-          reads as dead weight, so the whole subhead + track hide until a
-          followed team or athlete actually has a game or article to show. */}
-      {shown.length > 0 && (
-        <>
-          <h3 className="follow-subhead">From your follows</h3>
-          <div className="row-track">
-            {shown.map((entry) =>
-              entry.kind === 'game' ? (
-                <FollowGameCard key={`g-${entry.id}`} entry={entry} />
-              ) : (
-                <FollowArticleCard key={`a-${entry.id}`} entry={entry} />
-              ),
-            )}
-          </div>
-          {feed.length > FOLLOW_FEED_CAP && (
-            <button
-              type="button"
-              className="show-all"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? 'Show less' : `Show all (${feed.length})`}
-            </button>
-          )}
-        </>
+      {feed.length > FOLLOW_FEED_CAP && (
+        <button
+          type="button"
+          className="show-all"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? 'Show less' : `Show all (${feed.length})`}
+        </button>
       )}
     </section>
   );
@@ -631,9 +656,16 @@ export default function FeedPage() {
     if (!token || !followsLoaded) return;
     let cancelled = false;
     (async () => {
+      // SUGGESTIONS ARE FETCHED ONLY FOR A FAN WHO HAS NO FOLLOWS. They can no
+      // longer be RENDERED for anyone else -- the strip is gone and the empty
+      // state is the only consumer -- so asking for them was a request whose
+      // response had nowhere to go. One fewer round trip on every feed load for
+      // every fan past their first follow.
       const [feed, sugs] = await Promise.all([
         getFollowFeed(token).catch(() => [] as FollowFeedEntry[]),
-        getFollowSuggestions(token).catch(() => [] as FollowSuggestion[]),
+        mine.length === 0
+          ? getFollowSuggestions(token).catch(() => [] as FollowSuggestion[])
+          : Promise.resolve([] as FollowSuggestion[]),
       ]);
       if (!cancelled) {
         setFollowFeed(feed);

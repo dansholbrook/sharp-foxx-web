@@ -808,6 +808,29 @@ tfoot td {
   -webkit-overflow-scrolling: touch;
 }
 
+/* ---- .row-grid: the FEED's card rows. A grid that fills the column instead of
+   a scroller that leaves a remainder -- see the long note on Row() in
+   app/feed/page.tsx for the measurements that decided it.
+
+   `.row-track` above is UNTOUCHED and still in use: the rail bands, the profile
+   follow carousel and the suggestion row are all genuinely horizontal strips of
+   small items, where a scroller is the right component. Only the card rows
+   moved.
+
+   The .tcard reset is /games' `.results-grid .tcard` rule, verbatim in intent:
+   a card that was a fixed-width flex item has to be told to fill its column
+   instead. ---- */
+.row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.row-grid .tcard {
+  flex: initial;
+  width: auto;
+}
+
 .row-track::-webkit-scrollbar {
   height: 8px;
 }
@@ -5785,33 +5808,6 @@ a.btn-inline:hover {
     linear-gradient(135deg, #2a2418 0%, #1c1912 60%, #13110d 100%);
 }
 
-/* ---- Suggested strip (shown beneath the carousel when already following) ---- */
-.follow-sugstrip {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 0 4px;
-  margin-bottom: 22px;
-  border-top: 1px solid var(--border);
-}
-
-.follow-sugstrip__label {
-  flex: 0 0 auto;
-  font-size: 0.66rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking);
-  color: var(--muted);
-}
-
-.follow-sugstrip__track {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  -webkit-overflow-scrolling: touch;
-}
-
 .follow-sugchip {
   flex: 0 0 auto;
   display: flex;
@@ -9058,19 +9054,26 @@ a.follow-sugcard__name:hover {
   font-size: 1.5rem;
 }
 
-/* Live Now leads and reads BIG: wider cards, and a quiet gold ring so the row
-   registers as "happening now" before the pulsing LIVE badge is even read. */
-.fmain-live .tcard {
-  flex: 0 0 380px;
-}
+/* Live Now leads with a quiet gold ring so the row registers as "happening now"
+   before the pulsing LIVE badge is even read.
+
+   THE 380px WIDTH IS GONE. It was the "reads BIG" half of this rule, and it was
+   the worst offender under the old scroller: 380px into a 72fr column fitted
+   exactly two cards from 1280 all the way to 1512, leaving up to 247px of dead
+   space on the one row that is supposed to look most alive. Under `.row-grid`
+   the live row gets the same responsive columns as every other row, and its
+   emphasis comes from the ring and the badge -- which is what was actually
+   doing the work. */
 
 .fmain-live .thumb {
   box-shadow: 0 0 0 1px var(--accent-dim) inset;
 }
 
-.fmain-upcoming .tcard {
-  flex: 0 0 300px;
-}
+/* THE UPCOMING ROW'S 300px IS GONE for the same reason the live row's 380px is:
+   both were fixed widths tuned against a scroller, and under `.row-grid` a
+   fixed width is exactly what stops the column filling. (Worth knowing if you
+   are reading old measurements: the feed's upcoming cards were 300px, not the
+   280px `.tcard` base -- this rule is why.) */
 
 /* ---- The rail: one sticky element that scrolls itself when it outgrows the
    viewport. Its sections space via a flex gap (the bands' own row margins are
@@ -9590,6 +9593,33 @@ a.follow-sugcard__name:hover {
 }
 
 @media (max-width: 767px) {
+  /* ---- ON A PHONE THE ROW GOES BACK TO BEING A SCROLLER, and that is not a
+     compromise -- it is the right component at this width.
+
+     The grid exists because a 72fr laptop column could not be filled by fixed
+     280/300/380px cards. A phone has no such column: `minmax(260px, 1fr)` at
+     390px resolves to ONE card per line, so a capped row would stack six
+     full-width cards and each of the feed's four rows would become a screen and
+     a half of vertical scroll. A horizontal strip is what a phone actually
+     wants here, and it is what the reference does on mobile too.
+
+     The card's own fixed width is restored with it -- `.row-grid .tcard` beats
+     `.tcard` on specificity regardless of source order, so the reset has to be
+     undone explicitly rather than left to the cascade. ---- */
+  .row-grid {
+    display: flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .row-grid .tcard {
+    flex: 0 0 280px;
+    width: 280px;
+  }
+
   /* Swap desktop nav row for the mobile cluster. */
   .nav-links--desktop {
     display: none;

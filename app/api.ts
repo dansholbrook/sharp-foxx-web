@@ -3184,6 +3184,90 @@ export function isNationalOverdue(p: {
 // Points are a plain integer count, never money — so they format as a grouped
 // count ("1,100"), never through usd(). The ⚡ chip and the picks hero append
 // the unit themselves.
+// ============================================================================
+// TEAM DISPLAY NAME -- strip the sport, promote the gender to a tag.
+//
+// THE SUFFIX IS IN THE DATA, NOT IN THE RENDER. teams.name is stored as
+// "Augusta University Basketball (M)" -- institution, sport, and for 17,414 of
+// 26,012 rows a gender qualifier. So a card reading "Berry College Baseball vs
+// Augusta University Baseball" under a corner tag that already says BASEBALL is
+// the row faithfully rendering what it was given.
+//
+// !! DISPLAY ONLY. DO NOT PUSH THIS DOWN TO THE DATA LAYER. !!
+// OpenGamesBand (app/feed-picks.tsx) sorts open games by matching raw team NAME
+// against the names of the teams a fan follows -- /predictions/open-games
+// returns no team ids, so the string is the only join available. "Cleaning up"
+// the stored name, or applying this helper before that comparison, breaks that
+// sort one file over and does it silently: the sort would simply stop matching
+// and every game would look unfollowed.
+//
+// WHY THE GENDER BECOMES A TAG RATHER THAN VANISHING. 8,707 institution+sport
+// pairs field BOTH a men's and a women's team, and 8,721 teams' stripped names
+// collide with a sibling's. Dropping the qualifier would render a men's game and
+// a women's game between the same two schools identically, with nothing on the
+// card to tell them apart. The distinction has to survive the strip -- it just
+// moves from a suffix to a tag, which is what the sport tag already does.
+//
+// MATCHED AGAINST teams.sport's 33 VALUES, NOT EventListItem.sport's 6.
+// The two unions are different sizes AND different casings: the event type is a
+// six-value display union, while the stored name ends in the Title Case of the
+// 33-value column ("Track and Field", "Beach Volleyball", "Ice Hockey").
+// Deriving the word from the event would strip nothing on 27 of them.
+//
+// LONGEST FIRST IS LOAD-BEARING: "Beach Volleyball" must be tried before
+// "Volleyball", and "Ice Hockey"/"Field Hockey" before "Hockey", or the strip
+// leaves a stray "Beach" or "Ice" behind.
+//
+// The replacement for all of this is institutionName + gender on the event
+// projection -- see RESOLVER_TICKETS.md E7. This is a display patch and should
+// be deleted when that lands, not built on.
+// ----------------------------------------------------------------------------
+const TEAM_SPORT_WORDS: string[] = [
+  'basketball', 'football', 'baseball', 'hockey', 'soccer',
+  'archery', 'badminton', 'beach volleyball', 'bowling', 'cross country',
+  'equestrian', 'fencing', 'field hockey', 'golf', 'gymnastics', 'ice hockey',
+  'lacrosse', 'rifle', 'rodeo', 'rowing', 'sailing', 'skiing', 'softball',
+  'squash', 'swimming diving', 'synchronized swimming', 'tennis',
+  'track and field', 'volleyball', 'water polo', 'weight lifting', 'wrestling',
+  // 'other' is deliberately absent -- it is the enum's fallback, not a word any
+  // team's name ends in, and stripping it could eat a real one.
+].sort((a, b) => b.length - a.length);
+
+export interface TeamDisplay {
+  /** "Augusta University" -- what the card should render. */
+  name: string;
+  /** 'M' | 'W' when the stored name carried one, else null. Render as a tag. */
+  gender: 'M' | 'W' | null;
+}
+
+export function teamDisplay(raw: string | null | undefined): TeamDisplay {
+  const original = (raw ?? '').trim();
+  if (!original) return { name: '', gender: null };
+
+  // 1. The gender qualifier, always last when present.
+  let name = original;
+  let gender: 'M' | 'W' | null = null;
+  const g = name.match(/\s*\((M|W)\)$/i);
+  if (g) {
+    gender = g[1].toUpperCase() as 'M' | 'W';
+    name = name.slice(0, g.index).trimEnd();
+  }
+
+  // 2. Then the sport word, anchored to the end and preceded by a space, so a
+  //    school whose own name contains a sport word keeps it.
+  const lower = name.toLowerCase();
+  for (const word of TEAM_SPORT_WORDS) {
+    if (lower.endsWith(' ' + word)) {
+      name = name.slice(0, name.length - word.length - 1).trimEnd();
+      break;
+    }
+  }
+
+  // 3. A name that stripped to nothing keeps everything. Better a redundant
+  //    suffix than a blank card.
+  return { name: name || original, gender };
+}
+
 export function points(n: number): string {
   return n.toLocaleString('en-US');
 }
