@@ -159,8 +159,8 @@ export default function FieldRepsPage() {
           The create-a-rep card is demoted to the button on the right -- it was
           232px of kicker, heading and "reps normally join via /apply" prose
           wrapped around a form that is collapsed by default. ---- */}
-      <div className="gamesdir-head">
-        <h1 className="row-title gamesdir-title">Field Reps</h1>
+      <div className="page-head">
+        <h1 className="row-title page-head__title">Field Reps</h1>
         <div className="gamesdir-tabs" role="group" aria-label="Which roster to show">
           {([
             ...(isAdmin ? [] : [['mine', 'My roster'] as const]),

@@ -200,9 +200,37 @@ export default function ContestsPage() {
         <AppNav />
       </div>
 
-      <header className="masthead masthead--compact">
-        <span className="masthead-kicker">Contests</span>
-        <h1 className="masthead-title">Contests</h1>
+      {/* ---- Title and the status filter on one row. The masthead wrapper and
+          its kicker are gone: the kicker said "Contests" above an h1 saying
+          "Contests", and the wrapper's rule and margins were 53px of frame
+          around six words.
+
+          IT WILL WRAP TO TWO LINES BELOW ~410px, and that is the accepted
+          outcome rather than a miss: title + four chips measure ~381px against
+          358px of content width at 390px. Shrinking the chips or the title to
+          force one line would trade legibility on the narrowest phones for a
+          layout nicety, which is the wrong way round. ---- */}
+      <div className="page-head">
+        <h1 className="row-title page-head__title">Contests</h1>
+        <div className="filter-row" role="group" aria-label="Filter contests by status">
+          {FILTERS.map((f) => {
+            const on = filter === f.value;
+            return (
+              <button
+                key={f.label}
+                type="button"
+                className={`chip${on ? ' chip--on' : ''}`}
+                aria-pressed={on}
+                onClick={() => setFilter(f.value)}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="contests-compliance">
         {/* THE SECOND SENTENCE ONLY. "Enter with points, fill your sheet, climb
             the board" is how-it-works for a fan who is already on the contests
             page and has therefore worked it out. The no-cash-value line is not
@@ -237,27 +265,17 @@ export default function ContestsPage() {
             should meet it where the money language is, not once on a page they
             last opened in March. Evidence of banner-blindness is the thing
             that would reopen this — not the count. */}
-        <p className="masthead-standfirst">
+        {/* ---- IT STAYS AT THE TOP, above the grid, and that was decided
+            rather than defaulted. It is the single largest band on this page at
+            390px (~94px, four wrapped lines) and moving it under the grid would
+            have bought all of that back. It is not worth it: this is the surface
+            where a fan is one tap from spending, and compliance copy below the
+            fold is compliance copy nobody reads. The cost is known and
+            accepted. ---- */}
+        <p className="contests-compliance__text">
           Points have no cash value — they can&apos;t be bought, redeemed, or
           cashed out.
         </p>
-      </header>
-
-      <div className="filter-row" role="group" aria-label="Filter contests by status">
-        {FILTERS.map((f) => {
-          const on = filter === f.value;
-          return (
-            <button
-              key={f.label}
-              type="button"
-              className={`chip${on ? ' chip--on' : ''}`}
-              aria-pressed={on}
-              onClick={() => setFilter(f.value)}
-            >
-              {f.label}
-            </button>
-          );
-        })}
       </div>
 
       {error && <div className="error">{error}</div>}

@@ -479,8 +479,8 @@ function Games() {
           cover -- live now, coming up, and just played" only restated the two
           tabs beside it, and a line that restates its own controls is
           furniture. ---- */}
-      <div className="gamesdir-head">
-        <h1 className="row-title gamesdir-title">What&apos;s on</h1>
+      <div className="page-head">
+        <h1 className="row-title page-head__title">What&apos;s on</h1>
 
         {/* Tabs. Chips rather than role="tab", matching /discover: each tab is a
             filtered view of one page, not a persistent panel. */}
@@ -516,7 +516,7 @@ function Games() {
           one. The flex row, its 14px gap and `align-items: flex-end` STAY: that
           alignment is what lines the label-over-select fields up with the chips
           beside them, and it is load-bearing rather than decorative. ---- */}
-      <div className="gamesdir-controls">
+      <div className="page-controls">
         {/* WATCH/PLAY scope toggle: Sharp Foxx broadcasts (default) vs. every game
             incl. ingested feed scores. Compact chips, URL-synced like the rest. */}
         <div

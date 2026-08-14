@@ -897,7 +897,7 @@ function Discover() {
   const busy = loading && rowCount > 0;
 
   return (
-    <main className="feed-home--bleed feed-home discover-page">
+    <main className="feed-home discover-page">
       <div className="header-row">
         <div>
           <span className="wordmark">Sharp Foxx</span>
@@ -910,23 +910,21 @@ function Discover() {
         <AppNav />
       </div>
 
-      <header className="masthead masthead--compact">
-        <span className="masthead-kicker">Discover</span>
-        {/* NOT "The college map", which the Teams tab makes untrue: GET /teams
-            is not filtered to institutions, so pro teams come back with it —
-            their institution cell renders "—" precisely because they have
-            none. The title now says what the two tabs are and nothing more.
+      {/* ---- Title and the Schools/Teams tabs on one row. The masthead
+          wrapper and its kicker are gone; the tabs row's own `margin: 24px 0
+          18px` went with it -- 42px of margin around a 34px control, the same
+          rule already cut from /games.
 
-            No standfirst. "Every school and team in the graph — the ones we
-            cover and the ones we don't yet" was describing the tabs beneath it,
-            same as /games was. */}
-        <h1 className="masthead-title">Schools and teams</h1>
-      </header>
+          NOT "The college map", which the Teams tab makes untrue: GET /teams is
+          not filtered to institutions, so pro teams come back with it -- their
+          institution cell renders "-" precisely because they have none. The
+          title says what the two tabs are and nothing more.
 
-      {/* Tabs. Chips rather than role="tab": same treatment as the other
-          filter chips in the app, and each tab is a filtered view of one page
-          (a real tablist would imply panels that persist). */}
-      <div className="discover-tabs" role="group" aria-label="Browse schools or teams">
+          Still no standfirst: "every school and team in the graph" described
+          the tabs beneath it, same as /games did. ---- */}
+      <div className="page-head">
+        <h1 className="row-title page-head__title">Schools and teams</h1>
+        <div className="discover-tabs" role="group" aria-label="Browse schools or teams">
         {(['schools', 'teams'] as Tab[]).map((t) => (
           <button
             key={t}
@@ -938,9 +936,23 @@ function Discover() {
             {t === 'schools' ? 'Schools' : 'Teams'}
           </button>
         ))}
+        </div>
       </div>
 
-      <div className="discover-filters">
+      {/* ---- ONE CONTROLS ROW, NO PANEL. It was two bordered panels stacked --
+          fields on top, tier pills + the covered-only toggle hanging off the
+          bottom with `border-top: 0` so they read as one bar. The bar cost 34px
+          of padding and border per panel and stacked its fields to a column
+          below 720px: 299px of filters on a phone, for four controls.
+
+          The flex row, its 14px gap and `align-items: flex-end` survive -- that
+          alignment is what lines label-over-control fields up with the pills
+          beside them. The padding, border, panel background and radius do not.
+
+          BOTH role="group" WRAPPERS SURVIVE INTACT ("Filter by tier" below, and
+          the tabs up in the head row), and so does every <label>. The merge is
+          layout; the semantics are untouched. ---- */}
+      <div className="page-controls">
         <div className="discover-field discover-field--search">
           <label htmlFor="discover-q">Search</label>
           <input
@@ -1013,9 +1025,7 @@ function Discover() {
             />
           </>
         )}
-      </div>
 
-      <div className="discover-filters discover-filters--row2">
         <div className="filter-row" role="group" aria-label="Filter by tier">
           <button
             type="button"
@@ -1038,7 +1048,10 @@ function Discover() {
           ))}
         </div>
 
-        {/* Defaults by role — on for fans, off for staff. See the file header. */}
+        {/* Defaults by role — on for fans, off for staff. See the file header.
+            NOT collapsed into a chip: the role-based default is twenty lines of
+            reasoning in that header, and a chip would lose the label that says
+            what the box means. */}
         <label className="discover-toggle">
           <input
             type="checkbox"
@@ -1047,6 +1060,22 @@ function Discover() {
           />
           Covered only
         </label>
+
+        {/* THE COUNT, on the row that produced it rather than a band of its
+            own. Its copy branches are unchanged and deliberately so: an
+            unfiltered fan's view is already narrowed to the covered map, so the
+            old wording reported 34 covered schools as though they were the whole
+            2,012-row graph. Moved, not rewritten. */}
+        {!showSkeleton && !error && (
+          <p className="result-count">
+            {total.toLocaleString()} {total === 1 ? noun : `${noun}s`}
+            {hasFilters
+              ? ' match your filters'
+              : activeOnly
+                ? ' we cover'
+                : ' in the graph'}
+          </p>
+        )}
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -1061,18 +1090,7 @@ function Discover() {
 
       {!showSkeleton && !error && (
         <div className={busy ? 'discover-results discover-results--busy' : 'discover-results'}>
-          {/* What the count is COUNTING. A fan's default view is already
-              narrowed to the covered map, so the old unfiltered wording would
-              report 34 covered schools as though they were the whole 2,012-row
-              graph — a smaller number presented as the bigger fact. */}
-          <p className="result-count">
-            {total.toLocaleString()} {total === 1 ? noun : `${noun}s`}
-            {hasFilters
-              ? ' match your filters'
-              : activeOnly
-                ? ' we cover'
-                : ' in the graph'}
-          </p>
+          {/* The count moved UP to the controls row -- see the note there. */}
 
           {rowCount === 0 ? (
             <div className="results-empty">
