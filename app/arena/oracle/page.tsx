@@ -546,7 +546,7 @@ export default function OraclePage() {
           The content geometry is unchanged -- these blocks are vertical stacks
           and a centred column is what they want. Nothing here makes the Arena
           stop looking like a column; that is W2. ---- */}
-      <div className="arena-col">
+      <div className="arena-col arena-col--oracle">
 
       <div className="page-head">
         <div>
@@ -581,17 +581,39 @@ export default function OraclePage() {
 
       {!loading && !error && today && (
         <>
-          <TodayCard
-            day={today.day}
-            date={today.date}
-            justPicked={justPicked}
-            onPick={onPick}
-            picking={picking}
-            pickError={pickError}
-            covering={entryRefusal(today.entry, 'GET /arena/oracle/today')}
-          />
+          {/* ---- TWO COLUMNS, and the reason is WHERE THE STREAK SITS.
+              It used to render UNDER the card, so a fan read their streak after
+              they had already picked -- the one number that should inform the
+              call, delivered after the call. Beside the card it is context for
+              the decision instead of a receipt for it.
 
-          <StreaksRail streaks={today.streaks} badges={today.badges} />
+              REUSES /feed's .fgrid, not a new grid: same 72/28 tracks, same 40px
+              gap, and the same `display: contents` collapse below 1024px. That
+              collapse is why the phone layout does not regress -- .fmain and
+              .frail stop being boxes, their children become direct items of the
+              one-column .fgrid, and DOM order (card, then streaks) is exactly
+              the stack that shipped. No `order` rules are needed here; the feed
+              needs them because it interleaves seven bands, and this has two.
+
+              WHAT IS **NOT** IN THE RAIL is the point of the split -- see the
+              note above .arena-col--oracle in globals.css. ---- */}
+          <div className="fgrid">
+            <div className="fmain">
+              <TodayCard
+                day={today.day}
+                date={today.date}
+                justPicked={justPicked}
+                onPick={onPick}
+                picking={picking}
+                pickError={pickError}
+                covering={entryRefusal(today.entry, 'GET /arena/oracle/today')}
+              />
+            </div>
+
+            <div className="frail">
+              <StreaksRail streaks={today.streaks} badges={today.badges} />
+            </div>
+          </div>
 
           {history && <HistoryStrip history={history} />}
 
