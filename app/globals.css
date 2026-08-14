@@ -6796,7 +6796,10 @@ a.follow-sugcard__name:hover {
 .gamesdir-tabs {
   display: flex;
   gap: 8px;
-  margin: 24px 0 18px;
+  /* NO MARGIN. This was `24px 0 18px` -- 42px of vertical for a 34px control --
+     back when the tabs were a band of their own. They now sit in .gamesdir-head,
+     which owns the spacing for the row. */
+  margin: 0;
 }
 .gamesdir-tabs .chip {
   padding: 8px 20px;
@@ -6804,17 +6807,47 @@ a.follow-sugcard__name:hover {
   letter-spacing: var(--tracking);
 }
 
-/* ---- Filter bar: one row (sport, state, date window) ---- */
+/* ---- ROW A: page title + the tab it is on, one line.
+   `align-items: baseline` rather than center: the h1 and the chips are both
+   text, and baseline is what makes them sit as one line rather than two things
+   vertically centred against each other. ---- */
+.gamesdir-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* The page h1 borrows .row-title's scale (1.4rem serif gold) and only drops its
+   bottom margin -- the row owns spacing now. It is NOT .masthead-title: that one
+   is `clamp(2.2rem, 6vw, 3.1rem)`, which is the display size this pass removed. */
+.gamesdir-title {
+  margin: 0;
+}
+
+/* ---- ROW B: scope, sport, state, date and the count, one wrapping row.
+   Everything .gamesdir-filters used to do MINUS the box: the flex row, the 14px
+   gap and `align-items: flex-end` all survive, because that alignment is what
+   lines the label-over-select fields up with the chips beside them. The padding,
+   border, panel background and radius are gone -- 34px of vertical for a
+   container two selects and three chips never needed. ---- */
+.gamesdir-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+  margin-bottom: 22px;
+}
+
+/* Kept so the old selector still resolves if anything else reaches for it, but
+   it is no longer rendered by /games. */
 .gamesdir-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   align-items: flex-end;
-  padding: 16px;
-  margin-bottom: 22px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 4px;
 }
 
 .gamesdir-field {
@@ -6845,11 +6878,29 @@ a.follow-sugcard__name:hover {
   outline-offset: 1px;
 }
 
-/* The date chips sit on the filter bar's baseline next to the two selects,
-   which are label + control tall. */
-.gamesdir-filters .filter-row {
+/* The date chips sit on the row's baseline next to the two selects, which are
+   label + control tall. */
+.gamesdir-filters .filter-row,
+.gamesdir-controls .filter-row {
   align-items: center;
   padding-bottom: 2px;
+  /* .filter-row's own `margin: -20px 0 26px` is for a chip row that leads a
+     section; inside this row it would pull the chips up out of alignment and
+     add 26px under a row that already has its own margin. */
+  margin: 0;
+}
+
+/* The count is a status of the controls beside it: pushed to the far end, and
+   dropping to its own line only when the row wraps. */
+.gamesdir-controls .result-count {
+  margin: 0 0 0 auto;
+  padding-bottom: 2px;
+}
+
+/* The scope chips lose their standalone band margin for the same reason the
+   tabs did. */
+.gamesdir-controls .gamescope-toggle {
+  margin-bottom: 0;
 }
 
 /* The fallback header when there's nothing upcoming and we're showing recent
@@ -6860,9 +6911,31 @@ a.follow-sugcard__name:hover {
 }
 
 @media (max-width: 720px) {
+  /* THE OLD RULE STACKED EVERYTHING -- `flex-direction: column` on the filter
+     panel, which is most of why this page cost 223px of filters on a phone and
+     112px on a laptop. The two selects are 150px minimum: at 390px there is
+     358px of content width, so two of them plus the 14px gap fit on one line
+     with room to spare. Letting them share a line rather than stacking is worth
+     ~56px, and nothing about a 172px-wide select is hard to use.
+
+     Legacy .gamesdir-filters keeps the stacking it always had -- /games no
+     longer renders it, and anything else still reaching for it should not have
+     its layout changed by this pass. */
   .gamesdir-filters {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .gamesdir-controls .gamesdir-field {
+    flex: 1 1 140px;
+  }
+
+  /* On a wrapped row the count is no longer "the far end of the line" -- it is
+     its own line, and pushing it right there would leave it stranded away from
+     the controls it describes. */
+  .gamesdir-controls .result-count {
+    flex-basis: 100%;
+    margin-left: 0;
   }
 }
 

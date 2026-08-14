@@ -464,18 +464,27 @@ function Games() {
         <AppNav />
       </div>
 
-      <header className="masthead masthead--compact">
-        <span className="masthead-kicker">Games</span>
-        <h1 className="masthead-title">What&apos;s on</h1>
-        {/* NO STANDFIRST. "Every game we cover — live now, coming up, and just
-            played" was a description of the two tabs sitting directly beneath
-            it, which the tabs make in one word each and make truthfully. A line
-            that only restates the controls under it is furniture. */}
-      </header>
+      {/* ---- ROW A: the page's name and the tab it is on, ON ONE LINE.
+          It was two bands -- a masthead (53px) over a tabs row (76px, of which
+          42px was margin) -- for a title and two chips that together are 328px
+          wide and fit on one line even at 390px.
 
-      {/* Tabs. Chips rather than role="tab", matching /discover: each tab is a
-          filtered view of one page, not a persistent panel. */}
-      <div className="gamesdir-tabs" role="group" aria-label="Upcoming games or results">
+          THE KICKER IS DELETED rather than hidden. `.masthead--compact` was
+          setting `display: none` on it, which was the right call across six
+          pages in one pass; here the masthead wrapper is gone entirely, so the
+          span would come back. It said "Games" above an h1 that says what's on
+          the games page.
+
+          NO STANDFIRST, unchanged and for the original reason: "every game we
+          cover -- live now, coming up, and just played" only restated the two
+          tabs beside it, and a line that restates its own controls is
+          furniture. ---- */}
+      <div className="gamesdir-head">
+        <h1 className="row-title gamesdir-title">What&apos;s on</h1>
+
+        {/* Tabs. Chips rather than role="tab", matching /discover: each tab is a
+            filtered view of one page, not a persistent panel. */}
+        <div className="gamesdir-tabs" role="group" aria-label="Upcoming games or results">
         {(['upcoming', 'results'] as Tab[]).map((t) => (
           <button
             key={t}
@@ -484,18 +493,37 @@ function Games() {
             aria-pressed={tab === t}
             onClick={() => setTab(t)}
           >
-            {t === 'upcoming' ? 'Upcoming' : 'Results'}
-          </button>
-        ))}
+              {t === 'upcoming' ? 'Upcoming' : 'Results'}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* WATCH/PLAY scope toggle: Sharp Foxx broadcasts (default) vs. every game
-          incl. ingested feed scores. Compact chips, URL-synced like the rest. */}
-      <div
-        className="gamescope-toggle"
-        role="group"
-        aria-label="Which games to show"
-      >
+      {/* ---- ROW B: every remaining control, one wrapping row, no panel.
+          Scope, sport, state, date and the count were four bands and a bordered
+          box; at laptop width they total ~992px and fit on a single line.
+
+          THE TWO role="group" WRAPPERS SURVIVE THE MERGE, and that is the whole
+          reason this is safe to do. Scope ("which games") and date ("filter by
+          date") are different axes, each keeps its own group and its own
+          aria-label, so a screen reader still announces two groups no matter
+          that they now share a visual row. What was merged is the LAYOUT, never
+          the semantics -- and the tabs stayed up in Row A rather than joining
+          them, so the tab axis is separated by position as well.
+
+          THE PANEL CHROME IS GONE (padding 16, 1px border, --panel background,
+          radius) -- 34px of vertical for a box around controls that do not need
+          one. The flex row, its 14px gap and `align-items: flex-end` STAY: that
+          alignment is what lines the label-over-select fields up with the chips
+          beside them, and it is load-bearing rather than decorative. ---- */}
+      <div className="gamesdir-controls">
+        {/* WATCH/PLAY scope toggle: Sharp Foxx broadcasts (default) vs. every game
+            incl. ingested feed scores. Compact chips, URL-synced like the rest. */}
+        <div
+          className="gamescope-toggle"
+          role="group"
+          aria-label="Which games to show"
+        >
         {([
           ['foxx', 'Sharp Foxx'],
           ['all', 'All games'],
@@ -509,10 +537,9 @@ function Games() {
           >
             {label}
           </button>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <div className="gamesdir-filters">
         <div className="gamesdir-field">
           <label htmlFor="gamesdir-sport">Sport</label>
           <select
@@ -563,6 +590,26 @@ function Games() {
             </button>
           ))}
         </div>
+
+        {/* ---- THE COUNT, on the controls row rather than in a band of its own.
+            It is a STATUS OF THESE CONTROLS, not a heading for the results, so
+            it belongs on the line that produced it -- pushed to the far end by
+            `margin-left: auto` and dropping to its own line only when the row
+            wraps.
+
+            SAME GUARDS AS WHERE IT USED TO LIVE (`!showSkeleton && !error &&
+            !inFallback`), because hoisting a node out of a conditional and
+            leaving the conditions behind is how a count starts claiming "0
+            games" over a loading spinner. The fallback branch keeps its own
+            "Recent results" heading and deliberately shows no count -- the
+            number there would describe a list the user did not ask for. ---- */}
+        {!showSkeleton && !error && !inFallback && (
+          <p className="result-count">
+            {`${total.toLocaleString()} ${scope === 'foxx' ? 'Sharp Foxx ' : ''}${
+              total === 1 ? noun : `${noun}s`
+            }${hasFilters ? ' match your filters' : ''}`}
+          </p>
+        )}
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -626,13 +673,7 @@ function Games() {
             </>
           ) : (
             <>
-              {/* Straight off `total` — the server counted what it filtered. */}
-              <p className="result-count">
-                {`${total.toLocaleString()} ${scope === 'foxx' ? 'Sharp Foxx ' : ''}${
-                  total === 1 ? noun : `${noun}s`
-                }${hasFilters ? ' match your filters' : ''}`}
-              </p>
-
+              {/* The count moved UP to the controls row -- see the note there. */}
               {items.length === 0 ? (
                 <div className="results-empty">
                   <p className="results-empty__title">No games match these filters</p>
