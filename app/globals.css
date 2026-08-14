@@ -17216,10 +17216,17 @@ a.arena-tile:active {
   color: var(--muted);
 }
 
-/* WHERE THE CLOSED BANDS' SHARE WENT: into the open ones. Body-weight rather
-   than a caveat's — the purse concentrating is a feature of a small field and
-   reads as one, so it gets the same colour as the split line above it and no
-   alarm styling of any kind. */
+/* THE CARD'S OWN RULE: how many scores this field size pays. Body-weight rather
+   than a caveat's — a purse concentrating onto fewer scores is a feature of a
+   small field and reads as one, so it gets the same colour as the split line
+   above it and no alarm styling of any kind.
+
+   THE CLASS NAME IS NARROWER THAN THE LINE NOW. It was written when this only
+   appeared for a field too small to open every band ("concentrate"); since
+   2026-08-14 it is present at every field size and says the same thing in the
+   full-field case too. Kept rather than renamed: it is a style hook, the
+   styling did not change, and a rename would touch two files to say nothing
+   new. */
 .call-pot__concentrate {
   margin: 6px 0 0;
   font-size: 0.74rem;

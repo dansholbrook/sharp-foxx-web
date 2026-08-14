@@ -895,26 +895,62 @@ export function PotBlock({ pot, open }: { pot: CallCard['pot']; open: boolean })
       <p className="call-pot__split">
         Every fan tied at a score splits that band evenly.
       </p>
-      {/* WHERE THE CLOSED BANDS' SHARE IS: in the open ones. Stated in that
-          direction — what the purse IS doing, never what it is not — because the
-          fan's question at a small field is "is this worth less?" and the answer
-          is no, it is worth the same and lands on fewer people. */}
-      {openBands.length < pot.bands.length && (
-        <p className="call-pot__concentrate">
-          {openBands.length === 1
-            ? 'At this size the whole purse goes to the top score.'
-            : `At this size the whole purse pays out across the ${countWord(
-                openBands.length,
-              ).toLowerCase()} bands above.`}
-          {open && nextShut && (
-            <>
-              {' '}
-              {cardsAway === 1 ? 'One more card' : `${points(cardsAway)} more cards`}{' '}
-              and the {bandRank(nextShut.band).toLowerCase()} band opens too.
-            </>
-          )}
-        </p>
-      )}
+      {/* ------------------------------------------------------------------
+          THE CARD PRINTS ITS OWN RULE, so no document has to enumerate the
+          cases.
+
+          A static rules page has to say "under 10 the top score takes it, 10 to
+          49 the top scores split it, 50 or more splits three ways" — three
+          cases, of which a fan reading this card needs exactly one and cannot
+          tell which. The card knows the field size, so it can say the one. That
+          is the point of this line, and it is why the enumeration belongs
+          nowhere: a reviewer's document listing the cases is a document that
+          goes stale the day a band threshold moves, while this cannot.
+
+          ALWAYS RENDERED, WHICH IS THE CHANGE. This was gated on
+          `openBands.length < pot.bands.length`, so it spoke for small fields and
+          went SILENT once all three bands were open — leaving the biggest cards,
+          the ones where the split is most worth knowing, showing three bare
+          percentages and no sentence. One line covering all three states removes
+          the special case and closes that gap in the same edit.
+
+          "THE TOP N SCORES SPLIT THE POT" — ELIGIBILITY, NOT PAYMENTS, and the
+          distinction is what makes the sentence safe to print on an open card.
+          How many payments actually happen is min(bands open, DISTINCT SCORES),
+          and the second half is unknowable until the correspondent grades: at
+          2,140 entrants who all tie, the pot pays one way. Who is ELIGIBLE is
+          fixed by the field size and known right now. So this says how many
+          scores can be paid, never how many will be — which is why it needs no
+          "up to", and why it is still true at three entrants, the field that
+          actually ships.
+
+          At one band the sentence changes shape rather than taking a count
+          ("the top score takes the pot"), because min(1, anything) is 1: that
+          reading is unconditionally true at settlement, and "the top one scores
+          split it" is not English.
+
+          The tie rule sits above and still does its own job: this line says
+          WHICH SCORES are paid, that one says what happens among fans sharing
+          one. ------------------------------------------------------------ */}
+      <p className="call-pot__concentrate">
+        {pot.entrants === 0
+          ? 'No cards in yet'
+          : `${points(pot.entrants)} ${pot.entrants === 1 ? 'card' : 'cards'} in`}
+        {' · '}
+        {openBands.length === 1
+          ? 'the top score takes the pot.'
+          : `the top ${countWord(openBands.length).toLowerCase()} scores split the pot.`}
+        {/* The forward-looking half, and OPEN CARDS ONLY: after kickoff the
+            field is final, and "6 more cards" beside a locked card is an
+            invitation nobody can accept. */}
+        {open && nextShut && (
+          <>
+            {' '}
+            {cardsAway === 1 ? 'One more card' : `${points(cardsAway)} more cards`}{' '}
+            and the {bandRank(nextShut.band).toLowerCase()} band opens too.
+          </>
+        )}
+      </p>
     </div>
   );
 }
