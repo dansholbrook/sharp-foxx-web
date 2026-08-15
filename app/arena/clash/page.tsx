@@ -48,6 +48,7 @@ import {
   getClashTug,
 } from '../../api';
 import { ClashBoard, ClashContributionCard, ClashStandings } from './board';
+import { HowToPlay, Pays, PaysList } from '../how-to-play';
 import { JoinBoard } from './join-board';
 import { ClashPostsFeed } from './posts';
 
@@ -310,18 +311,50 @@ export default function ClashPage() {
             season={season || seasonFrom(tug)}
           />
 
-          {/* The footnote moved OUT of board.tsx to sit here, below both
-              columns -- which is where every other Arena page keeps its
-              fineprint (oracle, trail, bingo and call all render their own).
-              Clash was the outlier: this is a page footnote about how the game
-              scores, not board content. */}
+          {/* THE RULES MOVED INTO THE PANEL, and Clash gained the compliance
+              line it never had. This slot held a rules paragraph while the
+              other four games used theirs for "Points only · no cash value" —
+              so Clash was the one game stating its scoring here and the one
+              game stating no compliance line at all. Both halves are fixed
+              below: the rules are in <HowToPlay>, and the fineprint now says
+              what the other four say. */}
+          <HowToPlay
+            short={
+              <>
+                Every credit anyone in your bureau earns adds to its weekly
+                total. Most Clash Points takes the week.{' '}
+                <Link href="/arena">Everything you play in the Arena</Link>{' '}
+                counts here.
+              </>
+            }
+          >
+            <p>
+              Your bureau&apos;s score is the total Clash Points its members earn
+              all week. Nobody can lower it by playing, so bringing someone in
+              always helps. Each member can add up to 200 a day.
+            </p>
+            <p>
+              Every bureau is on one board at the moment. A week runs Monday to
+              Sunday and settles on Sunday night.
+            </p>
+            <PaysList>
+              <Pays what="Your bureau takes the week" value="50 each" />
+              <Pays what="Top of the free-for-all board" value="50 each" />
+              <Pays what="Your bureau places on the board" value="10 each" />
+              <Pays what="Your bureau comes up short" value="10 each" />
+              <Pays what="Bye week — no opponent" value="10 each" />
+            </PaysList>
+            <p>
+              Everything above is paid to every <strong>active</strong> member —
+              anyone who earned at least one credit that week. A bye is not a
+              week off: it pays the same as coming up short, to everyone who
+              turned up.
+            </p>
+          </HowToPlay>
+
           <p className="clash-fineprint">
-            Most <strong>Clash Points</strong> takes the week — every credit
-            anyone earns adds to your city&apos;s total, and nobody can drag you
-            down by playing. Win and every active member banks a bonus; lose and
-            there&apos;s a consolation.{' '}
-            <Link href="/arena">Everything you play in the Arena</Link> counts
-            here.
+            Points only · no cash value · never redeemable. Clash pays when the
+            week settles on Sunday night, not when you earn.
           </p>
 
           {/* The way out, and it is a quiet link rather than a button: changing

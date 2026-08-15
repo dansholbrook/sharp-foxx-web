@@ -22281,3 +22281,131 @@ a.scout-reveal__main:hover .scout-reveal__name {
 .contest-card--parlay_board {
   border-left: 3px solid var(--accent);
 }
+
+/* ============================================================================
+   HOW TO PLAY — the Arena's reference panel (app/arena/how-to-play.tsx).
+
+   MOBILE IS THE BASE. One column, full width, no grid: a payout list on a phone
+   is a stack of term-and-value pairs and stays one at every width, because the
+   value is short and the term is not — two columns would give the long half the
+   narrow track.
+
+   EXISTING TOKENS ONLY. Nothing here defines a colour; it borrows --panel,
+   --border, --border-strong, --muted, --text and --accent exactly as the cards
+   around it do, so the panel reads as part of the page rather than as a
+   document dropped into it.
+   ============================================================================ */
+
+.htp {
+  margin: 34px 0 0;
+  padding: 18px 18px 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.htp__title {
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.htp__short {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* The expander. `list-style: none` + the ::-webkit- rule kills the platform
+   triangle on both engines so the caret below is the only marker. */
+.htp__more {
+  margin: 12px 0 0;
+}
+
+.htp__toggle {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  /* 44px of tap target on a phone without a 44px-tall pill: the padding is
+     vertical so the row stays visually tight while the hit area is not. */
+  padding: 11px 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--accent);
+}
+
+.htp__toggle::-webkit-details-marker {
+  display: none;
+}
+
+/* The caret is drawn from the OPEN STATE rather than swapped by script, which
+   is the whole reason this is a <details>. */
+.htp__toggle::before {
+  content: '▸';
+  font-size: 0.9em;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.htp__more[open] .htp__toggle::before {
+  transform: rotate(90deg);
+}
+
+.htp__toggle:hover {
+  color: var(--accent-hover);
+}
+
+.htp__body {
+  padding: 2px 0 14px;
+}
+
+.htp__body p {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+/* ---- The payout list. ---- */
+.htp__pays {
+  margin: 0 0 14px;
+}
+
+.htp__pay {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.htp__pay:last-child {
+  border-bottom: 0;
+}
+
+.htp__paywhat {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* The number, held on one line and pinned right. `flex-shrink: 0` because the
+   term wraps and the value must not — "1,000 points" breaking after the comma
+   is the one thing on this panel that would look broken. */
+.htp__payval {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--accent);
+}

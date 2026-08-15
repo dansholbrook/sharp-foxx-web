@@ -49,6 +49,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
+import { HowToPlay, Pays, PaysList } from '../how-to-play';
 import { canAccess } from '../../roles';
 import { CallSheet, PotBlock } from './answer-sheet';
 import {
@@ -356,6 +357,41 @@ export default function CallPage() {
               covering={entryRefusal(current.entry, 'GET /arena/call/current')}
             />
           )}
+
+          <HowToPlay
+            short={
+              <>
+                One local game a week, five questions, and a pot that grows with the
+                number of people playing.
+              </>
+            }
+          >
+            <p>
+              Each week one game gets a card of five questions, written by the
+              correspondent who is actually at it. You answer all five before kickoff.
+              Filing a card pays whatever happens next.
+            </p>
+            <PaysList>
+              <Pays what="File a full card before kickoff" value="5" />
+              <Pays what="Each answer you get right" value="20" />
+              <Pays what="All five right &mdash; the Golden Whistle" value="100" />
+            </PaysList>
+            <p>
+              On top of that there is a pot. It starts at 500 and grows with the size
+              of the field up to 5,000, plus 2 credits for every card entered.
+            </p>
+            <p>
+              How the pot splits depends on how many people played. Under 10 cards,
+              the single top score takes it. 10 to 49, the top scores split it. 50 or
+              more, it splits three ways by score &mdash; 50%, 30%, 20%. Bands nobody
+              reaches fold back into the ones above. Everyone tied at a score splits
+              that share evenly.
+            </p>
+            <p>
+              If nobody gets a single answer right, the pot pays nothing that week and
+              everyone keeps their 5.
+            </p>
+          </HowToPlay>
 
           <p className="call-fineprint">
             Points only · no cash value · never redeemable. The Call pays when

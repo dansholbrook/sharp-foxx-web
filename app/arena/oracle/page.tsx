@@ -28,6 +28,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
+import { HowToPlay, Pays, PaysList } from '../how-to-play';
 import { canAccess } from '../../roles';
 import { TodayCard } from './today-card';
 import {
@@ -618,6 +619,46 @@ export default function OraclePage() {
           {history && <HistoryStrip history={history} />}
 
           {boards && <Boards boards={boards} meId={user?.id} />}
+
+          <HowToPlay
+            short={
+              <>
+                One call a day from the house engine. Agree with it or go against
+                it &mdash; free, once a day.
+              </>
+            }
+          >
+            <p>
+              Each day the house engine calls one game and says how sure it is. You
+              either ride with the call or fade it. Riding pays the same every time.
+              Fading pays more the surer the engine was, because going against a
+              confident call is the harder thing to get right.
+            </p>
+            <PaysList>
+              <Pays what="Ride with the engine and it&rsquo;s right" value="10" />
+              <Pays what="Fade it at 60% and you&rsquo;re right" value="15" />
+              <Pays what="Fade it at 75% and you&rsquo;re right" value="30" />
+              <Pays what="Fade it at 80% and you&rsquo;re right" value="40" />
+            </PaysList>
+            <p>
+              Get it wrong and you lose nothing. There is nothing to put up, so the
+              worst day is zero.
+            </p>
+            <p>
+              Calling it right on consecutive days builds a streak, and the streak
+              pays on its own four times along the way.
+            </p>
+            <PaysList>
+              <Pays what="3 days in a row" value="50" />
+              <Pays what="5 days in a row" value="125" />
+              <Pays what="10 days in a row" value="400" />
+              <Pays what="20 days in a row" value="1,000" />
+            </PaysList>
+            <p>
+              Miss a day and a Streak Freeze covers it, if you have one. You can hold
+              two at a time.
+            </p>
+          </HowToPlay>
 
           <p className="oracle-fineprint">
             Points only · no cash value · never redeemable. Oracle payouts land

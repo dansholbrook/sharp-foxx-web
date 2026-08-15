@@ -33,6 +33,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
+import { HowToPlay, Pays, PaysList } from '../how-to-play';
 import { canAccess } from '../../roles';
 import { TownCard } from './town-card';
 import { TrailMap } from './trail-map';
@@ -632,6 +633,40 @@ export default function TrailPage() {
           {book && <PennantBook book={book} firstRegion={firstRegion} />}
 
           {boards && <Boards boards={boards} meId={user?.id} />}
+
+          <HowToPlay
+            short={
+              <>
+                One town a day along a season-long route. Call each one right and the
+                pennants add up.
+              </>
+            }
+          >
+            <p>
+              Every day the Trail stops in a new town with one call to make. Get it
+              right and you take the pennant and move on. Get it wrong and you lose
+              nothing &mdash; you just don&rsquo;t collect that one.
+            </p>
+            <PaysList>
+              <Pays what="Call a town right" value="10" />
+              <Pays what="Finish a leg of the route" value="150" />
+              <Pays what="Finish the season" value="1,000" />
+            </PaysList>
+            <p>
+              A run of correct calls turns up the value of each pennant, to a limit.
+              Miss a day and a Streak Freeze covers it, if you have one.
+            </p>
+            <p>
+              Call all seven days in a week right and you take the Scenic Route.
+            </p>
+            <PaysList>
+              <Pays what="Scenic Route &mdash; all seven days" value="40 + a freeze" />
+            </PaysList>
+            <p>
+              The Scenic Route pays 40 credits, plus a Streak Freeze if you&rsquo;re
+              under the cap of two. At the cap you take the 40 and no freeze.
+            </p>
+          </HowToPlay>
 
           <p className="trail-fineprint">
             Points only · no cash value · never redeemable. Trail payouts land

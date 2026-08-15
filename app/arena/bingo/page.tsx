@@ -103,6 +103,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { AppNav, AccessDenied } from '../../nav';
+import { HowToPlay, Pays, PaysList } from '../how-to-play';
 import { canAccess } from '../../roles';
 import { BingoCard } from './bingo-card';
 import { CallBoard } from './call-board';
@@ -476,6 +477,36 @@ export default function BingoPage() {
               a lottery ticket's front face, and 1 in 5,919 flatters either way
               you say it. The payouts are stated in the lobby; what the fineprint
               owes is the thing that is true of every Arena game. */}
+          <HowToPlay
+            short={
+              <>
+                Fifty-six numbers a night, four every twenty minutes, every one of
+                them called off tonight&rsquo;s slate.
+              </>
+            }
+          >
+            <p>
+              You get one free card every night, and the free card faces the same
+              numbers as any other. Numbers are called from what actually happens in
+              tonight&rsquo;s games, four at a time, every twenty minutes.
+            </p>
+            <PaysList>
+              <Pays what="A line on your card" value="10" />
+              <Pays what="All four corners" value="75" />
+              <Pays what="Blackout &mdash; the whole card" value="1,000" />
+            </PaysList>
+            <p>
+              Want more than one card, you can buy extras.
+            </p>
+            <PaysList>
+              <Pays what="An extra card" value="costs 50" />
+            </PaysList>
+            <p>
+              If a night can&rsquo;t be run, nothing is called and the cost of any
+              extra cards comes straight back to you.
+            </p>
+          </HowToPlay>
+
           <p className="bingo-fineprint">
             Points only · no cash value · never redeemable. One free card every
             night, and the free card faces the same numbers as any other.
