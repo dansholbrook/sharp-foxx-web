@@ -22530,18 +22530,6 @@ a.scout-reveal__main:hover .scout-reveal__name {
   color: var(--text);
 }
 
-.teamctx__rec {
-  font-size: 0.86rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.teamctx__reclabel {
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--muted);
-}
-
 .teamctx__next,
 .teamctx__when {
   font-size: 0.78rem;
@@ -22559,16 +22547,19 @@ a.scout-reveal__main:hover .scout-reveal__name {
 
 /* From ~600px the record sits beside the name; the fixture keeps its own line
    because it is the longest string on the row. */
+/* From ~600px the fixture sits beside the team name rather than under it. It
+   used to take a full row of its own because a RECORD held the second column;
+   the record is gone (see TeamContextStrip) so the fixture takes that slot. */
 @media (min-width: 600px) {
   .teamctx__row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr;
     align-items: baseline;
     gap: 4px 16px;
   }
 
   .teamctx__next {
-    grid-column: 1 / -1;
+    text-align: right;
   }
 }
 

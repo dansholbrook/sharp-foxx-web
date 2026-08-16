@@ -290,18 +290,38 @@ function Scoreboard({
 }
 
 // ---------------------------------------------------------------------------
-// RECORDS AND WHAT EACH SIDE PLAYS NEXT. Derived server-side from finished and
-// scheduled events; nothing is stored, so a corrected result moves the record
-// with it and there is no second number to keep in step.
+// WHAT EACH SIDE PLAYS NEXT. Derived server-side from scheduled events.
 //
-// LIFETIME, AND LABELLED AS SUCH. `events` carries no season column, so "this
-// season" is not a thing this platform can say yet. "Record" with no qualifier
-// would be read as season-to-date by every fan who has seen a box score, so the
-// label says what it is instead of implying what it isn't.
+// ----------------------------------------------------------------------------
+// THE RECORD IS ON THE WIRE AND DELIBERATELY NOT RENDERED. DO NOT WIRE IT UP.
+//
+// GET /events/:id/context returns { record, next } per side and the record half
+// is correct — it counts every final we hold, home and away. The problem is the
+// DATA, not the query: we hold a few weeks of ESPN ingest, so a team that is
+// genuinely 20-14 on the season reads "3-0 here". That number is TRUE and reads
+// FALSE, which is the worst kind of number to put next to a team name.
+//
+// Labelling it does not save it. "3-0 all-time here" was the version that
+// shipped for about an hour, and the label is the part nobody reads — a fan
+// sees 3-0 beside Minnesota Lynx and files it as the Lynx's record. A
+// wrong-LOOKING record is worse than no record.
+//
+// THE CONDITION FOR TURNING IT ON, either one:
+//   * full-season ingest, so the count covers the season a fan assumes, or
+//   * a `season` column on `events`, so the query can scope to one and the
+//     label can name it ("12-4 this season") instead of hedging.
+// Until then the field stays on the wire, unrendered, with this note. The CSS
+// that styled it (.teamctx__rec / .teamctx__reclabel) was removed with it.
+//
+// NEXT FIXTURES ARE DIFFERENT AND THAT IS WHY THEY STAYED. A fixture is one row
+// that either exists or does not; it does not depend on the dataset being
+// complete, so it is right regardless of how much history we hold. An incomplete
+// schedule shows fewer fixtures, never a wrong one.
+// ----------------------------------------------------------------------------
 //
 // SELF-HIDING at every level: no context, no strip; a side with no team FK
 // (a covered game entered without teams) renders nothing for that side rather
-// than "0-0", which would be a claim.
+// than an empty row, which would be a claim about a team we cannot name.
 // ---------------------------------------------------------------------------
 function TeamContextStrip({
   event,
@@ -314,31 +334,33 @@ function TeamContextStrip({
     [event.awayTeam ?? 'Away', context.away],
     [event.homeTeam ?? 'Home', context.home],
   ];
-  if (!context.home && !context.away) return null;
+  // Nothing to show unless at least one side has a next fixture. Was keyed on
+  // the context existing at all, which was right when the strip also carried
+  // records; with only fixtures left, a context with two nulls is an empty box.
+  if (!context.home?.next && !context.away?.next) return null;
 
   return (
     <section className="teamctx">
-      <h2 className="teamctx__title">Form</h2>
+      {/* "Up next", not "Form" — the record is gone and a heading promising
+          form over a list of fixtures would be the same wrong-looking claim one
+          level up. */}
+      <h2 className="teamctx__title">Up next</h2>
       <ul className="teamctx__list">
         {sides.map(([name, side]) =>
-          side ? (
+          // A side with no upcoming fixture renders NOTHING rather than a name
+          // with a blank beside it: the row exists to carry the fixture, and
+          // without one there is nothing to say about that team here.
+          side?.next ? (
             <li key={name} className="teamctx__row">
               <span className="teamctx__name">{name}</span>
-              <span className="teamctx__rec">
-                {side.record.won}&ndash;{side.record.lost}
-                <small className="teamctx__reclabel"> all-time here</small>
-              </span>
-              {side.next && (
-                <span className="teamctx__next">
-                  Next:{' '}
-                  <Link href={`/games/${side.next.id}`}>
-                    {side.next.awayTeam ?? 'TBD'} at {side.next.homeTeam ?? 'TBD'}
-                  </Link>{' '}
-                  <span className="teamctx__when">
-                    {formatWhen(side.next.scheduledAt)}
-                  </span>
+              <span className="teamctx__next">
+                <Link href={`/games/${side.next.id}`}>
+                  {side.next.awayTeam ?? 'TBD'} at {side.next.homeTeam ?? 'TBD'}
+                </Link>{' '}
+                <span className="teamctx__when">
+                  {formatWhen(side.next.scheduledAt)}
                 </span>
-              )}
+              </span>
             </li>
           ) : null,
         )}
