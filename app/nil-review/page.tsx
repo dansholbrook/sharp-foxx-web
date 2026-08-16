@@ -16,7 +16,6 @@ import { canAccess } from '../roles';
 import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
   getNilReviewQueue,
-  getNilPool,
   approveDeliverable,
   returnDeliverable,
   etDateTime,
@@ -30,12 +29,6 @@ const usdCents = (cents: number) =>
     style: 'currency',
     currency: 'USD',
   });
-
-// Fallback platform fee rate for the approve PREVIEW when the deliverable's pool
-// fee rate isn't available (no institutionId, or the pool lookup failed). The
-// real math always comes back in the approve response, so this only tunes the
-// preview; 0.15 is the platform's standard rate.
-const DEFAULT_FEE_RATE = 0.15;
 
 function formatWhen(iso: string | null): string {
   if (!iso) return '—';
@@ -60,14 +53,12 @@ function athleteNameOf(item: NilReviewItem): string | null {
 function NilReviewDetail({
   item,
   token,
-  feeRate,
   onApproved,
   onReturned,
   close,
 }: {
   item: NilReviewItem;
   token: string;
-  feeRate: number;
   onApproved: (release: NilRelease) => void;
   onReturned: () => void;
   close: () => void;
@@ -78,8 +69,6 @@ function NilReviewDetail({
   const [error, setError] = useState<string | null>(null);
 
   const gross = item.valueCents;
-  const fee = Math.round(gross * feeRate);
-  const net = gross - fee;
   const who = athleteNameOf(item) ?? 'the athlete';
 
   async function onApprove() {
@@ -118,29 +107,26 @@ function NilReviewDetail({
   if (mode === 'confirm') {
     body = (
       <>
+        {/* ---- ONE NUMBER, BECAUSE THERE IS ONLY ONE NUMBER NOW.
+            This was a three-cell split -- gross, platform fee, net to athlete --
+            previewing the 15% that came off the release. Sharp Foxx takes no
+            part of the athlete's money, so gross IS net and a "fee: $0" row
+            would be a permanent reminder of a deduction that no longer happens.
+            See approveDeliverable in the API for why it went. ---- */}
         <p className="nil-restate">
-          Release <strong>{usdCents(gross)}</strong> — {usdCents(fee)} platform
-          fee, <strong>{usdCents(net)}</strong> to {who}?
+          Release <strong>{usdCents(gross)}</strong> to {who}?
         </p>
 
         <div className="nil-mathrow">
-          <div className="nil-mathrow__cell">
-            <span className="nil-mathrow__label">Gross</span>
-            <span className="nil-mathrow__value">{usdCents(gross)}</span>
-          </div>
-          <div className="nil-mathrow__cell">
-            <span className="nil-mathrow__label">Platform fee</span>
-            <span className="nil-mathrow__value">−{usdCents(fee)}</span>
-          </div>
           <div className="nil-mathrow__cell nil-mathrow__cell--net">
-            <span className="nil-mathrow__label">Net to athlete</span>
-            <span className="nil-mathrow__value">{usdCents(net)}</span>
+            <span className="nil-mathrow__label">To the athlete</span>
+            <span className="nil-mathrow__value">{usdCents(gross)}</span>
           </div>
         </div>
 
         <p className="game-hint">
-          Fee is computed at the pool&apos;s rate; the exact amounts are confirmed
-          on approval and paid from the school&apos;s pool.
+          Paid in full from the school&apos;s pool — Sharp Foxx takes no fee on
+          an athlete&apos;s money. The exact amount is confirmed on approval.
         </p>
 
         {error && <div className="error rep-form-msg">{error}</div>}
@@ -311,9 +297,6 @@ export default function NilReviewPage() {
   const [items, setItems] = useState<NilReviewItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // institutionId -> pool platform fee rate, for the approve preview. Best-effort;
-  // a missing entry falls back to DEFAULT_FEE_RATE.
-  const [feeRates, setFeeRates] = useState<Record<string, number>>({});
   // A brief banner after an approval, restating the real released net.
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -327,24 +310,9 @@ export default function NilReviewPage() {
     try {
       const queue = await getNilReviewQueue(t);
       setItems(queue);
-      // Load each distinct school's pool once for its fee rate (best-effort).
-      const ids = Array.from(
-        new Set(
-          queue
-            .map((q) => q.institutionId)
-            .filter((id): id is string => Boolean(id)),
-        ),
-      );
-      const pools = await Promise.all(
-        ids.map((id) =>
-          getNilPool(t, id)
-            .then((p) => [id, p.platformFeeRate] as const)
-            .catch(() => null),
-        ),
-      );
-      const map: Record<string, number> = {};
-      for (const entry of pools) if (entry) map[entry[0]] = entry[1];
-      setFeeRates(map);
+      // A per-school pool fetch used to run here, purely to preview each pool's
+      // platform fee rate. There is no fee to preview: an approval releases the
+      // full value to the athlete. One request per school per queue load, gone.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load review queue');
     } finally {
@@ -358,11 +326,6 @@ export default function NilReviewPage() {
 
   function removeItem(id: string) {
     setItems((prev) => (prev ? prev.filter((i) => i.id !== id) : prev));
-  }
-
-  function feeRateFor(item: NilReviewItem): number {
-    const id = item.institutionId;
-    return (id && feeRates[id]) || DEFAULT_FEE_RATE;
   }
 
   const columns: Column<NilReviewItem>[] = [
@@ -421,12 +384,11 @@ export default function NilReviewPage() {
             <NilReviewDetail
               item={i}
               token={token}
-              feeRate={feeRateFor(i)}
               onApproved={(release) => {
                 setNotice(
                   `Released ${usdCents(release.netCents)} to ${
                     athleteNameOf(i) ?? 'the athlete'
-                  } (${usdCents(release.feeCents)} platform fee).`,
+                  } in full.`,
                 );
                 removeItem(i.id);
               }}

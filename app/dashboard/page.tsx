@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
-import { RevChart, RevChartLegend } from '../rev-chart';
+import { RevChart } from '../rev-chart';
 import { RefTotalsStrip, RefBarChart, RefLeaderboard } from '../refreport';
 import {
   getCommissions,
@@ -29,13 +29,19 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 const SOURCE_KEYS = Object.keys(SOURCE_LABELS);
 
-// Labels for /reports/executive's revenueByStream keys. nil_fees is Sharp Foxx's
-// platform fee on NIL releases -- NOT gross contributions, which are the school's
-// money passing through us. The label has to say so or the number reads as a ~7x
-// undercount of NIL volume to anyone who remembers the old Reports page.
+// Labels for /reports/executive's revenueByStream keys.
+//
+// 'nil_fees' WAS HERE AND IS DELIBERATELY NOT. It labelled the 15% Sharp Foxx
+// took off a NIL release, and the comment here used to explain at length why the
+// number was so much smaller than NIL volume -- because it was a fee on the
+// school's money, not revenue we earned. That fee is gone entirely: Sharp Foxx
+// takes no part of an athlete's money. The stream is not emitted by the backend
+// any more, so a label for it would never be read; it is recorded here as a
+// removal rather than dropped silently, because "why is there no NIL line on the
+// revenue chart" is a question an exec will ask. The answer is that there is no
+// NIL revenue, by choice. NIL volume is nilTotalReleased on the same payload.
 const STREAM_LABELS: Record<string, string> = {
   ad_sales: 'Ad sales',
-  nil_fees: 'NIL platform fees',
   subscriptions: 'Subscriptions',
   retail: 'Retail',
 };
@@ -185,10 +191,9 @@ export default function DashboardPage() {
           <section className="card game">
             <span className="game-kicker">Last 12 months</span>
             <h2>Revenue by month</h2>
-            <RevChartLegend />
             <RevChart
               months={exec.revenueByMonth}
-              ariaLabel="Ad sales and NIL platform fees by month, last 12 months"
+              ariaLabel="Ad sales by month, last 12 months"
             />
           </section>
 

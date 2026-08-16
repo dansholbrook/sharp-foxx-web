@@ -48,7 +48,11 @@ export interface RevenueReport {
 // -- the backend normalizes both conventions at its output boundary, so nothing
 // here needs to know which table a number came from.
 //
-// Note on streams: nil_fees is Sharp Foxx's PLATFORM FEE on NIL releases, not
+// Note on streams: nil_fees USED TO BE a stream here -- Sharp Foxx's platform
+// fee on NIL releases. It is gone: the fee was a deduction from the school's
+// money on its way to the athlete rather than a margin, and is now hard zero.
+// The remaining note is kept because the same distinction still matters for
+// nilTotalReleased, which is gross NIL volume and not
 // gross contributions (that money is the school's, not revenue). It is a
 // different number from RevenueReport.byStream.nilContributions.
 export interface ExecutiveReport {
@@ -66,7 +70,7 @@ export interface ExecutiveReport {
   };
   // Exactly 12 entries, oldest-first, zero-filled: a month with no revenue is a
   // present zero rather than a gap, so the bar chart can index it directly.
-  revenueByMonth: Array<{ month: string; adRevenue: string; nilFees: string }>;
+  revenueByMonth: Array<{ month: string; adRevenue: string }>;
   // A list, not an object, so new streams are additive.
   revenueByStream: Array<{ stream: string; total: string; thisMonth: string }>;
   // state is null for orders whose advertiser has no institution -> "Unassigned".
