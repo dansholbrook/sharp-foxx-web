@@ -38,7 +38,7 @@ import {
   parlayStakeRangeLabel,
   points,
   signedPoints,
-  teamDisplay,
+  teamLabel,
   etDateTime,
   Contest,
   EventListItem,
@@ -386,11 +386,13 @@ export function NationalBoardBand({ token }: { token: string }) {
 // api.ts. The link still points at /games/[id], which renders the lean
 // feed-variant page for these.
 function OpenGameCard({ game, isFeed }: { game: OpenPickGame; isFeed: boolean }) {
-  // DISPLAY ONLY -- and note that the raw names are still what the follows sort
-  // in OpenGamesBand below matches on. Stripping before that comparison would
-  // stop every followed team matching, silently.
-  const home = teamDisplay(game.homeTeamName).name || 'TBD';
-  const away = teamDisplay(game.awayTeamName).name || 'TBD';
+  // DISPLAY ONLY -- and note that the RAW names are still what the follows sort
+  // in OpenGamesBand below matches on. Labelling before that comparison would
+  // stop every followed team matching, silently. That was true when this was a
+  // render-time strip and it is true now that the school arrives as its own
+  // field: the card reads homeInstitutionName, the sort reads homeTeamName.
+  const home = teamLabel(game.homeInstitutionName, game.homeTeamName) || 'TBD';
+  const away = teamLabel(game.awayInstitutionName, game.awayTeamName) || 'TBD';
   return (
     <Link
       href={`/games/${game.eventId}`}

@@ -8,6 +8,7 @@ import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import {
   getEvent,
+  teamLabel,
   getEventContext,
   getEvents,
   getEventContent,
@@ -71,8 +72,8 @@ function eventKey(
 // empty player box. A replay embeds (or falls back to an external link); with no
 // replay we show a countdown card (upcoming) or a final-score card. ----
 function GameVideo({ event }: { event: EventListItem }) {
-  const home = event.homeTeam ?? 'TBD';
-  const away = event.awayTeam ?? 'TBD';
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const title = `${home} vs ${away}`;
   const isLive = event.status === 'live';
   const embed = event.videoUrl ? toYouTubeEmbed(event.videoUrl) : null;
@@ -241,8 +242,8 @@ function Scoreboard({
   scoreVersion?: number;
   period?: string | null;
 }) {
-  const home = event.homeTeam ?? 'TBD';
-  const away = event.awayTeam ?? 'TBD';
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const homeScore = liveHome ?? event.homeScore;
   const awayScore = liveAway ?? event.awayScore;
   const hasScore = homeScore !== null && awayScore !== null;
@@ -331,8 +332,8 @@ function TeamContextStrip({
   context: EventContext;
 }) {
   const sides: [string, TeamContext | null][] = [
-    [event.awayTeam ?? 'Away', context.away],
-    [event.homeTeam ?? 'Home', context.home],
+    [teamLabel(event.awayInstitution, event.awayTeam) || 'Away', context.away],
+    [teamLabel(event.homeInstitution, event.homeTeam) || 'Home', context.home],
   ];
   // Nothing to show unless at least one side has a next fixture. Was keyed on
   // the context existing at all, which was right when the strip also carried
@@ -355,7 +356,8 @@ function TeamContextStrip({
               <span className="teamctx__name">{name}</span>
               <span className="teamctx__next">
                 <Link href={`/games/${side.next.id}`}>
-                  {side.next.awayTeam ?? 'TBD'} at {side.next.homeTeam ?? 'TBD'}
+                  {teamLabel(side.next.awayInstitution, side.next.awayTeam) || 'TBD'} at{' '}
+                  {teamLabel(side.next.homeInstitution, side.next.homeTeam) || 'TBD'}
                 </Link>{' '}
                 <span className="teamctx__when">
                   {formatWhen(side.next.scheduledAt)}
@@ -444,14 +446,14 @@ function PeriodTable({ event }: { event: EventDetail }) {
             {/* AWAY FIRST, which is how every box score in the sport is read —
                 the visiting side bats and is listed on top. */}
             <tr>
-              <th scope="row">{event.awayTeam ?? 'Away'}</th>
+              <th scope="row">{teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}</th>
               {periods.map((p) => (
                 <td key={p.period}>{p.away}</td>
               ))}
               <td className="periods__total">{event.awayScore ?? '—'}</td>
             </tr>
             <tr>
-              <th scope="row">{event.homeTeam ?? 'Home'}</th>
+              <th scope="row">{teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}</th>
               {periods.map((p) => (
                 <td key={p.period}>{p.home}</td>
               ))}
@@ -484,8 +486,8 @@ function PresentingSponsorStrip({ sponsorship }: { sponsorship: Sponsorship }) {
 
 // ---- Share row: plain intent URLs (no SDKs) + clipboard copy. ----
 function ShareRow({ event }: { event: EventListItem }) {
-  const home = event.homeTeam ?? 'TBD';
-  const away = event.awayTeam ?? 'TBD';
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
 
   // Resolve the page URL on the client only (no window during SSR).
   const [pageUrl, setPageUrl] = useState('');
@@ -566,8 +568,8 @@ function ShareRow({ event }: { event: EventListItem }) {
 // ---- Right-rail game card: a compact matchup + score/date/venue that links to
 // that game's page. ----
 function RailGameCard({ event }: { event: EventListItem }) {
-  const home = event.homeTeam ?? 'TBD';
-  const away = event.awayTeam ?? 'TBD';
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';

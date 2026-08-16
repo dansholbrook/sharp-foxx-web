@@ -42,7 +42,7 @@ import {
   etDateTime,
   etDateKey,
   etWallClockToIso,
-  teamDisplay,
+  teamLabel,
   EventListItem,
 } from '../api';
 
@@ -157,8 +157,9 @@ function shiftDays(dayKey: string, days: number): string {
 // shell so the grid stays uniform; the .playcard/.gamescope-* scope knocks it
 // back. See THE RULE in api.ts. ----
 function FeedGameCard({ event, picks }: { event: EventListItem; picks: GamePicks }) {
-  const home = teamDisplay(event.homeTeam).name || 'TBD';
-  const away = teamDisplay(event.awayTeam).name || 'TBD';
+  // The school, falling back to the stored name. See teamLabel in api.ts.
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
   const isLive = event.status === 'live';
 
@@ -209,8 +210,9 @@ function FeedGameCard({ event, picks }: { event: EventListItem; picks: GamePicks
 // surface, so it renders the quieter FeedGameCard instead. ----
 function GameCard({ event, picks }: { event: EventListItem; picks: GamePicks }) {
   if (isFeedEvent(event.source)) return <FeedGameCard event={event} picks={picks} />;
-  const home = teamDisplay(event.homeTeam).name || 'TBD';
-  const away = teamDisplay(event.awayTeam).name || 'TBD';
+  // The school, falling back to the stored name. See teamLabel in api.ts.
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';

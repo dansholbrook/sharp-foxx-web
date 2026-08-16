@@ -298,8 +298,22 @@ export interface EventListItem {
   sport: 'basketball' | 'football' | 'baseball' | 'hockey' | 'soccer' | 'other';
   homeTeamId: string | null;
   awayTeamId: string | null;
+  // THE STORED TEAM NAME, RAW: "Augusta University Baseball". Kept raw on the
+  // wire on purpose -- see teamLabel below, and the note on OpenPickGame about
+  // the one surface that matches on it.
   homeTeam: string | null;
   awayTeam: string | null;
+  // The school behind the team. What a card should actually print. NULL
+  // wherever the team has no institution, which is most of the schedule (80 of
+  // the 91 teams events reference are pro rows with clean names) -- so this is
+  // read through teamLabel, never directly.
+  homeInstitution: string | null;
+  awayInstitution: string | null;
+  // 'mens' | 'womens' | 'coed' straight off teams.gender. ON THE WIRE AND
+  // DELIBERATELY NOT RENDERED ANYWHERE -- see teamLabel for why, and why it
+  // rides along anyway.
+  homeGender: string | null;
+  awayGender: string | null;
   marketId: string | null;
   venue: string | null;
   status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
@@ -1427,6 +1441,29 @@ export interface PeriodScore {
 
 // The full row. Extends the list shape rather than restating it, so a field
 // added to one cannot silently diverge from the other.
+//
+// ---------------------------------------------------------------------------
+// `extends` DESCRIBES WHAT WE WANT, NOT WHAT THE ENDPOINT SENT, AND THAT HID A
+// BUG FOR THE WHOLE LIFE OF THIS PAGE. (2026-08-16)
+//
+// GET /events/:id was `select().from(events)` -- the raw row, with the two team
+// FKs and no join. This interface inherited `homeTeam: string | null` from
+// EventListItem anyway, because that is what extends MEANS: a promise about the
+// shape, checked against nothing. So `event.homeTeam` typechecked, arrived
+// undefined at runtime, and `event.homeTeam ?? 'TBD'` -- a fallback written for
+// a covered game entered without teams -- rendered on EVERY game. The
+// scoreboard read "TBD vs TBD" and no test, type or lint could see it, because
+// each half was locally correct.
+//
+// Fixed at the source: findOne() now carries the same two aliased joins list()
+// does, so the inheritance is true rather than aspirational. See the header on
+// EventsService.findOne.
+//
+// THE GENERAL SHAPE OF IT, worth keeping in mind before the next `extends`:
+// inheriting a field from a shape produced by a DIFFERENT endpoint asserts that
+// the other endpoint's projection applies here, and nothing enforces that. It
+// stays hidden until somebody opens the page.
+// ---------------------------------------------------------------------------
 export interface EventDetail extends EventListItem {
   // NULL ON EVERY COVERED GAME, and that is a fact about where the data comes
   // from rather than a gap to fill in: period scores are written only by the
@@ -1451,6 +1488,10 @@ export interface TeamContext {
     scheduledAt: string;
     homeTeam: string | null;
     awayTeam: string | null;
+    // Same pair as the list shape, so the fixture line under a scoreboard reads
+    // the same way the scoreboard does. No gender here: nothing renders it.
+    homeInstitution: string | null;
+    awayInstitution: string | null;
   } | null;
 }
 
@@ -2942,8 +2983,16 @@ export interface NationalPrediction extends PredictionBase {
 // IDs on this read — anything matching these against follows must do it by name.
 export interface OpenPickGame {
   eventId: string;
+  // RAW, AND THE SORT IN OpenGamesBand READS THESE AND NOTHING ELSE. With no
+  // team ids on this route, matching a game against a fan's follows is a string
+  // comparison against the raw name /follows/mine returns. Render from the
+  // Institution fields below; compare on these. See teamLabel.
   homeTeamName: string | null;
   awayTeamName: string | null;
+  // The school behind the team, when the team is one. NULL for the pro rows
+  // that make up most of the schedule -- teamLabel falls back to the raw name.
+  homeInstitutionName: string | null;
+  awayInstitutionName: string | null;
   // Only ever a game that hasn't finished — there's nothing to pick on a game
   // that's over, so the backend filters to these two.
   status: 'scheduled' | 'live';
@@ -3293,87 +3342,53 @@ export function isNationalOverdue(p: {
 // count ("1,100"), never through usd(). The ⚡ chip and the picks hero append
 // the unit themselves.
 // ============================================================================
-// TEAM DISPLAY NAME -- strip the sport, promote the gender to a tag.
+// TEAM LABEL -- print the school, fall back to the stored name.
 //
-// THE SUFFIX IS IN THE DATA, NOT IN THE RENDER. teams.name is stored as
-// "Augusta University Basketball (M)" -- institution, sport, and for 17,414 of
-// 26,012 rows a gender qualifier. So a card reading "Berry College Baseball vs
-// Augusta University Baseball" under a corner tag that already says BASEBALL is
-// the row faithfully rendering what it was given.
+// THIS REPLACED A 33-VALUE COPY OF THE teams.sport ENUM. (RESOLVER_TICKETS.md E7)
 //
-// !! DISPLAY ONLY. DO NOT PUSH THIS DOWN TO THE DATA LAYER. !!
-// OpenGamesBand (app/feed-picks.tsx) sorts open games by matching raw team NAME
-// against the names of the teams a fan follows -- /predictions/open-games
-// returns no team ids, so the string is the only join available. "Cleaning up"
-// the stored name, or applying this helper before that comparison, breaks that
-// sort one file over and does it silently: the sort would simply stop matching
-// and every game would look unfollowed.
+// teams.name is stored with the sport baked in -- "Augusta University Baseball",
+// "Berry College Volleyball" -- so a card read "Augusta University Baseball vs
+// Berry College Baseball" under a corner tag that already said BASEBALL. The old
+// fix stripped the suffix here, at render time, against a hardcoded list of all
+// 33 values of the backend's sport enum, longest-first so "Beach Volleyball"
+// beat "Volleyball". It worked, and it was one new sport away from failing
+// SILENTLY, in a way that looked exactly like the bug it was patching.
 //
-// WHY THE GENDER BECOMES A TAG RATHER THAN VANISHING. 8,707 institution+sport
-// pairs field BOTH a men's and a women's team, and 8,721 teams' stripped names
-// collide with a sibling's. Dropping the qualifier would render a men's game and
-// a women's game between the same two schools identically, with nothing on the
-// card to tell them apart. The distinction has to survive the strip -- it just
-// moves from a suffix to a tag, which is what the sport tag already does.
+// The projections now carry the school directly (institutions.name), so this is
+// a coalesce and there is nothing to keep in sync.
 //
-// MATCHED AGAINST teams.sport's 33 VALUES, NOT EventListItem.sport's 6.
-// The two unions are different sizes AND different casings: the event type is a
-// six-value display union, while the stored name ends in the Title Case of the
-// 33-value column ("Track and Field", "Beach Volleyball", "Ice Hockey").
-// Deriving the word from the event would strip nothing on 27 of them.
+// WHY IT IS A FALLBACK AND NOT A REPLACEMENT. Most of the schedule is not
+// college teams: of the 91 teams events reference, 11 have an institution and
+// the other 80 are pro rows -- Chicago Cubs, Las Vegas Raiders -- with clean
+// names and no school behind them. Measured on cloud 2026-08-16, all 9 teams
+// whose stored name carries a sport suffix are inside that 11, so the school
+// name lands exactly where the bug is and `??` covers everything else.
 //
-// LONGEST FIRST IS LOAD-BEARING: "Beach Volleyball" must be tried before
-// "Volleyball", and "Ice Hockey"/"Field Hockey" before "Hockey", or the strip
-// leaves a stray "Beach" or "Ice" behind.
+// THE ONE PLACE THAT MUST NOT USE THIS: OpenGamesBand sorts a fan's followed
+// games by matching the RAW team name against the raw name /follows/mine
+// returns, because /predictions/open-games carries no team ids. Comparing a
+// labelled name there would stop every follow matching, silently. Label for the
+// eye; compare on the raw string.
 //
-// The replacement for all of this is institutionName + gender on the event
-// projection -- see RESOLVER_TICKETS.md E7. This is a display patch and should
-// be deleted when that lands, not built on.
-// ----------------------------------------------------------------------------
-const TEAM_SPORT_WORDS: string[] = [
-  'basketball', 'football', 'baseball', 'hockey', 'soccer',
-  'archery', 'badminton', 'beach volleyball', 'bowling', 'cross country',
-  'equestrian', 'fencing', 'field hockey', 'golf', 'gymnastics', 'ice hockey',
-  'lacrosse', 'rifle', 'rodeo', 'rowing', 'sailing', 'skiing', 'softball',
-  'squash', 'swimming diving', 'synchronized swimming', 'tennis',
-  'track and field', 'volleyball', 'water polo', 'weight lifting', 'wrestling',
-  // 'other' is deliberately absent -- it is the enum's fallback, not a word any
-  // team's name ends in, and stripping it could eat a real one.
-].sort((a, b) => b.length - a.length);
-
-export interface TeamDisplay {
-  /** "Augusta University" -- what the card should render. */
-  name: string;
-  /** 'M' | 'W' when the stored name carried one, else null. Render as a tag. */
-  gender: 'M' | 'W' | null;
-}
-
-export function teamDisplay(raw: string | null | undefined): TeamDisplay {
-  const original = (raw ?? '').trim();
-  if (!original) return { name: '', gender: null };
-
-  // 1. The gender qualifier, always last when present.
-  let name = original;
-  let gender: 'M' | 'W' | null = null;
-  const g = name.match(/\s*\((M|W)\)$/i);
-  if (g) {
-    gender = g[1].toUpperCase() as 'M' | 'W';
-    name = name.slice(0, g.index).trimEnd();
-  }
-
-  // 2. Then the sport word, anchored to the end and preceded by a space, so a
-  //    school whose own name contains a sport word keeps it.
-  const lower = name.toLowerCase();
-  for (const word of TEAM_SPORT_WORDS) {
-    if (lower.endsWith(' ' + word)) {
-      name = name.slice(0, name.length - word.length - 1).trimEnd();
-      break;
-    }
-  }
-
-  // 3. A name that stripped to nothing keeps everything. Better a redundant
-  //    suffix than a blank card.
-  return { name: name || original, gender };
+// AND IT IS NOT UNCONDITIONALLY THE BETTER STRING: "Demo Valley CC Foxes"
+// becomes "Demo Valley Community College", which is more correct and less
+// characterful. The trade is accepted -- a mascot lost beats a sport printed
+// twice -- but it is a trade.
+//
+// GENDER IS ON THE WIRE AND RENDERS NOWHERE. The old helper promoted a "(M)"/
+// "(W)" suffix to a tag, and teams.gender is a better source for it: 25,973 of
+// 26,012 rows populated, never disagreeing with the name. It is not rendered
+// because it currently has no work to do -- NO team on the schedule carries a
+// qualifier, so a tag would appear on 56 of 91 cards to resolve a collision that
+// does not occur (cloud has 6 institution-vs-institution matchups; splitting
+// them by gender still gives 6). The day two schools meet twice in one sport,
+// homeGender/awayGender are already there and it is a render change.
+// ============================================================================
+export function teamLabel(
+  institution: string | null | undefined,
+  raw: string | null | undefined,
+): string {
+  return (institution ?? raw ?? '').trim();
 }
 
 export function points(n: number): string {

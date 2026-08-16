@@ -24,7 +24,7 @@ import {
   isUpcomingEvent,
   points,
   etDateTime,
-  teamDisplay,
+  teamLabel,
   FeedItem,
   EventListItem,
   FollowMineEntry,
@@ -143,16 +143,17 @@ function Row({
 // "vs" and a FINAL badge shows; when a replay link is set, a watch indicator
 // appears. The whole card links to the game's watch page at /games/[id]. ----
 function GameCard({ event }: { event: EventListItem }) {
-  // The stored names carry the sport (and often a gender) as a suffix, which the
-  // corner tag already says -- see teamDisplay in api.ts. Display only: the raw
-  // event.homeTeam is untouched and is still what OpenGamesBand sorts on.
-  const h = teamDisplay(event.homeTeam);
-  const a = teamDisplay(event.awayTeam);
-  const home = h.name || 'TBD';
-  const away = a.name || 'TBD';
-  // Both sides of a fixture share a gender, so it belongs on the event's tag
-  // rather than on each team -- one pill, no second absolutely-positioned tag.
-  const genderTag = h.gender ?? a.gender;
+  // The school, falling back to the stored name -- which carries the sport as a
+  // suffix that the corner tag already says. This used to be a render-time strip
+  // against a copy of the sport enum; it is now a field on the projection. See
+  // teamLabel in api.ts. The raw event.homeTeam is untouched either way, and is
+  // still what OpenGamesBand sorts on.
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
+  // THE GENDER PILL IS GONE. It rendered a "(M)"/"(W)" the stored name happened
+  // to carry, and no team on the schedule carries one -- so it rendered on
+  // nothing. teams.gender is on the wire (event.homeGender) for the day a
+  // matchup actually needs telling apart; see teamLabel for the count.
   const hasScore = event.homeScore !== null && event.awayScore !== null;
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';
@@ -166,10 +167,7 @@ function GameCard({ event }: { event: EventListItem }) {
         aria-label={`View ${home} vs ${away}`}
       >
         <div className={thumbClass(event.sport)}>
-          <span className="thumb-tag">
-            {event.sport ?? 'event'}
-            {genderTag ? ` · ${genderTag}` : ''}
-          </span>
+          <span className="thumb-tag">{event.sport ?? 'event'}</span>
           {isLive ? (
             <LiveBadge className="thumb-live" />
           ) : (

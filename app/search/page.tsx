@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { getEvents, etDateTime, EventListItem } from '../api';
+import { getEvents, etDateTime, teamLabel, EventListItem } from '../api';
 
 // Date-only ET formatting for compact thumbnail metadata (mirrors the feed page).
 function formatDate(iso: string): string {
@@ -42,8 +42,12 @@ function thumbClass(sport: string | null): string {
 // once a result is in, and a watch indicator when a replay link is set. The
 // whole card links to the game's watch page at /games/[id]. ----
 function GameCard({ event }: { event: EventListItem }) {
-  const home = event.homeTeam ?? 'TBD';
-  const away = event.awayTeam ?? 'TBD';
+  // Reads the same projection the feed does, so it gets the same label -- this
+  // card renders raw names until E7 and was the one surface the old display
+  // patch never covered. matchesQuery below still searches the RAW names, so
+  // typing "basketball" keeps matching the teams whose stored name says it.
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';
