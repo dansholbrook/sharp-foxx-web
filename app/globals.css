@@ -2273,7 +2273,27 @@ tfoot td {
     0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
+/* ---- min-width: 0 AT EVERY WIDTH, and it is a guard rather than a tweak.
+   ---------------------------------------------------------------------------
+   The track above is `1fr`, which is `minmax(auto, 1fr)` -- so its minimum is
+   this item's automatic minimum size, i.e. ITS LONGEST WORD. Without this line
+   a long team name does not wrap: it EXPANDS THE TRACK and pushes the whole
+   scoreboard past its container.
+
+   A mobile recon on 2026-08-16 called this "cramping -- 'Augusta University'
+   wraps to two lines". THAT WAS WRONG IN THE DIRECTION THAT MATTERS and the
+   correction is kept here: it overflows, it does not wrap. At 390px each team
+   track gets about 96px, and while "University" (~92px at 18.4px serif) just
+   fits, "Diamondbacks" and "Philadelphia" (~110px) do not -- and both are in
+   the data today. E7 did not create this, but by rendering institution names
+   where short stored names used to be it added a whole class of long words to
+   it.
+
+   Kept unscoped rather than put in the phone block, for the same reason the
+   guard belongs on `.fgrid` at every width: above 560px the three-column
+   layout leaves ~155px a side, which is comfortable but is not proof. ---- */
 .game-scoreboard__team {
+  min-width: 0;
   font-family: var(--font-serif);
   font-weight: 700;
   font-size: clamp(1.15rem, 3vw, 2rem);
@@ -2609,10 +2629,37 @@ tfoot td {
   color: var(--accent-hover);
 }
 
+/* ---- ON A PHONE THE SCOREBOARD STACKS, and that is what retires the problem
+   rather than managing it.
+   ---------------------------------------------------------------------------
+   Three columns rationed each team ~96px of a 390px screen. One column gives
+   each of them the full 326px -- a 3.4x increase -- so the longest name in the
+   data has more room than it can use and the type stays at the size it was
+   designed at. Home / score / away, top to bottom, which is how a scoreboard is
+   read on a phone anyway and how the period table beneath it already reads.
+
+   THE TWO ALTERNATIVES, AND WHY NOT:
+     A SMALLER TYPE STEP would need roughly 0.95rem -- about half the designed
+     size, on the page's primary text -- to fit today's longest word, and would
+     fail on tomorrow's. It buys one word.
+     ACCEPTING THE WRAP is not on offer: see the min-width note above, the
+     current behaviour is an overflow, not a wrap. Making it genuinely wrap
+     needs `overflow-wrap: anywhere`, which breaks proper nouns mid-word --
+     "Diamondb / acks" is worse than either alternative.
+
+   No markup change: the three DOM children simply become three rows, so the
+   side modifiers' text-align has to be neutralised here rather than in the
+   component. ---- */
 @media (max-width: 560px) {
   .game-scoreboard {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
     padding: 18px 16px;
     gap: 12px;
+  }
+  .game-scoreboard__team--home,
+  .game-scoreboard__team--away {
+    text-align: center;
   }
 }
 
@@ -10228,11 +10275,55 @@ a.follow-sugcard__name:hover {
     font-size: 16px;
   }
 
-  /* ---- Touch targets: real action buttons at least 44px tall. Text-style
-     actions (.link-btn: modal/slide-over close, inline links) are excluded so
-     they don't balloon. ---- */
-  button:not(.link-btn) {
+  /* ==========================================================================
+     TOUCH TARGETS: every action at least 44px tall, INCLUDING THE TEXT-STYLE
+     ONES. Corrected 2026-08-16.
+
+     THIS USED TO READ `button:not(.link-btn)`, excluding text-style actions
+     because ".link-btn: modal/slide-over close, inline links" would "balloon".
+     All 69 `.link-btn` uses were classified before touching it, and the
+     premise does not hold:
+
+       INLINE LINKS: ZERO. Not one sits inside a sentence. Every use is a
+       standalone control -- Close x5, Cancel, clear all filters x2, Copy,
+       Edit, the back links (<- The Arena x5, <- All contests, <- Call desk),
+       the forward links (Fan card ->, My picks ->, Leaderboard ->, See the
+       board ->, View roster ->), Sign in / Join free, and the desktop nav
+       links themselves.
+       MODAL CLOSE: about five -- and a modal's Close is the control that wants
+       the floor MOST, not least.
+
+     So the exclusion was protecting a category this codebase does not have,
+     at the cost of ~69 controls sitting at roughly 23px.
+
+     !! AND IT WAS NEVER THE CAUSE OF THE BACK LINK BEING SMALL. !! A mobile
+     recon on 2026-08-16 reported "<- The Arena is ~23px because .link-btn is
+     exempt from the floor". That diagnosis was WRONG and the correction is
+     kept here so nobody re-derives it: this selector matched `button` only,
+     and `<- The Arena` is a <Link>, i.e. an <a>. It was never within reach of
+     this rule, exemption or not -- NO rule gave anchors a floor at all. The
+     only two that ever had one were given it by name (.nav-sheet__link 52px,
+     .nav-menu__item 46px). That is why the fix below is TWO rules and not one
+     deleted `:not()`.
+
+     THE REJECTED ALTERNATIVE, recorded because it is the tempting one: an
+     ::after hit-area overlay (`position: absolute; inset: -11px -8px`) that
+     expands the target without changing layout. No -- neighbouring links sit
+     10px apart in .masthead-actions, so their invisible areas would overlap
+     and the later one would silently take the tap. An invisible hit area that
+     does not match what you can see is the trap .htp__toggle already avoided
+     by spending real vertical padding, and said so at the time.
+     ========================================================================== */
+  button {
     min-height: 44px;
+  }
+  /* The anchors and the text-style buttons alike. inline-flex + center so the
+     label sits in the middle of the taller box instead of at its top; matches
+     .chip below and .nav-console, which already declares exactly this pair. */
+  .link-btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
   .chip {
     min-height: 44px;
@@ -10251,6 +10342,25 @@ a.follow-sugcard__name:hover {
   .console-retract {
     width: 44px;
     height: 44px;
+  }
+
+  /* ---- THE ONE CONTROL THAT WAS RELYING ON THE OLD SELECTOR'S SPECIFICITY.
+     `.parlay-stake__chip` is a <button> declaring `min-height: 36px`. Against
+     the old `button:not(.link-btn)` -- specificity (0,1,1), since :not()
+     contributes its argument -- the floor WON and the chip was silently 44px on
+     a phone. Plain `button` is (0,0,1), which a single class now beats, so the
+     chip would have quietly shrunk to 36px: a real tap target getting smaller
+     as the side effect of a rule meant to make targets bigger.
+
+     Named here so it holds by intent rather than by an accident of the cascade.
+     Checked exhaustively rather than guessed: every other sub-44px declaration
+     in the file is either on a non-button (.parlay-chip--inert is a <span>), or
+     already raised at this width (.nav-menu__item -> 46px), or uses `height`
+     rather than `min-height` -- and `height` is not a cascade contest at all,
+     since min-height clamps it upward whatever the specificity. This was the
+     only one. */
+  .parlay-stake__chip {
+    min-height: 44px;
   }
 
   /* The photo pickers are <label>s wrapping a visually-hidden file input (the
@@ -11487,11 +11597,17 @@ a.follow-sugcard__name:hover {
    44px and the wrapper scrolls) would have hidden ~3.8 of 10 columns to buy
    precision the table above says is worth nothing.
 
-   !! THE SELECTOR IS TWO CLASSES ON PURPOSE. DO NOT "SIMPLIFY" IT TO
-   `.sqgrid-cell`. !! `button:not(.link-btn)` is specificity (0,1,1) and beats a
-   lone class (0,1,0) no matter which comes later in the file, so a tidied-up
-   version of this rule would silently stop applying and the cells would go back
-   to 32x44 with nothing to show why.
+   THE SELECTOR IS TWO CLASSES, AND ITS REASON CHANGED UNDER IT ON 2026-08-16.
+   It was written against a floor that read `button:not(.link-btn)` --
+   specificity (0,1,1), since :not() contributes its argument -- which beats a
+   lone `.sqgrid-cell` (0,1,0) whatever the source order, so the second class
+   was REQUIRED. That floor is now plain `button` (0,0,1), which a single class
+   would beat, so `> .sqgrid-cell` alone would work today.
+
+   It stays as two classes anyway: (0,2,0) is immune to whatever the floor's
+   selector becomes next, and this rule's whole job is to survive a rule written
+   somewhere else. But the old warning ("simplifying this would silently stop it
+   applying") is no longer true, and is corrected rather than left to mislead.
 
    FOR THE DEVICE SWEEP: a cell is ~32px wide and `.sqgrid-cell` sets
    font-size 0.6rem for two initials. That has not been checked on glass. If it
@@ -12784,11 +12900,22 @@ a.follow-sugcard__name:hover {
 
 /* ---- Commit -------------------------------------------------------------- */
 
+/* THE HOME INDICATOR, and this one is unconditional because the dock is.
+   `.call-slip`, `.parlay-stub` and `.console-endgame-dock` all add the inset
+   inside `@media (max-width: 767px)`, because that is the only width at which
+   they become sticky. This bar is `position: sticky; bottom: 0` at EVERY width,
+   so the inset belongs in the base rule -- and it costs nothing to do it there:
+   env(safe-area-inset-bottom) resolves to 0px on any device without an inset,
+   which is every desktop this also renders on.
+
+   It is worth the line: `.bracket-commit__go` is a 46px submit button, and its
+   lower edge was landing in the indicator zone. A dock whose primary action is
+   the part you cannot reliably press is worse than no dock. */
 .bracket-commit {
   position: sticky;
   bottom: 0;
   z-index: 5;
-  padding: 12px;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
   margin: 18px 0;
   border: 1px solid var(--border-strong);
   border-radius: 4px;
@@ -13696,11 +13823,19 @@ a.follow-sugcard__name:hover {
     margin-left: -4px;
     margin-right: -4px;
     background: var(--panel-raised);
+    /* THE HOME INDICATOR. Anything docked at bottom: 0 has its last ~34px sitting
+       under the indicator on a notched iPhone, and this stub's bottom row is the
+       stake and the place button. Same calc, same reason and the same base value
+       as .call-slip, which docks identically eight screens over. */
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
   /* An empty stub has nothing to keep in view — let it scroll away so it isn't
      a permanent band eating a third of a small screen. */
   .parlay-stub--empty {
     position: static;
+    /* ...and an undocked stub is not over the indicator, so the inset comes back
+       off rather than sitting there as dead space. */
+    padding-bottom: 14px;
   }
   .parlay-stub__legs {
     max-height: 26vh;
