@@ -77,6 +77,7 @@ import {
   callPhase,
   callVoidCopy,
   callWeekLabel,
+  callWeekRelation,
   points,
   etDateTime,
   CALL_QUESTION_COUNT,
@@ -1210,6 +1211,12 @@ export function CallSheet({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [editable, dirty]);
 
+  // Where the shown card sits relative to the fan's own week. Derived above the
+  // early return so the two branches read the same two props the same way, and
+  // null when either week is unparseable -- "we cannot tell" is not "it is this
+  // week". See callWeekRelation in api.ts.
+  const weekRelation = call ? callWeekRelation(call.weekStart, weekStart) : null;
+
   // ---- NO CALL -------------------------------------------------------------
   // Not an error and not styled as one, same as "The Oracle rests" and "The bus
   // is between seasons". The card is the page; hiding it would leave nothing.
@@ -1254,14 +1261,33 @@ export function CallSheet({
           dispatch from a person in a gym, and that is the entire proposition. */}
       <header className="call-head">
         <CallMark />
-        {/* THE CARD NAMES ITS OWN WEEK, ALWAYS. `current` returns the most
-            recent non-draft Call with week_start <= this Monday, so a fan
-            opening the app on Monday may be looking at LAST week's locked card
-            — "this week" would be a lie on exactly the days it matters. */}
+        {/* ---- THE CARD NAMES ITS OWN WEEK, ALWAYS -- and the dateline is
+            UNCONDITIONAL while the suffix beside it is not.
+
+            The date always earns its place: the quiet no-Call branch above
+            renders the same kicker, so making this one conditional would leave
+            the two states without a shared masthead and move the top line of the
+            card depending on the data. A weekly editorial product dates every
+            issue, not only the old ones — and `my-games` prints the same label
+            on a fan's receipt, so the card and the receipt agree on which week
+            they are talking about.
+
+            THE SUFFIX IS THE PART THAT IS SITUATIONAL, because it is a
+            CORRECTIVE rather than a date: it exists to explain a card that is
+            not from this week. `current` returns the most recently PUBLISHED
+            Call, which can sit on either side of the fan's own week, so there
+            are four relations and only two of them need a word. Nothing for a
+            card that is ahead — it is live and enterable and a tag would talk a
+            fan out of the one thing the card is for. See callWeekRelation in
+            api.ts for the whole argument and for the two ways the old
+            `!==` test was wrong. ---- */}
         <p className="call-kicker">
           {callWeekLabel(call.weekStart)}
-          {call.weekStart !== weekStart && (
+          {weekRelation === 'last' && (
             <span className="call-kicker__stale"> · last week&apos;s card</span>
+          )}
+          {weekRelation === 'earlier' && (
+            <span className="call-kicker__stale"> · an earlier card</span>
           )}
         </p>
         <p className="call-head__from">Filed from the stands by</p>

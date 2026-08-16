@@ -265,9 +265,19 @@ export default function CallPage() {
       <div className="page-head">
         <div>
           <h1 className="row-title page-head__title">The Correspondent&apos;s Call</h1>
-          {/* Deliberately says "each week" rather than "this week" — the read
-              can hand back last week's card, and the standfirst is the one line
-              on the page that has no dateline to correct it. */}
+          {/* Deliberately says "each week" rather than "this week", and BOTH
+              halves of that are load-bearing now.
+
+              The read hands back the most recently published Call, which can sit
+              on EITHER side of the fan's own week — last week's graded card on a
+              Monday, or a card published ahead of its week on the Sunday before.
+              "This week" would be wrong in both directions.
+
+              And "each week" is not merely the safe wording, it is the true one:
+              the cadence is the proposition. One game a week, chosen by someone
+              who was there. The standfirst describes the PROMISE, and the card's
+              kicker below it is what names the particular week — which is why
+              this line needs no dateline and must not grow one. */}
           <p className="page-rules">
             Each week one local game, and five questions only someone in the
             building can answer. Beat the room and the pot is yours to split.

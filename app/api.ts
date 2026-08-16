@@ -6309,20 +6309,102 @@ export const CALL_TIEBREAKER_MAX = 100000;
 export const CALL_QUESTION_COUNT = 5;
 
 // "Week of Jul 20" — a card naming its OWN week, which every Call surface must
-// do. `current` returns the most recent non-draft Call with week_start <= this
-// Monday, so a fan opening the app on Monday may be looking at last week's
-// locked card and "this week" would be a lie.
+// do, UNCONDITIONALLY. `current` returns the most recently PUBLISHED non-draft
+// Call, which need not be the current week's in either direction: a fan opening
+// the app on Monday may be looking at last week's locked card, and a card
+// published ahead of its week is the current card before its week begins.
+//
+// (This used to say "week_start <= this Monday". That predicate is gone — it hid
+// a live card whose week had not started and cost a day of entries. See the
+// header on CallService.current in the API.)
+//
+// SIX SURFACES RENDER THIS AND FIVE OF THEM CANNOT BE WRONG, because they state
+// a date and stop: the desk table, the compose and grade headers, the my-games
+// receipt and the fan card's empty state. Only the fan card's kicker makes a
+// RELATIVE claim on top of it, and that claim is callWeekRelation's job below.
 //
 // Local noon, same reason as everywhere else on the site: a bare YYYY-MM-DD
 // through `new Date` is UTC midnight, which renders as the day before for every
 // fan west of Greenwich.
 export function callWeekLabel(weekStart: string): string {
-  const [y, m, d] = weekStart.split('-').map(Number);
-  if (!y || !m || !d) return weekStart;
-  return `Week of ${new Date(y, m - 1, d, 12).toLocaleDateString('en-US', {
+  const t = callWeekNoon(weekStart);
+  if (t === null) return weekStart;
+  return `Week of ${new Date(t).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   })}`;
+}
+
+// A week-start (an ET Monday, 'YYYY-MM-DD') as a local-NOON timestamp, or null
+// if it does not parse. Noon rather than midnight for callWeekLabel's reason
+// above, and it is what makes the day arithmetic in callWeekRelation safe: a DST
+// boundary makes a "day" 23 or 25 hours long, so anchoring at noon leaves the
+// difference an hour off a whole number of days and a round() lands it.
+function callWeekNoon(weekStart: string): number | null {
+  const [y, m, d] = weekStart.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d, 12).getTime();
+}
+
+// ============================================================================
+// WHERE THE SHOWN CARD SITS RELATIVE TO THE FAN'S OWN WEEK.
+//
+// THE SUFFIX ON THE KICKER IS A CORRECTIVE, NOT A DATELINE. The dateline is
+// callWeekLabel and it always renders. This answers a different question --
+// "does this card need explaining?" -- and the answer is usually no.
+//
+// IT REPLACED `call.weekStart !== weekStart`, which asserted ONE relation for
+// every relation that was not equality, and there are three. It was wrong in
+// both directions:
+//
+//   AHEAD. A card for Monday 08-17's game is filed under week 08-17; on the
+//   Sunday before, the fan's week is 08-10. The card is live, unlocked and the
+//   thing they should be filling in -- and it read "last week's card".
+//
+//   OLDER THAN LAST WEEK. Measured on production: nothing published between
+//   Jul 30 and Aug 14, so the week-07-27 card was the fan-facing card that whole
+//   time, and from Aug 10 to Aug 14 it was TWO weeks old and still labelled
+//   "last week's card". Four days, and it predates the ahead case entirely.
+//
+// FOUR RELATIONS, AND ONLY TWO OF THEM SAY ANYTHING:
+//
+//   'ahead'    -> NOTHING. A future card is the one state where the fan can act:
+//                 it is open, it is enterable, and a "next week's card" tag reads
+//                 as "not yet your turn" and talks them out of the exact thing
+//                 the card exists for. The class the suffix renders into is
+//                 `call-kicker__stale` and a card ahead of its week is the
+//                 opposite of stale -- if a caption needs a second class to be
+//                 said, it is a second concept, and this one is not needed at
+//                 all. A past card needs explaining; a future card does not.
+//   'current'  -> NOTHING. The normal case.
+//   'last'     -> the specific, warm one. Correct in the overwhelmingly common
+//                 case (a Monday or Tuesday fan looking at the card that just
+//                 graded), and it is what stops them waiting on a result for
+//                 tonight's game.
+//   'earlier'  -> honest for the rest. It says the one thing that needs saying --
+//                 this is not the current week -- without inventing a distance
+//                 the kicker beside it already states exactly.
+//
+// NULL IS A FIFTH STATE AND IT IS NOT 'current'. An unparseable week means we do
+// not KNOW the relation, which is a different fact from knowing it is this week,
+// and collapsing the two would be the tolerant fallback that hides the defect.
+// It renders nothing (a corrective nobody can justify should not be shown) --
+// but callWeekLabel beside it prints the raw string, so a malformed week is
+// visible on the card rather than smoothed over.
+// ============================================================================
+export type CallWeekRelation = 'ahead' | 'current' | 'last' | 'earlier';
+
+export function callWeekRelation(
+  cardWeek: string,
+  currentWeek: string,
+): CallWeekRelation | null {
+  const card = callWeekNoon(cardWeek);
+  const now = callWeekNoon(currentWeek);
+  if (card === null || now === null) return null;
+  const days = Math.round((now - card) / 86_400_000);
+  if (days < 0) return 'ahead';
+  if (days === 0) return 'current';
+  return days === 7 ? 'last' : 'earlier';
 }
 
 // Which question a 400 was about, as a ZERO-BASED slot, or null if the message
