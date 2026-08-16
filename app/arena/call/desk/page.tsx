@@ -46,8 +46,7 @@ import {
   CallList,
   CallListItem,
   EventListItem,
-  FieldRep,
-} from '../../../api';
+  FieldRep, teamLabel } from '../../../api';
 
 // ---------------------------------------------------------------------------
 // NEW CALL — the create modal.
@@ -182,7 +181,7 @@ function NewCallForm({
               {events.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.homeTeam && e.awayTeam
-                    ? `${e.awayTeam} at ${e.homeTeam}`
+                    ? `${teamLabel(e.awayInstitution, e.awayTeam)} at ${teamLabel(e.homeInstitution, e.homeTeam)}`
                     : e.sport}{' '}
                   — {formatKickoff(e.scheduledAt)}
                 </option>

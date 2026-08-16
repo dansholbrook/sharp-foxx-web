@@ -33,8 +33,7 @@ import {
   EventListItem,
   FeedItem,
   GamePhoto,
-  FollowMineEntry,
-} from '../../api';
+  FollowMineEntry, teamLabel } from '../../api';
 
 // ---- formatting helpers (mirror the game / athlete-profile pages) ----
 // Both render in ET. formatWhen carries the zone label because it's the tip-off
@@ -63,6 +62,13 @@ function initialsOf(name: string): string {
 
 // Same matchup key the game page uses to reconcile the eventId-less published
 // feed against the events list: home | away | scheduledAt.
+// !! BOTH SIDES OF THIS KEY MUST STAY RAW teams.name. !!
+// It is the second raw-name JOIN on the platform, after /predictions/open-games,
+// and it fails the same silent way: the published feed carries no eventId, so a
+// matchup string is the only join available. Label the names for DISPLAY
+// (teamLabel + homeInstitution) and compare on these -- clean one side and every
+// article stops matching its game, with nothing to show but an empty rail.
+// RESOLVER_TICKETS.md E8.
 function eventKey(
   home: string | null,
   away: string | null,
@@ -84,8 +90,8 @@ function LiveBadge({ className }: { className?: string }) {
 // ---- Next up / Live: a prominent card for the team's live game, else the next
 // scheduled one. Renders nothing when the team has neither. ----
 function NextUpCard({ event }: { event: EventListItem }) {
-  const home = event.homeTeam ?? 'TBD';
-  const away = event.awayTeam ?? 'TBD';
+  const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
+  const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const isLive = event.status === 'live';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
 
@@ -135,8 +141,8 @@ function RecentResults({ finals }: { finals: EventListItem[] }) {
       <h2 className="team-section__title">Recent results</h2>
       <div className="team-results">
         {shown.map((g) => {
-          const home = g.homeTeam ?? 'TBD';
-          const away = g.awayTeam ?? 'TBD';
+          const home = teamLabel(g.homeInstitution, g.homeTeam) || 'TBD';
+          const away = teamLabel(g.awayInstitution, g.awayTeam) || 'TBD';
           const hasScore = g.homeScore !== null && g.awayScore !== null;
           return (
             <Link key={g.id} href={`/games/${g.id}`} className="team-result">

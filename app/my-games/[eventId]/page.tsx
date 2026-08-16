@@ -7,59 +7,7 @@ import { useAuth } from '../../auth-context';
 import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { useOwnRep, TrainingGate } from '../../training-gate';
-import {
-  getMyAssignments,
-  updateAssignment,
-  generateArticle,
-  getEventContent,
-  getContentItem,
-  updateContent,
-  submitContent,
-  publishContent,
-  unpublishContent,
-  getEvents,
-  updateEventResult,
-  getMyAdOrders,
-  getAdvertisers,
-  getEventSponsorship,
-  createSponsorship,
-  deleteSponsorship,
-  getLiveEvents,
-  createLiveEvent,
-  deleteLiveEvent,
-  presignGamePhoto,
-  uploadToPresignedUrl,
-  confirmMedia,
-  getGamePhotos,
-  deleteMedia,
-  getEventPredictions,
-  createPrediction,
-  lockPrediction,
-  resolvePrediction,
-  voidPrediction,
-  getCallEvents,
-  callWeekLabel,
-  callListPhase,
-  callStaffRoute,
-  points,
-  etDateTime,
-  etDateKey,
-  eventStatusLabel,
-  etTime,
-  CallListItem,
-  Prediction,
-  PredictionKind,
-  MyAssignment,
-  ContentItem,
-  EventContentItem,
-  UpdateEventResultInput,
-  EventResult,
-  AdOrder,
-  Sponsorship,
-  LiveEvent,
-  LiveEventType,
-  GamePhoto,
-} from '../../api';
+import { getMyAssignments, updateAssignment, generateArticle, getEventContent, getContentItem, updateContent, submitContent, publishContent, unpublishContent, getEvents, updateEventResult, getMyAdOrders, getAdvertisers, getEventSponsorship, createSponsorship, deleteSponsorship, getLiveEvents, createLiveEvent, deleteLiveEvent, presignGamePhoto, uploadToPresignedUrl, confirmMedia, getGamePhotos, deleteMedia, getEventPredictions, createPrediction, lockPrediction, resolvePrediction, voidPrediction, getCallEvents, callWeekLabel, callListPhase, callStaffRoute, points, etDateTime, etDateKey, eventStatusLabel, etTime, CallListItem, Prediction, PredictionKind, MyAssignment, ContentItem, EventContentItem, UpdateEventResultInput, EventResult, AdOrder, Sponsorship, LiveEvent, LiveEventType, GamePhoto, teamLabel } from '../../api';
 
 const usd = (v: string) =>
   Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -2124,7 +2072,7 @@ function GameWorkspace({
             min="0"
             inputMode="numeric"
             className="result-score-input"
-            aria-label={`${assignment.event.homeTeam ?? 'Home'} score`}
+            aria-label={`${teamLabel(assignment.event.homeInstitution, assignment.event.homeTeam) || 'Home'} score`}
             placeholder="Home"
             value={homeScoreDraft}
             disabled={resultBusy}
@@ -2141,7 +2089,7 @@ function GameWorkspace({
             min="0"
             inputMode="numeric"
             className="result-score-input"
-            aria-label={`${assignment.event.awayTeam ?? 'Away'} score`}
+            aria-label={`${teamLabel(assignment.event.awayInstitution, assignment.event.awayTeam) || 'Away'} score`}
             placeholder="Away"
             value={awayScoreDraft}
             disabled={resultBusy}
@@ -2465,8 +2413,8 @@ function GameWorkspace({
           sponsorship={sponsorship}
           initialHome={result?.homeScore ?? null}
           initialAway={result?.awayScore ?? null}
-          homeLabel={assignment.event.homeTeam ?? 'Home'}
-          awayLabel={assignment.event.awayTeam ?? 'Away'}
+          homeLabel={teamLabel(assignment.event.homeInstitution, assignment.event.homeTeam) || 'Home'}
+          awayLabel={teamLabel(assignment.event.awayInstitution, assignment.event.awayTeam) || 'Away'}
           canAskWinner={
             !!assignment.event.homeTeamId && !!assignment.event.awayTeamId
           }

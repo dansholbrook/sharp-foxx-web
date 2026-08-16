@@ -19,8 +19,7 @@ import {
   Advertiser,
   AdPackage,
   EventListItem,
-  CreateAdOrderInput,
-} from './api';
+  CreateAdOrderInput, teamLabel } from './api';
 import { DateEcho } from './date-echo';
 
 // Sentinel option value that reveals the inline "new advertiser" input.
@@ -49,8 +48,8 @@ function formatGameDate(iso: string): string {
 // The dropdown label for a sponsorable game: "Home vs Away — date", with TBD
 // standing in for either unnamed side (no raw UUIDs).
 function gameLabel(e: EventListItem): string {
-  const home = e.homeTeam ?? 'TBD';
-  const away = e.awayTeam ?? 'TBD';
+  const home = teamLabel(e.homeInstitution, e.homeTeam) || 'TBD';
+  const away = teamLabel(e.awayInstitution, e.awayTeam) || 'TBD';
   return `${home} vs ${away} — ${formatGameDate(e.scheduledAt)}`;
 }
 

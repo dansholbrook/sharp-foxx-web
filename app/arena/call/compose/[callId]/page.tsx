@@ -457,6 +457,14 @@ export default function CallComposePage() {
     void load();
   }, [token, router, allowed, load]);
 
+  // !! RAW NAMES ON PURPOSE. DO NOT SWAP IN homeInstitution HERE. !!
+  // This context is interpolated into the question text by the templates
+  // (`Who wins: ${ctx.awayTeam} or ${ctx.homeTeam}?`) and that text is SAVED as
+  // call_questions.prompt, then graded against. It is a write, not a render --
+  // every prompt already in the table carries the raw name, so relabelling here
+  // would make one card's five questions disagree with each other and with the
+  // ones stored before it. The card's matchup LINE is labelled server-side
+  // instead; see CallEventInfo in api.ts. RESOLVER_TICKETS.md E8.
   const ctx: CallComposeContext | null = useMemo(() => {
     if (!card?.event.homeTeam || !card.event.awayTeam) return null;
     return {

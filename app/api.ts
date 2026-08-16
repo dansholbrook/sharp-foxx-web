@@ -239,6 +239,12 @@ export interface MyAssignment {
     awayTeamId: string | null;
     homeTeam: string | null;
     awayTeam: string | null;
+    // The school behind each side. An assignment is always a COVERED game and
+    // every institution-linked event is one, so this surface sees the stored
+    // name's sport suffix by construction. Read through teamLabel.
+    // RESOLVER_TICKETS.md E8.
+    homeInstitution: string | null;
+    awayInstitution: string | null;
   };
 }
 
@@ -6042,10 +6048,25 @@ export interface CallEventInfo {
   status: string;
   venue: string | null;
   scheduledAt: string;
-  // "Away at Home", already assembled (a team with no row degrades to TBD).
+  // "Away at Home", already assembled, and ASSEMBLED FROM THE SCHOOL where the
+  // teams have one -- so it reads "Albany State University at Georgia State
+  // University" rather than repeating "Baseball" twice beside a card about one
+  // baseball game. RESOLVER_TICKETS.md E8.
   matchup: string;
+  // !! RAW teams.name, AND THE COMPOSE SCREEN MUST KEEP USING THESE. !!
+  // CallComposeContext is built from this pair and interpolated into the
+  // question text, which is PERSISTED as call_questions.prompt and graded
+  // against later ("Who wins: Chicago Sky or Minnesota Lynx?"). Swapping the
+  // school in there is not a render change, it is a write: every prompt already
+  // stored carries the raw name, so one card would end up mixing the two.
+  // Whether new prompts should read better is a product decision, filed rather
+  // than taken.
   homeTeam: string | null;
   awayTeam: string | null;
+  // The school behind each side, null for the pro rows. Present so a surface can
+  // label independently of `matchup`; nothing needs it yet.
+  homeInstitution: string | null;
+  awayInstitution: string | null;
 }
 
 // CALLER OF THE WEEK — the title the tiebreaker decides, and the whole of what

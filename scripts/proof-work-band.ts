@@ -63,6 +63,9 @@ function assignment(
       id: eventId, sport: 'basketball', venue: 'The Gym', status,
       scheduledAt: iso(kickoffMs),
       homeTeamId: 'h', awayTeamId: 'a', homeTeam: 'Home', awayTeam: 'Away',
+      // null, as a pro/unlinked team is: this fixture is about the band's
+      // timing rules, not about how a name renders. E8.
+      homeInstitution: null, awayInstitution: null,
     },
   };
 }

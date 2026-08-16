@@ -60,6 +60,13 @@ function formatWhen(iso: string): string {
 // its game page we match on the joined matchup + scheduled time against the
 // events list. Fine at current scale; unresolved articles are simply dropped
 // from the rail so every row navigates somewhere real.
+// !! BOTH SIDES OF THIS KEY MUST STAY RAW teams.name. !!
+// It is the second raw-name JOIN on the platform, after /predictions/open-games,
+// and it fails the same silent way: the published feed carries no eventId, so a
+// matchup string is the only join available. Label the names for DISPLAY
+// (teamLabel + homeInstitution) and compare on these -- clean one side and every
+// article stops matching its game, with nothing to show but an empty rail.
+// RESOLVER_TICKETS.md E8.
 function eventKey(
   home: string | null,
   away: string | null,
