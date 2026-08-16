@@ -10286,6 +10286,16 @@ a.follow-sugcard__name:hover {
      its own pass with a device sweep across every route, not a rider on a
      surface-scoped change; see docs/correspondent-mobile-followups.md.
 
+     THE PREDICTION IN THAT PARAGRAPH CAME TRUE, and it is recorded here because
+     it is the strongest argument for paying the debt off. `.bingo-cards` shipped
+     with a FIXED 454px track (`repeat(auto-fit, 454px)`), 96px wider than the
+     content box on a phone. What that produced was not a sideways scroll anyone
+     would notice and report -- this rule ate it -- but a Bingo card that looked
+     SLIGHTLY WRONG, with part of the B column at negative x where no gesture
+     reaches and part of the O column clipped on the right. It survived a week of
+     layout passes that way. A page that scrolls sideways gets found; a page that
+     quietly loses 96px of itself does not.
+
      It does NOT break the sticky elements at this width (.call-slip,
      .parlay-stub, .console-endgame-dock). With html's overflow left visible,
      the spec propagates body's overflow to the VIEWPORT and treats body itself
@@ -11362,6 +11372,62 @@ a.follow-sugcard__name:hover {
   transition: border-color 0.12s ease, background 0.12s ease, transform 0.08s ease;
   -webkit-tap-highlight-color: transparent;
 }
+/* ============================================================================
+   THE 44px TAP FLOOR DOES NOT APPLY TO THESE CELLS, AND THE REASON IS THAT A
+   MIS-TAP ON THIS BOARD COSTS NOTHING.
+
+   `button:not(.link-btn) { min-height: 44px }` (in the <=767px block) is the
+   right rule for a standalone control, where hitting the wrong one does
+   something you did not ask for. It caught 100 cells of a matrix where that is
+   not true.
+
+   THE DECIDING FACT: THE DIGITS ARE '?' UNTIL THE BOARD LOCKS. The row and
+   column digits are not revealed while the board is claimable
+   (`revealed ? board.colDigits![col] : '?'` in squares-board.tsx), so before
+   lock EVERY EMPTY SQUARE IS WORTH EXACTLY THE SAME AS EVERY OTHER ONE. A fan
+   is buying A SQUARE, not choosing a cell. So:
+
+     miss onto another EMPTY square -> you got what you wanted; they are
+                                       interchangeable
+     miss onto someone else's square -> inert, a no-op
+     miss onto YOUR OWN square       -> opens the release confirm, dismiss it
+
+   Not one of those costs a fan anything. And after lock nothing on the board is
+   tappable at all -- it becomes a picture, whose whole job is that you can see
+   all 100 cells at once to find the winning square and your own holdings. So
+   the floor was protecting against a cost that does not exist, and charging for
+   it in the one thing the board actually needs.
+
+   WHAT IT COST, CONCRETELY: `aspect-ratio: 1/1` sizes the height from the
+   width, then `min-height: 44px` overrode it. At a 390px viewport a cell is
+   (358 - 20 gaps - 20 header col) / 10 = ~32px wide, so every square on the
+   Squares board was 32x44. That fixed the axis that was not the problem -- the
+   binding one is WIDTH, and 32px stayed 32px -- and left the game's own shape
+   wrong. Below ~512px there is no width at which the floor and the aspect ratio
+   can both be honoured.
+
+   THIS AGREES WITH `min-width: 320px` ABOVE RATHER THAN REVERSING IT. That
+   declaration already set the "crush vs scroll" threshold at ~28px cells --
+   its author chose FIT THE BOARD, LET IT BE SMALL, and this is the same call
+   one property over. The alternative (raise the min-width to 480 so cells stay
+   44px and the wrapper scrolls) would have hidden ~3.8 of 10 columns to buy
+   precision the table above says is worth nothing.
+
+   !! THE SELECTOR IS TWO CLASSES ON PURPOSE. DO NOT "SIMPLIFY" IT TO
+   `.sqgrid-cell`. !! `button:not(.link-btn)` is specificity (0,1,1) and beats a
+   lone class (0,1,0) no matter which comes later in the file, so a tidied-up
+   version of this rule would silently stop applying and the cells would go back
+   to 32x44 with nothing to show why.
+
+   FOR THE DEVICE SWEEP: a cell is ~32px wide and `.sqgrid-cell` sets
+   font-size 0.6rem for two initials. That has not been checked on glass. If it
+   does not fit, it wants a SIZE STEP on the mark, not a size floor on the cell
+   -- a floor is what this comment exists to undo.
+   ============================================================================ */
+.sqgrid .sqgrid-cell {
+  min-height: 0;
+}
+
 .sqgrid-cell__mark {
   pointer-events: none;
 }
@@ -17132,6 +17198,41 @@ a.arena-tile:active {
   background: rgba(201, 163, 78, 0.07);
 }
 
+/* ---- ON A PHONE THE POT COMES FIRST, AND THE CALL IS THE ONLY ARENA PAGE
+   THAT NEEDS THIS RULE.
+   ---------------------------------------------------------------------------
+   Below 1024px `.fmain` / `.frail` both become `display: contents`, so their
+   children fall through and become direct grid items of a one-column `.fgrid`.
+   That machinery was built for /feed, and so were the `order:` values that go
+   with it -- they target `.frail-arena`, `.frail-points`, `.frail-inplay`,
+   `.fmain-hero`, `.fmain-tail`, classes no Arena page renders. So the four
+   Arena pages using `.fgrid` stack in DOM order: main, then rail.
+
+   FOR THREE OF THEM THAT IS CORRECT. W2's rule is main = the thing you act on,
+   rail = YOUR OWN STANDING, read while acting -- and a standing read after the
+   decision is a mild loss, not a wrong order. The Oracle's streaks, the Trail's
+   streaks and the Clash's contribution card are all that.
+
+   THE CALL'S RAIL IS NOT A STANDING. It is the POT: reference material for the
+   decision itself, the thing a fan checks to see what filing a card is worth.
+   Stacked after `.call-card`, it landed below five questions, a tiebreaker and
+   a submit button -- so a fan on a phone answered the whole card and only then
+   found out what the purse pays. That is the decision and its price the wrong
+   way round.
+
+   Keyed on `.call-page` (the <main> class) rather than on `.fgrid`, because
+   this is a statement about ONE page's content and not about the grid: the
+   other three are right as they are and must not be reordered with it.
+   `.call-pot` renders exactly once, only in the rail, and only when the card is
+   open or locked (see `potBeside` in page.tsx) -- when it does not render there
+   is no `.fgrid` either, so this rule has nothing to act on and costs nothing.
+   ---- */
+@media (max-width: 1023px) {
+  .call-page .call-pot {
+    order: -1;
+  }
+}
+
 .call-pot__head {
   display: flex;
   align-items: baseline;
@@ -19800,9 +19901,32 @@ a.arena-tile:active {
    454px = the 420px `.bingo-grid` cap + 32px of `.bingo-card` padding + 2px of
    border, so a track holds a card exactly and the board inside never resizes.
    ---- */
+/* ---- minmax(0, 454px), AND THE `minmax` IS THE WHOLE FIX.
+   ---------------------------------------------------------------------------
+   THIS WAS `repeat(auto-fit, 454px)` AND IT CUT THE B COLUMN OFF EVERY PHONE.
+   A bare `454px` track is FIXED: auto-fit will drop to one track in a narrow
+   container but that track still measures 454px, so at 390px (a 358px content
+   box) the grid was 96px wider than the box it sat in. With
+   `justify-content: center` the overflow split both ways -- the card ran from
+   x = -48 to x = 406 -- so roughly 62% of the B column sat at NEGATIVE x, where
+   no gesture can reach it, and 39% of the O column was clipped on the right by
+   `body { overflow-x: hidden }`. A fan could not see part of their own card.
+   Broken on every viewport under ~502px.
+
+   minmax(0, 454px) keeps the desktop behaviour exactly -- two tracks plus a
+   16px gap still need 924px, which is where `.arena-col--bingo`'s 940 came
+   from -- and lets the single track shrink to the container below that.
+
+   THE SQUARES INSIDE NEED NO FLOOR OF THEIR OWN, checked rather than assumed:
+   the card's 16px padding and 1px border leave the 5-column `.bingo-grid`
+   324px at a 390px viewport, so each square is (324 - 16 of gaps) / 5 = ~62px.
+   At a 320px viewport (the narrowest phone this supports) they are ~48px. And
+   they are not tap targets at all -- `.bingo-sq` renders as an aria-hidden
+   <span> and the card daubs itself from the draw -- so the only requirement is
+   that the number stays readable, which 48px at 1.05rem comfortably is. ---- */
 .bingo-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, 454px);
+  grid-template-columns: repeat(auto-fit, minmax(0, 454px));
   justify-content: center;
   gap: 16px;
   margin: 0 0 20px;
