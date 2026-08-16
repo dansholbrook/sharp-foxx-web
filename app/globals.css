@@ -9660,14 +9660,58 @@ a.follow-sugcard__name:hover {
    sequence. Nothing is hidden — the leaderboard teaser, which the brief's
    mobile list omits, slots in right after Make-your-picks. ---- */
 @media (max-width: 1023px) {
+  /* ---- minmax(0, 1fr), NOT 1fr, AND THE DESKTOP RULE ALREADY KNEW THIS.
+     ------------------------------------------------------------------------
+     `1fr` is `minmax(auto, 1fr)`, so the track's MINIMUM is the largest grid
+     item's min-content -- a single unbreakable descendant wider than the phone
+     stretches this track and the page with it, without limit. The desktop rule
+     twelve hundred lines up is `minmax(0, 72fr) minmax(0, 28fr)` for exactly
+     that reason, and `.arena-col > * { min-width: 0 }` guards the Arena pages
+     the same way. This one column was the place it was never done.
+
+     It was found the long way round: a horizontal scroll reported from a real
+     phone on /feed that no code reading could account for -- every fixed-width
+     card on that page is inside a scroller and every rail band is a column
+     flex, so nothing DECLARED an overflowing width. The overflow was
+     content-driven, and this is what let content do it.
+
+     THIS TREATS THE MECHANISM, NOT THE ELEMENT. Whatever string is too wide is
+     still too wide; it will now be clipped or wrapped inside a bounded column
+     instead of dragging the viewport. Worth knowing when the offending element
+     is finally identified: this rule will have changed how it FAILS, not
+     whether it is wrong. ---- */
   .fgrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 30px;
   }
 
   .fmain,
   .frail {
     display: contents;
+  }
+
+  /* ---- ...AND THE GUARD HAS TO LAND ON THE GRANDCHILDREN, WHICH IS THE WHOLE
+     TRAP.
+     ------------------------------------------------------------------------
+     `.fmain` and `.frail` carry `min-width: 0` in the base rules, and
+     `display: contents` above ERASES BOTH -- the box is gone, so its properties
+     apply to nothing. Their children are promoted to grid items of `.fgrid`
+     carrying no such guard: on /feed that is .fwork, .fmain-hero, the .row
+     sections, .follow-section, .fmain-tail, .frail-arena, .frail-points and
+     .frail-inplay, and not one of them declares min-width anywhere.
+
+     !! `.fgrid > *` WOULD NOT WORK, AND IT IS THE OBVIOUS THING TO WRITE. !!
+     Selector matching runs on the DOM tree, which `display: contents` does not
+     touch -- so `.fgrid > *` still matches `.fmain` and `.frail`, the two
+     elements that no longer generate a box. The grid items are the DOM
+     GRANDCHILDREN. Hence `> * > *`.
+
+     `.fgrid > *` is kept beside it so a page that puts a real item directly in
+     the grid is covered too; today nothing does, on any of the five pages using
+     this layout (/feed and the Oracle, Trail, Call and Clash). ---- */
+  .fgrid > *,
+  .fgrid > * > * {
+    min-width: 0;
   }
 
   /* The Oracle teaser leads on mobile, ahead of even the points hero: it is
@@ -10277,33 +10321,63 @@ a.follow-sugcard__name:hover {
     padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
   }
 
-  /* ---- Kill horizontal overflow: media never pushes past the viewport, and
-     the body clips any stray wide child.
+  /* ==========================================================================
+     !! THIS IS NOT THE GUARD IT WAS BELIEVED TO BE. DO NOT RELY ON IT. !!
+     Corrected 2026-08-16, after a horizontal scroll was reported from a real
+     phone on /feed while every code reading said the page was contained.
 
-     THIS MASKS RATHER THAN FIXES, and that is a known, filed debt -- a future
-     too-wide child gets silently clipped instead of scrolling, which also means
-     a code read can't tell a clipped child from an absent one. Removing it is
-     its own pass with a device sweep across every route, not a rider on a
-     surface-scoped change; see docs/correspondent-mobile-followups.md.
+     WHAT THIS COMMENT USED TO CLAIM: "the body clips any stray wide child."
+     BODY CLIPS NOTHING. `html` carries no overflow declaration, so per CSS
+     Overflow 3 section 3.3 the UA takes the overflow value off the first `body`
+     child and applies it TO THE VIEWPORT -- and the used value on `body` itself
+     becomes `visible`. There is no clipping box here at all. The declaration
+     below is a statement about the viewport that happens to be written on body.
 
-     THE PREDICTION IN THAT PARAGRAPH CAME TRUE, and it is recorded here because
-     it is the strongest argument for paying the debt off. `.bingo-cards` shipped
-     with a FIXED 454px track (`repeat(auto-fit, 454px)`), 96px wider than the
-     content box on a phone. What that produced was not a sideways scroll anyone
-     would notice and report -- this rule ate it -- but a Bingo card that looked
-     SLIGHTLY WRONG, with part of the B column at negative x where no gesture
-     reaches and part of the O column clipped on the right. It survived a week of
-     layout passes that way. A page that scrolls sideways gets found; a page that
-     quietly loses 96px of itself does not.
+     AND ON THE PLATFORM IT WAS WRITTEN FOR, THE VIEWPORT DOES NOT HONOUR IT.
+     Desktop engines do suppress the pan once the value propagates. iOS Safari
+     is long-documented not to: the layout viewport still exceeds the width and
+     the visual viewport pans over it. So on the phones this whole media query
+     exists for, a too-wide child scrolls exactly as if this rule were absent.
 
-     It does NOT break the sticky elements at this width (.call-slip,
-     .parlay-stub, .console-endgame-dock). With html's overflow left visible,
-     the spec propagates body's overflow to the VIEWPORT and treats body itself
-     as visible -- so body never becomes the scrollport and sticky descendants
-     still resolve against the viewport. (The older note here claimed .frail was
-     the only sticky element on the page; that stopped being true once the slip
-     and the stub docked, so the reasoning is restated rather than the count.)
-     ---- */
+     WHAT THAT COST, and it is the reason for the shouting: every "no horizontal
+     scroll" reading taken this week was evidence of NOTHING. The mask was
+     believed to be hiding overflow, so a page that looked contained was read as
+     a page that was contained -- and the two are unrelated. A guard everyone
+     believes in that does not exist is worse than no guard, because it converts
+     an absent test into a passing one.
+
+     THE ONE THING THAT DID GET HIDDEN was hidden by the browser, not by this:
+     `.bingo-cards` shipped with a FIXED 454px track (`repeat(auto-fit, 454px)`),
+     96px wider than the content box on a phone, with `justify-content: center`
+     splitting the overflow both ways -- so part of the B column sat at negative
+     x, which no gesture reaches on any platform, and it read as a card that
+     looked SLIGHTLY WRONG rather than as a page that scrolled. It survived a
+     week of layout passes that way. That one is fixed at the source.
+
+     WHAT TO DO INSTEAD: fix the child. To find it, from the device:
+
+       document.documentElement.scrollWidth  vs  .clientWidth        (how much)
+       [...document.querySelectorAll('*')]                            (what)
+         .filter(e => e.getBoundingClientRect().right >
+                      document.documentElement.clientWidth + 1)
+
+     The shallowest element in that list is the culprit; the rest are its
+     children being dragged along.
+
+     THE RULE STAYS FOR NOW because removing it is its own pass with a device
+     sweep across every route, and because it is not doing harm -- it is simply
+     not doing the work it was credited with. See
+     docs/correspondent-mobile-followups.md.
+
+     THE STICKY NOTE BELOW REMAINS TRUE, and follows from the same propagation
+     rather than surviving it. .call-slip, .parlay-stub and
+     .console-endgame-dock still dock correctly: because body's used overflow is
+     `visible`, body never becomes the scrollport, so sticky descendants resolve
+     against the viewport as intended. (An older version of this note claimed
+     .frail was the only sticky element on the page; that stopped being true once
+     the slip and the stub docked, so the reasoning is restated rather than the
+     count.)
+     ========================================================================== */
   body {
     overflow-x: hidden;
   }
