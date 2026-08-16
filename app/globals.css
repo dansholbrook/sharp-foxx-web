@@ -22409,3 +22409,176 @@ a.scout-reveal__main:hover .scout-reveal__name {
   white-space: nowrap;
   color: var(--accent);
 }
+
+/* ============================================================================
+   THE GAME PAGE'S BOX SCORE — period table + form strip.
+   MOBILE IS THE BASE. Existing tokens only.
+   ============================================================================ */
+
+.periods {
+  margin: 22px 0 0;
+}
+
+.periods__title,
+.teamctx__title {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+/* THE SCROLLER OWNS THE OVERFLOW so the PAGE never scrolls sideways. Baseball
+   runs to 13 innings in extras; at 390px that is far wider than the viewport
+   and it must scroll inside this box, not drag the document with it. */
+.periods__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.periods__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.periods__table th,
+.periods__table td {
+  padding: 9px 10px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* The team name column: left-aligned, and the one column that may be wide. It
+   is sticky so a fan scrolled out to the 13th inning can still see whose row
+   they are reading — the single thing that makes a wide table usable at 390px. */
+.periods__table tbody th[scope='row'],
+.periods__corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: var(--panel);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.periods__table thead th {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.periods__table tbody td {
+  color: var(--text);
+}
+
+/* The running total, set apart from the periods it sums. */
+.periods__total {
+  font-weight: 700;
+  color: var(--accent);
+  border-left: 1px solid var(--border);
+}
+
+.periods__none {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ---- Form: record + next fixture, one row per side. ---- */
+.teamctx {
+  margin: 22px 0 0;
+}
+
+.teamctx__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+/* One column on a phone — a record and a fixture are two different sentences
+   and stacking them beats squeezing both onto a 390px line. */
+.teamctx__row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.teamctx__row:last-child {
+  border-bottom: 0;
+}
+
+.teamctx__name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.teamctx__rec {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.teamctx__reclabel {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.teamctx__next,
+.teamctx__when {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.teamctx__next a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.teamctx__next a:hover {
+  text-decoration: underline;
+}
+
+/* From ~600px the record sits beside the name; the fixture keeps its own line
+   because it is the longest string on the row. */
+@media (min-width: 600px) {
+  .teamctx__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 4px 16px;
+  }
+
+  .teamctx__next {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The called-off states. Dashed, muted, and deliberately NOT alarm-coloured:
+   a postponement is news, not an error. */
+.game-coverage--off {
+  border-style: dashed;
+}
+
+.pill--off {
+  border-color: var(--border-strong);
+  color: var(--muted);
+}

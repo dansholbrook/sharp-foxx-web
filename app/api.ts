@@ -1407,6 +1407,63 @@ export const getPublishedContent = (token: string) =>
 // It deliberately sends NO limit -- the backend then returns every matching row,
 // which those callers need (My Games joins /assignments/mine against the full
 // set by event id; a page-capped list would silently lose games). A browse
+// ---------------------------------------------------------------------------
+// ONE GAME, IN FULL. GET /events/:id returns the whole row -- every column the
+// list shape omits, including `periodScores`.
+//
+// THE GAME PAGE USED TO PULL THE ENTIRE LIST AND FILTER, on a comment reading
+// "No guaranteed GET /events/:id". The route has existed the whole time
+// (events.controller.ts), ungated, returning a bare select(). That comment cost
+// 486 rows per page load and kept the period-by-period table off the screen,
+// because the list projection has never carried it.
+// ---------------------------------------------------------------------------
+export interface PeriodScore {
+  // 1-indexed, and it is the PERIOD LABEL rather than an array position:
+  // baseball's ninth inning is period 9 whether or not the eighth is present.
+  period: number;
+  home: number;
+  away: number;
+}
+
+// The full row. Extends the list shape rather than restating it, so a field
+// added to one cannot silently diverge from the other.
+export interface EventDetail extends EventListItem {
+  // NULL ON EVERY COVERED GAME, and that is a fact about where the data comes
+  // from rather than a gap to fill in: period scores are written only by the
+  // ESPN resolver, so the games we cover ourselves have none (0 of 24 finals,
+  // measured 2026-08-15). The UI says so rather than rendering an empty table.
+  periodScores: PeriodScore[] | null;
+  totalLine: string | null;
+  spreadLine: string | null;
+  marketId: string | null;
+}
+
+export const getEvent = (token: string, id: string) =>
+  authGet<EventDetail>(`/events/${encodeURIComponent(id)}`, token);
+
+// Each side's record and next fixture, DERIVED on the server from finished and
+// scheduled events. Garnish: its own call so it can fail without taking the
+// game page with it.
+export interface TeamContext {
+  record: { won: number; lost: number };
+  next: {
+    id: string;
+    scheduledAt: string;
+    homeTeam: string | null;
+    awayTeam: string | null;
+  } | null;
+}
+
+export interface EventContext {
+  // NULL when that side has no team FK -- a covered game entered without teams.
+  home: TeamContext | null;
+  away: TeamContext | null;
+}
+
+export const getEventContext = (token: string, id: string) =>
+  authGet<EventContext>(`/events/${encodeURIComponent(id)}/context`, token);
+
+
 // surface that wants a page and a count uses getGames() below.
 export const getEvents = async (
   token: string,

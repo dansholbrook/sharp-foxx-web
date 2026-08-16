@@ -7,6 +7,8 @@ import { useAuth } from '../../auth-context';
 import { AppNav, AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import {
+  getEvent,
+  getEventContext,
   getEvents,
   getEventContent,
   getPublishedContent,
@@ -16,6 +18,9 @@ import {
   isFeedEvent,
   etDateTime,
   etTime,
+  EventDetail,
+  EventContext,
+  TeamContext,
   EventListItem,
   EventContentItem,
   FeedItem,
@@ -145,7 +150,42 @@ function GameVideo({ event }: { event: EventListItem }) {
     );
   }
 
-  // Scheduled (or postponed with no stream yet) — a countdown card.
+  // ---------------------------------------------------------------------
+  // CALLED OFF, AND SAID SO. Postponed and canceled used to fall through to
+  // the "Upcoming" card below and print the ORIGINAL kickoff time — so eight
+  // games on cloud were telling fans to turn up to something that is not
+  // happening. It was the only thing on this page that was WRONG rather than
+  // missing, which is why it is fixed first.
+  //
+  // THE TWO ARE NOT ONE STATE. Postponed means "not then" and a new date may
+  // follow; canceled means "not at all". Collapsing them would tell a fan
+  // whose game was moved that it is gone. Neither line invents a new date,
+  // because nothing in the row holds one — a rescheduled game arrives as its
+  // own event.
+  // ---------------------------------------------------------------------
+  if (event.status === 'postponed' || event.status === 'canceled') {
+    const off = event.status === 'postponed';
+    return (
+      <div className="game-coverage game-coverage--off">
+        <span className="game-coverage__kicker">
+          {off ? 'Postponed' : 'Called off'}
+        </span>
+        <span className="game-coverage__matchup">{title}</span>
+        <span className="game-coverage__detail">
+          {off
+            ? 'This game was postponed. No new date yet — it will appear as its own fixture when it is rescheduled.'
+            : 'This game was called off and will not be played.'}
+        </span>
+        {event.venue && (
+          <span className="game-coverage__detail game-coverage__detail--venue">
+            {event.venue}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Scheduled — a countdown card.
   return (
     <div className="game-coverage">
       <span className="game-coverage__kicker">Upcoming</span>
@@ -208,6 +248,7 @@ function Scoreboard({
   const hasScore = homeScore !== null && awayScore !== null;
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';
+  const isOff = event.status === 'postponed' || event.status === 'canceled';
 
   return (
     <div className="game-scoreboard">
@@ -229,6 +270,13 @@ function Scoreboard({
           <LiveBadge />
         ) : isFinal ? (
           <span className="pill">Final</span>
+        ) : isOff ? (
+          /* The same fix one component down: the fall-through branch printed a
+             kickoff time for a game that is not being played. A pill, not a
+             time, because there is no time to give. */
+          <span className="pill pill--off">
+            {event.status === 'postponed' ? 'Postponed' : 'Called off'}
+          </span>
         ) : (
           <span className="game-scoreboard__when">
             {formatWhen(event.scheduledAt)}
@@ -239,6 +287,165 @@ function Scoreboard({
       <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" />
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// RECORDS AND WHAT EACH SIDE PLAYS NEXT. Derived server-side from finished and
+// scheduled events; nothing is stored, so a corrected result moves the record
+// with it and there is no second number to keep in step.
+//
+// LIFETIME, AND LABELLED AS SUCH. `events` carries no season column, so "this
+// season" is not a thing this platform can say yet. "Record" with no qualifier
+// would be read as season-to-date by every fan who has seen a box score, so the
+// label says what it is instead of implying what it isn't.
+//
+// SELF-HIDING at every level: no context, no strip; a side with no team FK
+// (a covered game entered without teams) renders nothing for that side rather
+// than "0-0", which would be a claim.
+// ---------------------------------------------------------------------------
+function TeamContextStrip({
+  event,
+  context,
+}: {
+  event: EventDetail;
+  context: EventContext;
+}) {
+  const sides: [string, TeamContext | null][] = [
+    [event.awayTeam ?? 'Away', context.away],
+    [event.homeTeam ?? 'Home', context.home],
+  ];
+  if (!context.home && !context.away) return null;
+
+  return (
+    <section className="teamctx">
+      <h2 className="teamctx__title">Form</h2>
+      <ul className="teamctx__list">
+        {sides.map(([name, side]) =>
+          side ? (
+            <li key={name} className="teamctx__row">
+              <span className="teamctx__name">{name}</span>
+              <span className="teamctx__rec">
+                {side.record.won}&ndash;{side.record.lost}
+                <small className="teamctx__reclabel"> all-time here</small>
+              </span>
+              {side.next && (
+                <span className="teamctx__next">
+                  Next:{' '}
+                  <Link href={`/games/${side.next.id}`}>
+                    {side.next.awayTeam ?? 'TBD'} at {side.next.homeTeam ?? 'TBD'}
+                  </Link>{' '}
+                  <span className="teamctx__when">
+                    {formatWhen(side.next.scheduledAt)}
+                  </span>
+                </span>
+              )}
+            </li>
+          ) : null,
+        )}
+      </ul>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PERIOD BY PERIOD — the quarter/inning table, and the honest empty state.
+//
+// SHAPE: [{period, home, away}], written ONLY by the ESPN resolver. Uniform
+// across sports, but the LENGTH is not: basketball and football run 4, baseball
+// runs 8 or 9 (the home side does not bat in the ninth when ahead) and up to 13
+// in extras. Measured on cloud 2026-08-15: 1 to 13 columns, so the table
+// scrolls inside its own container rather than wrapping. A wrapped period table
+// is unreadable — the columns stop lining up with their headers.
+//
+// THE COVERED-GAME CASE IS SAID OUT LOUD RATHER THAN LEFT BLANK.
+//
+//   feed games:     335 of 336 finals carry periods  (99.7%)
+//   covered games:    0 of  24 finals carry periods  (0%)
+//
+// Period scores arrive with the provider payload, and a covered game has no
+// provider — it is ours, entered by a person. So the games this platform exists
+// to cover are exactly the ones with no table, and a fan looking at one would
+// otherwise find a hole where the box score is on the screen that is supposed
+// to prove we cover it. It says why instead. Capturing periods at the courtside
+// console is a real feature and a different job; this is the note that stops
+// the absence reading as a bug in the meantime.
+// ---------------------------------------------------------------------------
+function PeriodTable({ event }: { event: EventDetail }) {
+  const periods = event.periodScores ?? [];
+  const covered = event.source === null;
+  const started = event.status === 'live' || event.status === 'final';
+
+  // Nothing to say before a game starts: an empty table on a fixture three days
+  // out is noise, not information.
+  if (!started) return null;
+
+  if (periods.length === 0) {
+    // Only worth explaining on a game we cover. A feed game with no periods is
+    // a provider gap and a fan can do nothing with that sentence.
+    if (!covered) return null;
+    return (
+      <section className="periods">
+        <h2 className="periods__title">Period by period</h2>
+        <p className="periods__none">
+          We cover this game ourselves, so there is no period-by-period
+          breakdown — the final score is filed from the ground rather than pulled
+          from a feed.
+        </p>
+      </section>
+    );
+  }
+
+  const label = periodLabel(event.sport);
+  return (
+    <section className="periods">
+      <h2 className="periods__title">Period by period</h2>
+      {/* The scroller owns the overflow so the PAGE never scrolls sideways —
+          the rule .fgrid and every other wide surface here follows. */}
+      <div className="periods__scroll">
+        <table className="periods__table">
+          <thead>
+            <tr>
+              <th scope="col" className="periods__corner">
+                <span className="sr-only">Team</span>
+              </th>
+              {periods.map((p) => (
+                <th scope="col" key={p.period}>
+                  {p.period}
+                </th>
+              ))}
+              <th scope="col" className="periods__total">
+                {label}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* AWAY FIRST, which is how every box score in the sport is read —
+                the visiting side bats and is listed on top. */}
+            <tr>
+              <th scope="row">{event.awayTeam ?? 'Away'}</th>
+              {periods.map((p) => (
+                <td key={p.period}>{p.away}</td>
+              ))}
+              <td className="periods__total">{event.awayScore ?? '—'}</td>
+            </tr>
+            <tr>
+              <th scope="row">{event.homeTeam ?? 'Home'}</th>
+              {periods.map((p) => (
+                <td key={p.period}>{p.home}</td>
+              ))}
+              <td className="periods__total">{event.homeScore ?? '—'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// The word for the last column. Not the period word — that is the row of
+// numbers — but what the running total is called in that sport.
+function periodLabel(sport: EventListItem['sport']): string {
+  return sport === 'baseball' ? 'R' : 'T';
 }
 
 // ---- Presenting sponsor strip: a slim gold-bordered band beneath the
@@ -676,6 +883,13 @@ export default function GamePage() {
   const { token, user } = useAuth();
   const allowed = canAccess(user?.roles ?? [], pathname);
 
+  // THE GAME, ITS OWN ROW. Was `events.find(e => e.id === id)` over the whole
+  // list; see the loader below for why that changed.
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  // Records and next fixtures. Garnish — a failure leaves it null and the strip
+  // simply doesn't render.
+  const [context, setContext] = useState<EventContext | null>(null);
+  // The list, kept ONLY for the "More games" rail. It no longer gates the page.
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [articles, setArticles] = useState<EventContentItem[] | null>(null);
   const [latest, setLatest] = useState<FeedItem[] | null>(null);
@@ -696,12 +910,20 @@ export default function GamePage() {
     setError(null);
     (async () => {
       try {
-        // No guaranteed GET /events/:id, so pull the list and find by id (also
-        // powers the "More games" rail). Published-only content for this game;
-        // the global published feed powers "Latest articles". Article/feed
-        // failures shouldn't blank the page, so they're swallowed to [].
-        const [ev, content, feed, sponsor] = await Promise.all([
-          getEvents(token),
+        // ONE GAME, BY ID. This used to be `getEvents(token)` — the whole
+        // schedule, 486 rows, filtered client-side to one — under a comment
+        // reading "No guaranteed GET /events/:id". That route has existed the
+        // whole time, ungated, returning the full row. The comment cost two
+        // orders of magnitude of payload and kept `periodScores` off the screen,
+        // because the LIST projection has never carried it.
+        //
+        // THE RAIL NO LONGER GATES THE PAGE. "More games" still needs the list,
+        // so it is fetched here too — but swallowed to [] like the other
+        // garnish. A slow or failed schedule read used to blank the game; now it
+        // costs a rail.
+        const [ev, ctx, content, feed, sponsor, list] = await Promise.all([
+          getEvent(token, id),
+          getEventContext(token, id).catch(() => null),
           getEventContent(token, id, 'published').catch(
             () => [] as EventContentItem[],
           ),
@@ -709,12 +931,15 @@ export default function GamePage() {
           // The sponsor strip is a garnish, not the page -- a failed lookup
           // degrades silently to null rather than blanking the game.
           getEventSponsorship(token, id).catch(() => null),
+          getEvents(token).catch(() => [] as EventListItem[]),
         ]);
         if (cancelled) return;
-        setEvents(ev);
+        setEvent(ev);
+        setContext(ctx);
         setArticles(content);
         setLatest(feed);
         setSponsorship(sponsor);
+        setEvents(list);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load game');
@@ -728,10 +953,52 @@ export default function GamePage() {
     };
   }, [token, id, router, allowed]);
 
-  const event = useMemo(
-    () => events?.find((e) => e.id === id) ?? null,
-    [events, id],
-  );
+
+
+  // ---------------------------------------------------------------------
+  // THE 30-SECOND REFRESH, WHILE LIVE ONLY.
+  //
+  // The 5s pulse below polls `game_events` — the COURTSIDE feed — and derives
+  // the score from score_update rows. That is excellent on a covered game with
+  // a rep at the console, and it does nothing at all on a FEED game (453 of
+  // 486), because nothing emits game_events for those. Their score moves in the
+  // database when the resolver runs and the page never looked again, so a fan
+  // watching an ESPN game saw whatever was true when the tab opened.
+  //
+  // WHY 30s AND NOT FASTER. The resolver polls the provider every TEN MINUTES,
+  // so that is the ceiling on freshness — polling at 5s would issue 120 requests
+  // to learn the same number. 30s keeps the page consistent with the database
+  // without pretending to be consistent with the game. It is also strictly
+  // cheaper than the poll already running beside it: one small row every 30s
+  // against a feed cursor every 5.
+  //
+  // STOPS ON UNMOUNT AND WHEN THE GAME STOPS BEING LIVE — the same discipline
+  // useLivePulse follows, for the same reason: a finished game's row will never
+  // change again and a timer left running is a request per viewer forever.
+  // ---------------------------------------------------------------------
+  const isLiveNow = event?.status === 'live';
+  useEffect(() => {
+    if (!token || !isLiveNow) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const fresh = await getEvent(token, id);
+          // The status can move underneath us — a game going final is exactly
+          // when the last score lands, so the row is applied either way and the
+          // effect re-runs to clear the timer.
+          if (!cancelled) setEvent(fresh);
+        } catch {
+          /* A missed tick is the next tick's problem. Never surfaced: a
+             transient failure must not put an error box over a live game. */
+        }
+      })();
+    }, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [token, id, isLiveNow]);
 
   // "More games": live games float to the very top of the rail, then same-sport
   // first among the rest, then everything else. Current game excluded.
@@ -831,6 +1098,11 @@ export default function GamePage() {
                 </span>
               </div>
               <Scoreboard event={event} />
+              {/* The box score, directly under the score it breaks down. Both
+                  self-hide: no periods before a game starts, no form strip
+                  without team FKs. */}
+              <PeriodTable event={event} />
+              {context && <TeamContextStrip event={event} context={context} />}
               {/* The reason this page exists for a feed game. Renders on every
                   game (an upcoming one can carry open questions pre-tip) but
                   only polls while live. */}
@@ -855,6 +1127,11 @@ export default function GamePage() {
                 period={live ? pulse.period : null}
               />
               {sponsorship && <PresentingSponsorStrip sponsorship={sponsorship} />}
+              {/* On a covered game this states WHY there is no period table
+                  rather than leaving a hole where the box score goes — see
+                  PeriodTable. The form strip works the same on both layouts. */}
+              <PeriodTable event={event} />
+              {context && <TeamContextStrip event={event} context={context} />}
               {/* Photos ride directly under the video area (single column on
                   mobile puts them right beneath the player). */}
               <GamePhotos token={token} eventId={id} />
