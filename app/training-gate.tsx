@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AppNav } from './nav';
 import { useAuth } from './auth-context';
 import { getFieldReps, getLtiLaunchTicket, FieldRep } from './api';
 
@@ -57,7 +56,7 @@ export function useOwnRep(
 // shell + masthead so it reads like the rest of the app; the gold CTA opens the
 // external Academy in a new tab. Rendered by My Games and the game workspace.
 export function TrainingGate() {
-  const { user, token } = useAuth();
+  const { token } = useAuth();
   const [launching, setLaunching] = useState(false);
   // Shown when we fell back to the plain Moodle URL (no auto sign-in).
   const [fellBack, setFellBack] = useState(false);
@@ -88,18 +87,6 @@ export function TrainingGate() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead">
         <span className="masthead-kicker">Onboarding</span>
         <h1 className="masthead-title">Welcome to Sharp Foxx Academy</h1>

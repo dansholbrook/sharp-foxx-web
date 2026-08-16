@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import { RevChart, RevChartLegend } from '../rev-chart';
 import { RefTotalsStrip, RefBarChart, RefLeaderboard } from '../refreport';
@@ -125,17 +125,6 @@ export default function DashboardPage() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead">
         <span className="masthead-kicker">Executive</span>
         <h1 className="masthead-title">Dashboard</h1>

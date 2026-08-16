@@ -44,7 +44,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { FanCard } from '../fan-card';
 import { canAccess } from '../roles';
 import {
@@ -203,18 +203,6 @@ function Leaderboard() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead masthead--compact masthead-head">
         <div>
           <span className="masthead-kicker">Points</span>

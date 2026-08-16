@@ -6,6 +6,7 @@ import { FollowsProvider } from './follows-context';
 import { PointsProvider } from './points-context';
 import { EarnProvider } from './earn-context';
 import { NotificationsProvider } from './notifications-context';
+import { SiteHeader } from './site-header';
 
 export const metadata: Metadata = {
   title: 'Sharp Foxx — Admin',
@@ -44,7 +45,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <PointsProvider>
               <EarnProvider>
                 <FollowsProvider>
-                  <NotificationsProvider>{children}</NotificationsProvider>
+                  <NotificationsProvider>
+                    {/* THE CHROME, ABOVE THE PAGE AND OUTSIDE ITS <main>.
+                        It sits here, innermost, because it reads the session
+                        (AuthProvider) and mounts the bell (NotificationsProvider)
+                        — and because that is the whole point of the change: the
+                        nav's width is now a function of the VIEWPORT rather than
+                        of whatever max-width each page chose for its content.
+                        See site-header.tsx and RESOLVER_TICKETS.md W1.
+
+                        NOT rendered during session restore: AuthProvider swaps
+                        its entire subtree for <SessionRestoring/> while
+                        `restoring`, which carries its own minimal wordmark bar. */}
+                    <SiteHeader />
+                    {children}
+                  </NotificationsProvider>
                 </FollowsProvider>
               </EarnProvider>
             </PointsProvider>

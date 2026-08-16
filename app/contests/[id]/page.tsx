@@ -22,7 +22,7 @@ import Link from 'next/link';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
 import { usePoints } from '../../points-context';
-import { AppNav, AccessDenied } from '../../nav';
+import { AccessDenied } from '../../nav';
 import { FanCard } from '../../fan-card';
 import { SquaresBoard } from './squares-board';
 import { SurvivorBoard } from './survivor-board';
@@ -1226,18 +1226,6 @@ export default function ContestPage() {
 
   return (
     <main className="feed-home contest-detail">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="contest-detail__back">
         <Link href="/contests" className="link-btn">
           ← All contests

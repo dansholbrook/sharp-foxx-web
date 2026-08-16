@@ -63,10 +63,16 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* ---- THE CONTENT COLUMN, AND ONLY THE CONTENT COLUMN.
+   `main` no longer contains the header (see .header-row below), so its
+   max-width is now a statement about this page's CONTENT and nothing else.
+   The 48px that used to sit above the header moved onto the header itself;
+   the 32px here is the old `.header-row { margin-bottom }`, so the distance
+   from the top of the viewport to the first line of content is unchanged. ---- */
 main {
   max-width: 920px;
   margin: 0 auto;
-  padding: 48px 24px;
+  padding: 32px 24px 48px;
 }
 
 /* ---- Headings: elegant serif in gold ---- */
@@ -310,14 +316,25 @@ tfoot td {
   color: var(--muted);
 }
 
-/* ---- Header + nav: wide uppercase wordmark row ---- */
+/* ---- Header + nav: wide uppercase wordmark row.
+   ---------------------------------------------------------------------------
+   IT IS NOW THE FULL-WIDTH BAR, NOT A BLOCK INSIDE THE PAGE. It is rendered
+   once, in app/layout.tsx, as a SIBLING of `main` rather than its first child
+   (site-header.tsx; RESOLVER_TICKETS.md W1). So it carries its own gutters --
+   the 24px it used to inherit from `main` -- and its border-bottom runs the
+   width of the viewport, which is the point: the nav's available space stopped
+   being a function of each page's editorial max-width.
+
+   The three values are the old ones rearranged, not new ones: 48px was `main`'s
+   top padding, 18px was this rule's padding-bottom, and the 32px that used to
+   be this rule's margin-bottom is now `main`'s padding-top. Nothing about the
+   vertical rhythm changed. ---- */
 .header-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 32px;
-  padding-bottom: 18px;
+  padding: 48px 24px 18px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -329,23 +346,14 @@ tfoot td {
   align-items: center;
 }
 
-/* THE PER-PAGE "Signed in as … · role" LINE, HIDDEN EVERYWHERE.
-   That fact now lives in the avatar menu, where it costs no width and sits
-   next to the initials that carry the same answer at a glance. It was never in
-   nav.tsx: the markup is copy-pasted into 39 page files, identical in every one
-   (.header-row > div > .muted), and this rule already hid it below 768px — it
-   is now simply not width-dependent.
-
-   THE DEBT, NAMED: those 39 blocks still render, and this rule is the only
-   thing stopping them. The real fix is a shared <PageHeader> component that
-   owns the wordmark + <AppNav/> so a page never writes its own header at all,
-   at which point this rule and the markup both go. That is a 39-file change of
-   its own and does not belong bolted onto a nav pass; editing 39 files here to
-   delete a line CSS already hides would be a large diff for no rendered
-   difference. Until then: one selector, one place, deliberate. */
-.header-row > div > .muted {
-  display: none;
-}
+/* THE PER-PAGE "Signed in as … · role" LINE IS GONE, MARKUP AND ALL.
+   This slot used to hold a `display: none` on `.header-row > div > .muted` --
+   one selector suppressing 39 copy-pasted blocks -- and its comment named the
+   real fix: "a shared <PageHeader> component that owns the wordmark +
+   <AppNav/> so a page never writes its own header at all, at which point this
+   rule and the markup both go." That component is site-header.tsx, so both
+   went. The fact itself lives in the avatar menu, next to the initials that
+   carry the same answer at a glance. */
 
 /* ---- The desktop nav: a wrapping row of links, and a cluster that does not
    wrap. Two children, and the split is the point -- see the note in nav.tsx.
@@ -10050,16 +10058,19 @@ a.follow-sugcard__name:hover {
 
   /* ---- Page frame: pull in the generous desktop gutters/margins ---- */
   main {
-    padding: 24px 16px 56px;
+    padding: 22px 16px 56px;
   }
 
   /* header-row becomes the slim top bar: wordmark left, controls right. The
-     sign-in line is hidden at every width now, up in the base rule. */
+     sign-in line no longer exists at any width — see the base rule.
+     Same rearrangement as the base rule: 24px was `main`'s top padding, 14px
+     was this rule's own padding-bottom, and its 22px margin-bottom is now
+     `main`'s padding-top above. The bar keeps the 16px phone gutter it used to
+     inherit from `main`. */
   .header-row {
     align-items: center;
     gap: 12px;
-    margin-bottom: 22px;
-    padding-bottom: 14px;
+    padding: 24px 16px 14px;
   }
 
   /* ---- SEARCH WRAPS TO ITS OWN LINE, INSIDE THE BAR. It cannot sit beside the
@@ -22572,4 +22583,123 @@ a.scout-reveal__main:hover .scout-reveal__name {
 .pill--off {
   border-color: var(--border-strong);
   color: var(--muted);
+}
+
+/* ============================================================================
+   THE COVERAGE BAND — /field-reps > My roster. Existing tokens only, mobile base.
+   ============================================================================ */
+
+.coverage {
+  margin: 26px 0 0;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.coverage__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.coverage__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Says WHOSE list this is. Kept adjacent to the title rather than as a footnote
+   because it qualifies the heading, and a qualifier nobody reads is how "every
+   covered game" becomes "my games" in somebody's head. */
+.coverage__scope {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.coverage__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* MOBILE IS THE BASE: the game stacks above its control. The select and the
+   button are a pair and stay on one line at every width — splitting them would
+   put "Assign" under a name it no longer looks attached to. */
+.coverage__row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.coverage__row:first-child {
+  border-top: 0;
+}
+
+.coverage__game {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.coverage__matchup {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.coverage__matchup:hover {
+  text-decoration: underline;
+}
+
+.coverage__meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.coverage__act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coverage__act select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.coverage__act .btn-inline {
+  flex-shrink: 0;
+}
+
+.coverage__none {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* From ~640px the game and its control share a row, the control pinned right. */
+@media (min-width: 640px) {
+  .coverage__row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .coverage__act {
+    flex-shrink: 0;
+  }
+
+  .coverage__act select {
+    flex: 0 1 auto;
+    max-width: 220px;
+  }
 }

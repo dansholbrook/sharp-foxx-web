@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import {
+  getCoverageGames,
+  createAssignment,
+  etDateTime,
+  CoverageGame,
   getFieldReps,
   createUser,
   createFieldRep,
@@ -133,17 +137,6 @@ export default function FieldRepsPage() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       {/* ---- ONE ROW: what this page is, which list you are on, and the one
           action that belongs here.
 
@@ -352,7 +345,168 @@ export default function FieldRepsPage() {
             </div>
           )
         )}
+        {/* ------------------------------------------------------------------
+            COVERAGE, ON THE MY-ROSTER TAB ONLY.
+
+            THIS IS NOT A REVERSAL OF THE "+ Add Game" REMOVAL ABOVE, and the
+            two were decided together rather than one overruling the other. That
+            button CREATED AN EVENT — scheduling work, unrelated to managing
+            people — and it sat in the masthead reading as this page's primary
+            action. Both objections stand and neither applies here:
+
+              * THE OBJECT IS THE REP, NOT THE GAME. Assigning a correspondent
+                is a fact about what one of your people is doing this week, which
+                is the same kind of fact as the kind/status/cohort/commission in
+                the table above it. The game is the value, not the subject.
+              * IT IS A BAND BELOW THE TABLE, NEVER THE MASTHEAD. The page's one
+                headline action is still "add a rep".
+
+            MY ROSTER ONLY. On the admin directory tab "my roster" is
+            meaningless — an admin manages nobody — so the band would be a list
+            of games with no one to put on them.
+
+            WHY IT EXISTS AT ALL: the Call auto-draft cannot run without
+            assignments, and nobody claims games. One covered game on cloud has a
+            correspondent and next week has none, so a draft generator "correctly
+            returns nothing" every week, which is broken with a label on it. This
+            asks the assignment question BEFORE there is a Call needing a name.
+            ------------------------------------------------------------------ */}
+        {tab === 'mine' && !loading && !error && (
+          <CoverageBand token={token} reps={shown} />
+        )}
       </section>
     </main>
+  );
+}
+
+// ===========================================================================
+// THE COVERAGE BAND — covered games nobody is on, and one tap to staff them.
+//
+// COVERAGE, NOT REGION. A manager owns the reps who report to them, not a
+// territory; see the note on getCoverageGames in app/api.ts for the five
+// columns that would be needed to draw a territory and the four modules that
+// have independently found they are empty.
+//
+// THE LIST IS PLATFORM-WIDE and says so, because nothing relates a game to a
+// manager. Today that is two games, so platform-wide and mine are the same
+// list; the label is what stops that being a surprise at fifty managers.
+//
+// SELF-HIDING when there is nothing to staff — a manager whose reps are all on
+// games should see their roster and nothing else.
+// ===========================================================================
+function CoverageBand({ token, reps }: { token: string; reps: FieldRep[] }) {
+  const [games, setGames] = useState<CoverageGame[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Which rep each game is about to be assigned to. Keyed by game so two rows
+  // can be staffed in either order without one clobbering the other's choice.
+  const [picked, setPicked] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    try {
+      const res = await getCoverageGames(token);
+      setGames(res.items);
+    } catch {
+      // Best-effort: a failed read costs the band, never the roster above it.
+      setGames([]);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // ONLY ACTIVE FIELD REPS can be put on a game. An onboarding rep has no
+  // business at a fixture yet, and the assignment fence on the server refuses
+  // them anyway -- offering the name would be offering a button that 403s.
+  const assignable = useMemo(
+    () => reps.filter((r) => r.kind === 'field_rep' && r.status === 'active'),
+    [reps],
+  );
+
+  async function assign(gameId: string) {
+    const repId = picked[gameId] ?? assignable[0]?.id;
+    if (!repId) return;
+    setBusy(gameId);
+    setError(null);
+    try {
+      await createAssignment(token, { eventId: gameId, repId });
+      // Drop the row rather than refetching: the game is staffed and the list is
+      // "games nobody is on". Refetching would also work and costs a round trip
+      // to learn something this client already knows.
+      setGames((prev) => (prev ?? []).filter((g) => g.id !== gameId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not assign that game');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!games || games.length === 0) return null;
+
+  return (
+    <section className="coverage">
+      <div className="coverage__head">
+        <h3 className="coverage__title">Games needing a correspondent</h3>
+        {/* SAYS WHOSE LIST THIS IS. Not "your games" — nothing scopes these to
+            a manager, and implying otherwise would be the claim the server's
+            `scope: 'platform'` exists to prevent. */}
+        <span className="coverage__scope">
+          Every covered game with nobody on it
+        </span>
+      </div>
+
+      {assignable.length === 0 ? (
+        <p className="coverage__none">
+          {games.length} game{games.length === 1 ? '' : 's'} need someone, and no
+          active field rep reports to you yet. Reps are linked to a manager when
+          they are onboarded.
+        </p>
+      ) : (
+        <ul className="coverage__list">
+          {games.map((g) => (
+            <li key={g.id} className="coverage__row">
+              <span className="coverage__game">
+                <Link href={`/games/${g.id}`} className="coverage__matchup">
+                  {g.awayTeam ?? 'TBD'} at {g.homeTeam ?? 'TBD'}
+                </Link>
+                <span className="coverage__meta">
+                  {etDateTime(g.scheduledAt)}
+                  {g.venue ? ` · ${g.venue}` : ''}
+                </span>
+              </span>
+              <span className="coverage__act">
+                <label className="sr-only" htmlFor={`cov-${g.id}`}>
+                  Who is covering {g.awayTeam ?? 'this game'}
+                </label>
+                <select
+                  id={`cov-${g.id}`}
+                  value={picked[g.id] ?? assignable[0].id}
+                  disabled={busy === g.id}
+                  onChange={(e) =>
+                    setPicked((p) => ({ ...p, [g.id]: e.target.value }))
+                  }
+                >
+                  {assignable.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.displayName ?? r.id}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn-inline"
+                  disabled={busy === g.id}
+                  onClick={() => assign(g.id)}
+                >
+                  {busy === g.id ? 'Assigning…' : 'Assign'}
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <div className="error">{error}</div>}
+    </section>
   );
 }

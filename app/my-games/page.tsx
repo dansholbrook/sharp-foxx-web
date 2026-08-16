@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { AddGameForm } from '../add-game-form';
 import { canAccess } from '../roles';
 import { QueueTable, Column } from '../queue-table';
@@ -559,17 +559,6 @@ export default function MyGamesPage() {
 
   return (
     <main className="feed-home--bleed feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead masthead--compact">
         <div className="masthead-head">
           <div>

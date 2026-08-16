@@ -4,7 +4,6 @@ import { Suspense, useEffect, useMemo, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { AppNav } from '../nav';
 import { getEvents, etDateTime, EventListItem } from '../api';
 
 // Date-only ET formatting for compact thumbnail metadata (mirrors the feed page).
@@ -121,7 +120,7 @@ const ALL = 'all';
 function SearchResults() {
   const router = useRouter();
   const params = useSearchParams();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   const initialQ = params.get('q') ?? '';
 
@@ -202,18 +201,6 @@ function SearchResults() {
 
   return (
     <main className="feed-home--bleed feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <form className="feed-search" onSubmit={onSubmit} role="search">
         <svg
           className="feed-search__icon"

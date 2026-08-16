@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
-import { AppNav, AccessDenied } from '../../nav';
+import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { useOwnRep, TrainingGate } from '../../training-gate';
 import {
@@ -2749,17 +2749,6 @@ export default function GameWorkspacePage() {
 
   return (
     <main className="feed-home ws-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <Link href="/my-games" className="game-back">
         ← Back to My Games
       </Link>

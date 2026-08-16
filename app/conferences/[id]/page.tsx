@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
-import { AppNav, AccessDenied } from '../../nav';
+import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { tierLabel, genderLabel } from '../../tiers';
 import { getConference, ConferenceDetail, ConferenceMember } from '../../api';
@@ -108,18 +108,6 @@ export default function ConferencePage() {
 
   return (
     <main className="feed-home conf-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <Link href="/feed" className="game-back">
         ← Back to feed
       </Link>

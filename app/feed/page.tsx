@@ -1,13 +1,12 @@
 'use client';
 
-import { Children, useEffect, useMemo, useState, FormEvent } from 'react';
+import { Children, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { useFollows } from '../follows-context';
 import { usePoints } from '../points-context';
 import { FollowButton } from '../follow-button';
-import { AppNav } from '../nav';
 import { ArenaTeaser } from '../arena-teaser';
 import { FollowDisc, followHref } from '../follow-carousel';
 import {
@@ -69,49 +68,9 @@ function thumbClass(sport: string | null): string {
 // The special "all sports" sentinel for the sport filter chips (mirrors /search).
 const ALL = 'all';
 
-// ---- Search bar: renders prominently; submit navigates to /search (built
-// later). The query is passed along so that page can pick it up. ----
-function SearchBar() {
-  const router = useRouter();
-  const [q, setQ] = useState('');
-
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = q.trim();
-    router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : '/search');
-  }
-
-  return (
-    <form className="feed-search" onSubmit={onSubmit} role="search">
-      <svg
-        className="feed-search__icon"
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <circle cx="11" cy="11" r="7" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-      <input
-        className="feed-search__input"
-        type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search games, teams, sports…"
-        aria-label="Search games, teams, sports"
-      />
-      <button className="feed-search__btn" type="submit">
-        Search
-      </button>
-    </form>
-  );
-}
+// SearchBar MOVED TO site-header.tsx, unchanged. It lived inside this page's
+// `.header-row`, and when the header became a layout-level component the field
+// had to travel with the bar it sits in. Still rendered on /feed only.
 
 // How many cards a feed row shows before the Show-all expander. Two grid rows
 // at 1280 and 1440 (three columns each), one and a half at 1728.
@@ -756,26 +715,12 @@ export default function FeedPage() {
 
   return (
     <main className="feed-home--bleed feed-home feed-dash">
-      {/* ONE BAR OF CHROME, and search now rides inside it rather than below.
-          At >=768px it sits between the wordmark and the nav -- the reference
-          layout's single row. Below that it wraps to a second line INSIDE the
-          same bar (see .header-row in globals.css): the mobile cluster is
-          already at capacity at 390px, which is why the ⚡ chip drops out under
-          400px, so there is no room to put a field beside it. A wrapped line in
-          the chrome block costs ~56px; the old .feed-search block cost 100px
-          plus a 146px masthead above it. */}
-      <div className="header-row header-row--search">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <SearchBar />
-        <AppNav />
-      </div>
+      {/* THE CHROME AND THE SEARCH FIELD BOTH LEFT THIS FILE. They are in
+          site-header.tsx now, rendered once in app/layout.tsx above every
+          page's <main> -- see RESOLVER_TICKETS.md W1. The field is still shown
+          on THIS ROUTE ALONE; SiteHeader keys it on `pathname === '/feed'`,
+          which is the same one page it has always been on. The reasoning about
+          why it rides inside the bar rather than below it moved with it. */}
 
       {/* THE MASTHEAD IS GONE -- kicker, display title and rule. It cost ~146px
           on a phone and ~161px on a laptop to say "Your feed / Tonight's games"

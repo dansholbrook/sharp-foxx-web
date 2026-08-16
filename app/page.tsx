@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { login, devLogin, LoginResponse } from './api';
 import { useAuth } from './auth-context';
 import { landingFor } from './roles';
@@ -65,18 +64,6 @@ export default function LoginPage() {
 
   return (
     <main className="apply-page">
-      <div className="header-row">
-        <span className="wordmark">Sharp Foxx</span>
-        <div className="login-header-links">
-          <Link href="/join" className="link-btn">
-            New here? Join free →
-          </Link>
-          <Link href="/apply" className="link-btn">
-            Apply to join
-          </Link>
-        </div>
-      </div>
-
       <div className="masthead">
         <span className="masthead-kicker">Members</span>
         <h1 className="masthead-title">Sign in</h1>

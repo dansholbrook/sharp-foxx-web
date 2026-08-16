@@ -55,19 +55,12 @@ function validate(v: {
   return errors;
 }
 
-// A minimal branded public header for the unauthenticated /apply page: the
-// Sharp Foxx wordmark and a small "Sign in" link back to the dev login. NOT the
-// logged-in AppNav -- this page never touches the auth session.
-function PublicHeader() {
-  return (
-    <div className="header-row">
-      <span className="wordmark">Sharp Foxx</span>
-      <Link href="/" className="link-btn">
-        Sign in
-      </Link>
-    </div>
-  );
-}
+// The public header (wordmark + a "Sign in" link back to the login page)
+// is no longer written here. It is one of three variants in
+// site-header.tsx, rendered once in app/layout.tsx above every page's
+// <main> -- this file and /apply held character-identical copies of it.
+// SiteHeader picks the public variant BY ROUTE, so a signed-in visitor to
+// this page still gets it, exactly as before.
 
 const PITCH_MIN = 30;
 
@@ -152,7 +145,6 @@ export default function ApplyPage() {
   if (submitted) {
     return (
       <main className="apply-page">
-        <PublicHeader />
         <div className="masthead">
           <span className="masthead-kicker">Recruiting</span>
           <h1 className="masthead-title">Application received</h1>
@@ -175,8 +167,6 @@ export default function ApplyPage() {
 
   return (
     <main className="apply-page">
-      <PublicHeader />
-
       <div className="masthead">
         <span className="masthead-kicker">Join the network</span>
         <h1 className="masthead-title">Join the Sharp Foxx network</h1>

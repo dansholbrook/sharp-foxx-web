@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import { QueueTable, SlideOver, Column } from '../queue-table';
 import {
@@ -477,17 +477,6 @@ export default function NilPage() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       {/* ---- Title and the one action on a row; kicker, display size and rule
           gone. "Name · Image · Likeness" sat above an h1 reading "My NIL",
           which is the same three words expanded.

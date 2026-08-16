@@ -1947,6 +1947,43 @@ export const createEvent = (token: string, input: CreateEventInput) =>
 export const createAssignment = (token: string, input: CreateAssignmentInput) =>
   authPost<AssignmentRow>('/assignments', token, input);
 
+// ---------------------------------------------------------------------------
+// COVERAGE — covered games nobody is on yet. Feeds the band on /field-reps.
+//
+// COVERAGE, NOT REGION, AND THE NAME IS THE DECISION. A manager owns the REPS
+// WHO REPORT TO THEM (field_reps.manager_id), not a territory: a geographic
+// region could span three managers with no single owner, and the data to draw
+// one does not exist. Measured 2026-08-15 — rep_territories 0 rows,
+// events.market_id 0 of 486, teams.market_id 0 of 26,011,
+// institutions.market_id 0 of 2,013, field_reps.home_market_id 0 of 15.
+//
+// FOUR MODULES HAVE NOW REACHED THAT CONCLUSION INDEPENDENTLY: the assignment
+// claim fence ("MARKET SCOPING IS UNIMPLEMENTABLE"), scout-cards ("territory
+// gating is not implementable at all today"), the Call auto-draft recon, and
+// this. It is written here so the fifth reader finds a decision rather than
+// rediscovering it — if this field were called `region`, they would go looking
+// for territory data that has never existed.
+// ---------------------------------------------------------------------------
+export interface CoverageGame {
+  id: string;
+  sport: string;
+  venue: string | null;
+  scheduledAt: string;
+  homeTeam: string | null;
+  awayTeam: string | null;
+}
+
+export interface CoverageList {
+  // 'platform' — every unstaffed covered game, not just the caller's. Echoed by
+  // the server so this client cannot label them as the manager's own; nothing
+  // relates a game to a manager. See AssignmentsService.listUnstaffedCoverage.
+  scope: 'platform';
+  items: CoverageGame[];
+}
+
+export const getCoverageGames = (token: string) =>
+  authGet<CoverageList>('/assignments/coverage', token);
+
 // Advertisers to populate the Log a Sale dropdown (and to resolve businessName
 // for ad-order listings, which carry only advertiserId).
 export const getAdvertisers = (token: string) =>

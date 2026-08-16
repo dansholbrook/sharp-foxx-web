@@ -12,7 +12,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { usePoints } from '../points-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { FanRecordLine, recordFromPicks } from '../fan-card';
 import { WaysToEarn } from '../ways-to-earn';
 import { canAccess } from '../roles';
@@ -389,18 +389,6 @@ export default function MyPicksPage() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead masthead--compact masthead-head">
         <div>
           <span className="masthead-kicker">Points</span>

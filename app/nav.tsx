@@ -342,9 +342,18 @@ export function AppNav() {
 
   const { sections, console: consoleLinks } = navLinksFor(user?.roles ?? []);
 
-  // Badge the Review link with the queue count. One best-effort fetch on mount
-  // (no polling); a failure or an empty queue simply shows no badge. Only staff
-  // who can reach /review ever see the link, so gate the fetch on that too.
+  // Badge the Review link with the queue count. One best-effort fetch per page
+  // view (no polling); a failure or an empty queue simply shows no badge. Only
+  // staff who can reach /review ever see the link, so gate the fetch on that too.
+  //
+  // `pathname` IS IN THE DEPS BELOW, AND IT IS NOT DECORATION. This used to say
+  // "on mount" and mean it: AppNav was rendered by each of ~36 pages, so every
+  // navigation destroyed and rebuilt it and the counts were re-read. Moving the
+  // header into app/layout.tsx (RESOLVER_TICKETS.md W1) means this component now
+  // mounts ONCE PER SESSION -- an editor who cleared the queue would have gone on
+  // seeing a badge for a queue with nothing in it until they reloaded the tab.
+  // Re-reading on route change reproduces the old cadence exactly, request for
+  // request; it is not new polling.
   const canReview = (user?.roles ?? []).some(
     (r) => r === 'admin' || r === 'regional_manager',
   );
@@ -372,7 +381,7 @@ export function AppNav() {
     return () => {
       cancelled = true;
     };
-  }, [token, canReview]);
+  }, [token, canReview, pathname]);
 
   // The review/NIL count badges attach to the same two links wherever they are
   // rendered (inside Console, and flat in the mobile sheet), so factor the
@@ -452,11 +461,15 @@ export function AppNav() {
           original rule's argument still holds and now applies to the things it
           was written about: whole words, wrapping between items.
 
-          THIS DOES NOT STOP THE LINKS WRAPPING, and it is not meant to. On a
-          720px page (/arena/trail, /arena/oracle) a fan's six sections plus the
-          cluster need ~684px against ~546px of nav space, so they wrap and
-          should. The nav's space depending on a PAGE'S editorial width is the
-          real bug — see RESOLVER_TICKETS.md W1. ---- */}
+          THIS DOES NOT STOP THE LINKS WRAPPING, and it is not meant to. What it
+          stopped is the links wrapping FOR THE WRONG REASON: a fan's six
+          sections plus the cluster needed ~684px, and on /arena/trail they were
+          given ~546px — not because the window was small but because that page
+          caps its content at 720px for a vertical road. That coupling is gone
+          (RESOLVER_TICKETS.md W1; the header is rendered once in layout.tsx
+          now), so the space this row gets is the WINDOW's, on every route.
+          Where the window really is too narrow, wrapping here is the right
+          behaviour and stays. ---- */}
       <div className="nav-desk">
         <div className="nav-links nav-links--desktop">
           {sections.map((l) => (
@@ -544,16 +557,13 @@ export function AppNav() {
 // use, instead of the raw "403 Insufficient role" text. Reuses the feed shell,
 // masthead, and empty-state styles -- no new CSS. The nav still lists the pages
 // this role *can* reach, so it's a way out, not a dead end.
+//
+// It no longer renders that nav itself: this component is returned FROM a page,
+// so <SiteHeader/> is already above it. "Use the bar above" is now literally
+// describing the layout's own bar.
 export function AccessDenied() {
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead">
         <span className="masthead-kicker">Restricted</span>
         <h1 className="masthead-title">No access</h1>

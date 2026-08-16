@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import {
   getContests,
@@ -194,18 +194,6 @@ export default function ContestsPage() {
 
   return (
     <main className="feed-home--bleed feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       {/* ---- Title and the status filter on one row. The masthead wrapper and
           its kicker are gone: the kicker said "Contests" above an h1 saying
           "Contests", and the wrapper's rule and margins were 53px of frame

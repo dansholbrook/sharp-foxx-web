@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
 import { useArticleReadEarn } from '../../earn-hooks';
-import { AppNav } from '../../nav';
 import {
   getContentItem,
   getPublishedContent,
@@ -30,7 +29,7 @@ export default function ArticlePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   const [item, setItem] = useState<ContentItem | null>(null);
   // The published-feed row matched by id: carries author + event join. Best-effort
@@ -105,18 +104,6 @@ export default function ArticlePage() {
 
   return (
     <main className="feed-home article-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <Link href="/feed" className="game-back">
         ← Back to feed
       </Link>

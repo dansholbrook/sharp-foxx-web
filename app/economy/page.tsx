@@ -32,7 +32,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import {
   getEngagementActions,
@@ -928,18 +928,6 @@ export default function EconomyPage() {
 
   return (
     <main className="feed-home economy-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead">
         <span className="masthead-kicker">Staff</span>
         <h1 className="masthead-title">Engagement economy</h1>

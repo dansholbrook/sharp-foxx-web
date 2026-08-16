@@ -48,7 +48,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { useAgeGate } from '../../age-gate';
-import { AppNav, AccessDenied } from '../../nav';
+import { AccessDenied } from '../../nav';
 import { HowToPlay, Pays, PaysList } from '../how-to-play';
 import { canAccess } from '../../roles';
 import { CallSheet, PotBlock } from './answer-sheet';
@@ -243,24 +243,19 @@ export default function CallPage() {
 
   return (
     <main className="feed-home call-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       {/* ---- THE CONTENT COLUMN. The page itself now runs the full width and
           THIS carries the measure, which is the whole point: the header row
           above is outside it, so the global nav gets the window rather than
           whatever cap this page's content happens to want. That coupling is
-          RESOLVER_TICKETS.md W1, and moving the cap off `main` retires it for
-          these pages.
+          RESOLVER_TICKETS.md W1 -- WHICH HAS SINCE LANDED IN FULL: the header
+          is rendered once in app/layout.tsx now, outside every page's <main>
+          (site-header.tsx), so no page's cap can reach the nav on any route.
+
+          THE COLUMN STAYS, and its reason is now the second half of that
+          sentence rather than the first. It arrived as the Arena's own interim
+          answer to W1; what it does on its own merits is hold the cards to a
+          readable measure on a wide screen, which is what `main`'s cap used to
+          do for them. Deleting it would widen the cards, not the nav.
 
           The content geometry is unchanged -- these blocks are vertical stacks
           and a centred column is what they want. Nothing here makes the Arena

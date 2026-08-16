@@ -3,13 +3,24 @@
 // ============================================================================
 // THE BELL AND THE TRAY — one shared notification state for the whole app.
 //
-// WHY A PROVIDER AND NOT STATE INSIDE AppNav: <AppNav /> is rendered by each of
-// the ~36 authenticated pages inside its own .header-row, NOT once in
-// layout.tsx. Anything holding state or firing a fetch inside it re-runs on
-// every route change — which is exactly what the Review/NIL queue badges in
-// nav.tsx do today, tolerable at two best-effort calls on mount and not
-// tolerable for something that polls. So the count lives here, above the router,
-// and the bell is a pure reader of it.
+// WHY A PROVIDER AND NOT STATE INSIDE AppNav. This used to read "<AppNav /> is
+// rendered by each of the ~36 authenticated pages inside its own .header-row,
+// NOT once in layout.tsx", and that is no longer the arrangement: <SiteHeader/>
+// renders the bar once, in layout.tsx, above every page's <main>
+// (RESOLVER_TICKETS.md W1).
+//
+// THE DECISION SURVIVES THE CHANGE THAT INVALIDATED ITS REASON, and it is worth
+// saying why rather than quietly leaving it. The old argument was that state in
+// AppNav re-runs on every route change; a poller could not live there. AppNav is
+// now stable across navigations, so it COULD — but the provider is still the
+// right home, because two bells are mounted at once (see the tray note below)
+// and a poll hung off a control that exists twice is a poll that runs twice.
+// One count, one interval, one tray, above the router.
+//
+// The Review/NIL queue badges in nav.tsx went the other way for the same
+// reason, and the trade is deliberate: they are two best-effort calls that must
+// be FRESH rather than shared, so they now re-read on `pathname` to reproduce
+// exactly the per-navigation cadence remounting used to give them for free.
 //
 // This is the points-context.tsx shape — one provider under Auth, one fetch per
 // token, a value shared by a control that renders on every screen — with three

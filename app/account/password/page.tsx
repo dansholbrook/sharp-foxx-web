@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { changePassword } from '../../api';
 import { useAuth } from '../../auth-context';
-import { AppNav } from '../../nav';
 import { landingFor } from '../../roles';
 
 // Backend minimum for a new password.
@@ -70,18 +69,6 @@ function ChangePasswordInner() {
 
   return (
     <main className="apply-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       {done ? (
         <>
           <div className="masthead">

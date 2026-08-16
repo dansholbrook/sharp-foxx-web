@@ -26,7 +26,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
-import { AppNav } from '../../nav';
 import {
   getNotificationPreferences,
   updateNotificationPreferences,
@@ -62,7 +61,7 @@ const SECTIONS: Array<{
 
 export default function NotificationSettingsPage() {
   const router = useRouter();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   const [items, setItems] = useState<NotificationPreference[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,18 +132,6 @@ export default function NotificationSettingsPage() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead">
         <span className="masthead-kicker">Account</span>
         <h1 className="masthead-title">Notifications</h1>

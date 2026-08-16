@@ -90,14 +90,22 @@ function isTokenExpired(token: string): boolean {
 
 // A minimal branded placeholder shown for the one tick it takes to rehydrate the
 // session, in place of the real page. Reuses existing feed styles -- no new CSS.
+//
+// THIS IS THE ONE PLACE THAT STILL WRITES ITS OWN `.header-row`, and it has to.
+// <SiteHeader/> is rendered in app/layout.tsx BELOW this provider, and the line
+// at the foot of this file swaps the entire subtree for this component while
+// `restoring` -- so there is no header above it to inherit. A bare wordmark is
+// also the honest bar here: the nav needs a session it does not have yet.
 function SessionRestoring() {
   return (
-    <main className="feed-home">
+    <>
       <div className="header-row">
         <span className="wordmark">Sharp Foxx</span>
       </div>
-      <div className="card muted">Restoring your session…</div>
-    </main>
+      <main className="feed-home">
+        <div className="card muted">Restoring your session…</div>
+      </main>
+    </>
   );
 }
 

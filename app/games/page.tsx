@@ -34,7 +34,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { GamePickStrip, GamePicks, useGamePicks } from '../game-pick-strip';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import {
   getGames,
@@ -452,18 +452,6 @@ function Games() {
 
   return (
     <main className="feed-home--bleed feed-home gamesdir-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       {/* ---- ROW A: the page's name and the tab it is on, ON ONE LINE.
           It was two bands -- a masthead (53px) over a tabs row (76px, of which
           42px was margin) -- for a title and two chips that together are 328px

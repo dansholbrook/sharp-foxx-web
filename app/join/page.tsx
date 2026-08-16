@@ -51,18 +51,12 @@ function validate(v: {
   return errors;
 }
 
-// A minimal branded public header: the wordmark and a small "Sign in" link back
-// to the login page. NOT the logged-in AppNav -- this page has no session yet.
-function PublicHeader() {
-  return (
-    <div className="header-row">
-      <span className="wordmark">Sharp Foxx</span>
-      <Link href="/" className="link-btn">
-        Sign in
-      </Link>
-    </div>
-  );
-}
+// The public header (wordmark + a "Sign in" link back to the login page)
+// is no longer written here. It is one of three variants in
+// site-header.tsx, rendered once in app/layout.tsx above every page's
+// <main> -- this file and /apply held character-identical copies of it.
+// SiteHeader picks the public variant BY ROUTE, so a signed-in visitor to
+// this page still gets it, exactly as before.
 
 function JoinForm() {
   const router = useRouter();
@@ -160,8 +154,6 @@ function JoinForm() {
 
   return (
     <main className="apply-page join-page">
-      <PublicHeader />
-
       <div className="masthead">
         <span className="masthead-kicker">Join free</span>
         <h1 className="masthead-title">Get closer to the game</h1>

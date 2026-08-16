@@ -14,7 +14,6 @@
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
-import { AppNav } from '../../nav';
 import { etDateTime } from '../../api';
 
 export function CallStaffShell({
@@ -35,17 +34,6 @@ export function CallStaffShell({
 
   return (
     <main className="feed-home callstaff-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead masthead-head">
         <div>
           <span className="masthead-kicker">{kicker}</span>

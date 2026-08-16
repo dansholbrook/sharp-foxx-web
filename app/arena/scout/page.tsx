@@ -31,7 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../auth-context';
 import { useAgeGate, AgeGateDeclinedError } from '../../age-gate';
-import { AppNav, AccessDenied } from '../../nav';
+import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import {
   ScoutBook,
@@ -204,7 +204,11 @@ export default function ScoutPage() {
 
   return (
     <>
-      <AppNav />
+      {/* The site header (wordmark + nav) is rendered once in app/layout.tsx
+          now, so the bare <AppNav/> these two Scout pages used to render for
+          themselves is gone -- it was a third header shape, without the
+          wordmark, invented because the page did not want the header INSIDE its
+          <main>. That is exactly what W1 made the rule. */}
       <main className="scout-page">
         <header className="scout-hero">
           <p className="scout-hero__kicker">Season-long · The Scout Book</p>

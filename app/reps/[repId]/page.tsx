@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../auth-context';
-import { AppNav, AccessDenied } from '../../nav';
+import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import {
   getFieldReps,
@@ -240,17 +240,6 @@ export default function RepDrilldownPage() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead">
         <span className="masthead-kicker">Rep drill-down</span>
         <h1 className="masthead-title">{headerName}</h1>

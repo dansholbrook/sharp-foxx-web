@@ -69,7 +69,7 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { usePoints } from '../points-context';
 import { useFollows } from '../follows-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { FanRecordLine, recordFromPicks } from '../fan-card';
 import { StreakChip, anyStreakActive } from '../arena-streaks';
 import { CarouselItem } from '../follow-carousel';
@@ -726,18 +726,6 @@ export default function ProfilePage() {
 
   return (
     <main className="feed-home">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       <div className="masthead masthead-head">
         <div>
           <span className="masthead-kicker">Your profile</span>

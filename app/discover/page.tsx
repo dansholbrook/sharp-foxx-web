@@ -33,7 +33,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
-import { AppNav, AccessDenied } from '../nav';
+import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
 import { QueueTable, Column, SlideOver } from '../queue-table';
 import {
@@ -898,18 +898,6 @@ function Discover() {
 
   return (
     <main className="feed-home discover-page">
-      <div className="header-row">
-        <div>
-          <span className="wordmark">Sharp Foxx</span>
-          <span className="muted">
-            Signed in as{' '}
-            <span className="mono">{user?.displayName ?? user?.id}</span>
-            {user?.roles?.length ? ` · ${user.roles.join(', ')}` : ''}
-          </span>
-        </div>
-        <AppNav />
-      </div>
-
       {/* ---- Title and the Schools/Teams tabs on one row. The masthead
           wrapper and its kicker are gone; the tabs row's own `margin: 24px 0
           18px` went with it -- 42px of margin around a 34px control, the same
