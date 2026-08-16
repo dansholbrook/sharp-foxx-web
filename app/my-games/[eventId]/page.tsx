@@ -5,6 +5,7 @@ import { useParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../auth-context';
 import { AccessDenied } from '../../nav';
+import { StatLinesPanel } from './stat-lines';
 import { canAccess } from '../../roles';
 import { useOwnRep, TrainingGate } from '../../training-gate';
 import { getMyAssignments, updateAssignment, generateArticle, getEventContent, getContentItem, updateContent, submitContent, publishContent, unpublishContent, getEvents, updateEventResult, getMyAdOrders, getAdvertisers, getEventSponsorship, createSponsorship, deleteSponsorship, getLiveEvents, createLiveEvent, deleteLiveEvent, presignGamePhoto, uploadToPresignedUrl, confirmMedia, getGamePhotos, deleteMedia, getEventPredictions, createPrediction, lockPrediction, resolvePrediction, voidPrediction, getCallEvents, callWeekLabel, callListPhase, callStaffRoute, points, etDateTime, etDateKey, eventStatusLabel, etTime, CallListItem, Prediction, PredictionKind, MyAssignment, ContentItem, EventContentItem, UpdateEventResultInput, EventResult, AdOrder, Sponsorship, LiveEvent, LiveEventType, GamePhoto, teamLabel } from '../../api';
@@ -2520,6 +2521,32 @@ function GameWorkspace({
         <>
           <Section key="final-result" kicker="Final" title="Result summary">
             {resultBody}
+          </Section>
+          {/* ---- THE BOX SCORE, AND IT SITS HERE FOR A REASON. Scout Book
+               scores prospects from correspondent-filed stat lines, and until
+               now no screen had ever called the filing endpoint — the pipeline
+               shipped, the scorer was proven, and the surface was never built.
+               It belongs in the workspace rather than a console because this is
+               the moment the spec's in-flow prompt was aimed at: the game just
+               ended, the rep is still in the gym, and they are already on this
+               page. The missing-line nudge now deep-links here.
+
+               FINAL ONLY. A line before the game is over is a guess, and the
+               scorer treats a filed line as the record. ---- */}
+          <Section
+            key="final-stats"
+            kicker="Box score"
+            title="File stat lines"
+            defaultOpen={false}
+          >
+            {token && (
+              <StatLinesPanel
+                token={token}
+                eventId={eventId}
+                homeLabel={teamLabel(assignment.event.homeInstitution, assignment.event.homeTeam) || 'Home'}
+                awayLabel={teamLabel(assignment.event.awayInstitution, assignment.event.awayTeam) || 'Away'}
+              />
+            )}
           </Section>
           <Section key="final-article" kicker="Coverage" title="Article">
             {articleBody}

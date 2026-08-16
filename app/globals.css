@@ -23036,3 +23036,153 @@ a.scout-reveal__main:hover .scout-reveal__name {
     max-width: 220px;
   }
 }
+
+/* ============================================================================
+   FILING A BOX SCORE — the correspondent's stat-line form.
+   Lives in the workspace (/my-games/[eventId]) under the Box score section.
+
+   MOBILE IS THE BASE and it is not a slogan here: the person using this is
+   standing in a gym holding a phone with the scorebook in the other hand. Every
+   rule below is the phone rule; the only thing the wider screen gets is more
+   columns of number inputs, because that is the only thing extra width helps.
+
+   Existing tokens only, and existing components wherever one fits: the bench
+   toggle and the block chooser are `.chip`, the inputs are `.field`, the
+   refusals are `.error`. Nothing new was invented that already had a name.
+   ============================================================================ */
+
+.statfile {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Which bench. Two chips, and the row wraps rather than shrinking them --
+   these carry team names, which can be long now that they render the school. */
+.statfile__sides,
+.statfile__groups,
+.statfile__roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Already filed. A RECEIPT, NOT A BOX SCORE: it exists so a correspondent
+   can see who is done without re-reading it as who played. Muted, compact, and
+   deliberately not sorted by anything meaningful -- the real box score is the
+   game page's. ---- */
+.statfile__filed {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.statfile__filed-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.statfile__filed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.statfile__filed-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.86rem;
+}
+
+.statfile__prompt {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* The picker. A tap target per player, so the same 44px floor every other
+   control on a phone gets -- these are the thing being tapped most. */
+.statfile__pick {
+  text-align: left;
+}
+.statfile__pick--new {
+  border-style: dashed;
+}
+
+.statfile__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.statfile__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.statfile__newplayer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.statfile__dnp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* A checkbox row is a tap target like any other. */
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* ---- THE NUMBERS. One column on a phone, because a correspondent reads a
+   label and types a number and reads the next label -- two columns halve the
+   scroll and double the mis-taps. Wider screens get two, which is where the
+   label and its box stop competing for the same line. ---- */
+.statfile__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 560px) {
+  .statfile__fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.statfile__field input {
+  /* Numbers, tabular, so a column of them lines up and a transposed digit is
+     visible rather than merely wrong. */
+  font-variant-numeric: tabular-nums;
+}
+
+.statfile__hint {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+/* The server's own sentence. Given room to be a sentence rather than squeezed
+   onto one line -- these say things like "completions cannot exceed
+   passAttempts", and they were written to be read. */
+.statfile__error {
+  margin: 0;
+}
+
+.statfile__saved {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--accent);
+}

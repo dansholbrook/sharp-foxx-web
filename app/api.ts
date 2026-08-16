@@ -1511,6 +1511,116 @@ export interface EventContext {
   away: TeamContext | null;
 }
 
+// ============================================================================
+// STAT LINES — the correspondent's box score.
+//
+// !! THIS IS THE FIRST CODE PATH TO CALL POST /events/:id/stat-lines AGAINST
+// LIVE DATA. !! The endpoint shipped, the scorer was proven against fixtures,
+// and no screen has ever called it. The 24 stat lines on cloud were written by
+// scripts/seed-scout-demo.ts with a raw INSERT that bypassed the service
+// entirely, so the sport-family validator and the roster-minting path have run
+// exactly once each, inside one proof script. Expect the first real filing to be
+// the first time that code meets a human.
+//
+// WHAT THE SERVER DERIVES, so this client never asks for it: the stat FAMILY
+// (from the event's sport), the SEASON label (from the event's kickoff — it is
+// on the box-score payload precisely so no second copy of the Aug–Dec/Jan–Jul
+// rule lives here), and which two teams are legal benches.
+// ============================================================================
+
+// A player already on this team's roster for this season — the picker's rows.
+export interface RosterPlayer {
+  id: string;
+  jerseyNumber: string | null;
+  displayName: string | null;
+  position: string | null;
+  classYear: string | null;
+  // NULL is the normal state and means "nobody has confirmed which athlete this
+  // is yet" — never render it as an error.
+  athleteId: string | null;
+}
+
+export const getRoster = (token: string, teamId: string, season: string) =>
+  authGet<RosterPlayer[]>(
+    `/roster-players?teamId=${encodeURIComponent(teamId)}&season=${encodeURIComponent(season)}`,
+    token,
+  );
+
+export interface BoxScoreLine {
+  id: string;
+  teamId: string;
+  statKind: string;
+  stats: Record<string, number>;
+  didNotPlay: boolean;
+  // Non-null once a consumer has settled off this line. A locked line cannot be
+  // corrected in place — the server says so with a sentence naming the regrade.
+  lockedAt: string | null;
+  rosterPlayerId: string;
+  jerseyNumber: string | null;
+  displayName: string | null;
+  position: string | null;
+  athleteId: string | null;
+}
+
+export interface BoxScore {
+  eventId: string;
+  sport: string;
+  status: string;
+  // Derived server-side from the event's kickoff. Feed it straight back to
+  // getRoster; do not compute it here.
+  season: string;
+  // The sport family id ('football' | 'basketball' | …), or null when the sport
+  // has no family defined. Null means this game cannot take stat lines at all.
+  statKind: string | null;
+  headlineStat: string | null;
+  // FILED IS NOT PLAYED. false means nobody has filed yet — it does not mean the
+  // game had no players.
+  filed: boolean;
+  home: { teamId: string | null; lines: BoxScoreLine[] };
+  away: { teamId: string | null; lines: BoxScoreLine[] };
+}
+
+export const getBoxScore = (token: string, eventId: string) =>
+  authGet<BoxScore>(`/events/${encodeURIComponent(eventId)}/box-score`, token);
+
+// One line. `player` identifies the subject: an existing rosterPlayerId, or at
+// least one of jerseyNumber / name for someone the roster has never seen (the
+// server mints the roster row). `teamId` must be one of THIS event's two.
+export interface StatLineInput {
+  player: {
+    rosterPlayerId?: string;
+    jerseyNumber?: string;
+    name?: string;
+    position?: string;
+    classYear?: string;
+  };
+  teamId: string;
+  // Family-shaped, and EVERY FIELD IS OPTIONAL — a correspondent files what they
+  // saw, not a full box score. Omit the key rather than sending 0: a 0 asserts
+  // "he took the shot and missed", an absent key asserts nothing.
+  stats?: Record<string, number>;
+  didNotPlay?: boolean;
+}
+
+// Returns the box-score shape plus `filed` as a COUNT of lines written by this
+// call (not the boolean of the same name on BoxScore — the read means "has
+// anyone filed", the write means "how many did I just file"). Verified against
+// the running service rather than assumed.
+export interface FileStatLinesResult {
+  eventId: string;
+  statKind: string | null;
+  season: string;
+  filed: number;
+  lines: BoxScoreLine[];
+}
+
+export const fileStatLines = (token: string, eventId: string, lines: StatLineInput[]) =>
+  authPost<FileStatLinesResult>(
+    `/events/${encodeURIComponent(eventId)}/stat-lines`,
+    token,
+    { lines },
+  );
+
 export const getEventContext = (token: string, id: string) =>
   authGet<EventContext>(`/events/${encodeURIComponent(id)}/context`, token);
 
