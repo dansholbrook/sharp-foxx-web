@@ -559,26 +559,40 @@ export default function MyGamesPage() {
 
   return (
     <main className="feed-home--bleed feed-home">
-      <div className="masthead masthead--compact">
-        <div className="masthead-head">
-          <div>
-            <span className="masthead-kicker">Your assignments</span>
-            <h1 className="masthead-title">My Games</h1>
-            <p className="masthead-standfirst">
-              Games assigned to you or self-claimed. Open a game to run it
-              courtside — go live, report the result, and draft its recap.
-            </p>
-          </div>
-          <div className="masthead-actions">
-            <button
-              type="button"
-              className="btn-inline"
-              onClick={() => setShowAdd(true)}
-            >
-              + Add Game
-            </button>
-          </div>
-        </div>
+      {/* ---- ROW A: the page's name and its one action, ON ONE LINE.
+          This page had the FIRST chrome pass (`.masthead--compact`, which hides
+          the kicker and drops the title to 1.5rem) but not the second, so it was
+          still the old three-part masthead structure underneath. /games, /field-
+          reps, /contests, /discover and /nil are all on `.page-head`; this was
+          the last list page that was not.
+
+          THE KICKER IS DELETED, NOT LEFT TO CSS. `.masthead--compact` was the
+          only thing hiding "Your assignments", via `display: none` on
+          `.masthead-kicker`. Dropping the wrapper without removing the span
+          would have brought it BACK — visible, and reading as a second title
+          above an h1 that already says the same thing. /games hit exactly this
+          and left a note; this is that note being used.
+
+          NO STANDFIRST. "Games assigned to you or self-claimed. Open a game to
+          run it courtside — go live, report the result, and draft its recap."
+          Sentence one described the list, which the list says by existing.
+          Sentence two described the game page, which is one tap away and says it
+          better. Compare `.page-rules` on /nil, which SURVIVES its pass: it
+          carries a rule ("submit proof, an editor approves, then it lands in
+          your wallet") that nothing on screen states. A line that restates its
+          own content is furniture; a line that carries a rule is not.
+
+          THE H1 STAYS. This is the landing page for the role, and a list page
+          still has to say which list you are on. ---- */}
+      <div className="page-head">
+        <h1 className="row-title page-head__title">My Games</h1>
+        <button
+          type="button"
+          className="btn-inline"
+          onClick={() => setShowAdd(true)}
+        >
+          + Add Game
+        </button>
       </div>
 
       {showAdd && (

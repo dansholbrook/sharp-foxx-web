@@ -666,7 +666,39 @@ function useLivePulse(token: string | null, eventId: string, live: boolean) {
       }
     }
     // Ascending -> reverse so newest sits at the head of the feed.
-    if (newFeed.length) setFeed((f) => [...newFeed.reverse(), ...f]);
+    //
+    // REVERSED OUTSIDE THE UPDATER, deliberately. Array.reverse() MUTATES, and
+    // React may invoke a state updater more than once for the same update; an
+    // in-place reverse inside the updater flips the batch back on the second
+    // invocation and silently mis-orders the feed.
+    if (newFeed.length) {
+      const newestFirst = [...newFeed].reverse();
+      setFeed((f) => {
+        // ------------------------------------------------------------------
+        // DEDUPE BY ROW ID. Belt and braces on top of the cursor, not a
+        // substitute for it.
+        //
+        // The cursor is now exact (LiveEventsService.list casts it in SQL
+        // rather than round-tripping it through a JavaScript Date, which used
+        // to truncate microseconds and hand back the newest row on every
+        // single poll). With that fixed, a poll cannot normally return a row
+        // this feed already holds.
+        //
+        // "Normally" is the reason this is here. `id` is the game_events
+        // primary key, so a row is either new to this list or it is not, and
+        // answering that question locally costs a Set over a capped feed. Any
+        // future cursor mistake -- an inclusive comparison, a retry that
+        // replays a batch, a reconnect that re-seeds history -- then costs a
+        // wasted render instead of a visibly duplicated feed. `key={ev.id}`
+        // downstream also stops fighting duplicate React keys.
+        // ------------------------------------------------------------------
+        const seen = new Set(f.map((e) => e.id));
+        const fresh = newestFirst.filter((e) => !seen.has(e.id));
+        // Returning the SAME array when nothing is new keeps a redundant poll
+        // from re-rendering the feed at all.
+        return fresh.length ? [...fresh, ...f] : f;
+      });
+    }
     // Collapse the whole batch to at most ONE takeover — several sponsor_spot
     // events in a single poll are the same ad, and stacking them is spam. Keep
     // the latest. Drop it entirely while a manual dismissal is still cooling
@@ -926,7 +958,15 @@ export default function GamePage() {
   const [latest, setLatest] = useState<FeedItem[] | null>(null);
   // The game's presenting sponsor, or null when it has none. A failed lookup
   // degrades silently (stays null), so the strip simply doesn't render.
+  //
+  // FETCHED AT MOUNT, AND ALSO REFRESHED WHEN A SPOT RUNS -- see the takeover
+  // effect below. A sponsor can be attached mid-game, long after a fan opened
+  // the page, and this state is what both the strip and the takeover read.
   const [sponsorship, setSponsorship] = useState<Sponsorship | null>(null);
+  // The business name for the spot CURRENTLY on screen, resolved from that
+  // spot's own sponsorshipId rather than from page state. Null until resolved
+  // (or when it cannot be), which is what makes the fallback copy reachable.
+  const [takeoverName, setTakeoverName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1075,6 +1115,53 @@ export default function GamePage() {
   const live = event?.status === 'live';
   const pulse = useLivePulse(token, id, live && !isFeed);
 
+  // ---- WHO THE SPOT ON SCREEN IS FOR -------------------------------------
+  // THE SPOT NAMES ITS OWN SPONSOR, not whoever the page happened to load.
+  //
+  // The takeover used to render `sponsorship?.businessName ?? 'our presenting
+  // sponsor'`, where `sponsorship` was fetched ONCE at mount. A sponsor is
+  // routinely attached mid-game -- on the session that produced this fix, Cy
+  // Pizza was linked at 22:37:18 and the spot ran at 22:37:34, sixteen seconds
+  // later, to a page that had been open since 22:36 and had therefore loaded
+  // `null`. The card read "A word from our presenting sponsor / our presenting
+  // sponsor" while the console button beside it correctly said "Run Cy Pizza
+  // spot".
+  //
+  // The event carries `payload.sponsorshipId`, so the spot is self-describing:
+  // re-read the game's sponsor when a spot appears and use it only if its id is
+  // the one the spot was run for. There is no GET /sponsorships/:id -- the two
+  // read shapes are ?eventId= and ?adOrderId= -- and none is needed, because a
+  // game has at most one presenting sponsor (create() 409s on a second), so
+  // "the game's sponsor, if it is the one this spot names" is the same lookup.
+  //
+  // THE ID CHECK IS NOT CEREMONY. If a sponsor is swapped between the spot
+  // airing and this resolving, the ids differ and we fall back to the generic
+  // copy rather than crediting a spot to an advertiser it was never run for.
+  //
+  // It also refreshes `sponsorship` itself, which is what puts the "Presented
+  // by" strip on screen for a fan who opened the page before the sponsor
+  // existed. That is a side benefit and NOT a complete fix for the strip: a
+  // game whose sponsor is attached but whose spot never runs still shows no
+  // strip until reload. See RESOLVER_TICKETS.md LV1.
+  useEffect(() => {
+    const spot = pulse.takeover;
+    if (!token || !spot) {
+      setTakeoverName(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const wanted = spot.payload.sponsorshipId;
+      const fresh = await getEventSponsorship(token, id).catch(() => null);
+      if (cancelled) return;
+      if (fresh) setSponsorship(fresh);
+      setTakeoverName(fresh && fresh.id === wanted ? fresh.businessName : null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, id, pulse.takeover]);
+
   // "Watch a live game" earns after three minutes of VISIBLE time on this page.
   // Same gate as the pulse — COVERED and LIVE: an ingested feed game is a
   // scoreboard, not a Sharp Foxx broadcast, and there is nothing to watch on it.
@@ -1133,7 +1220,15 @@ export default function GamePage() {
             <div className="game-main game-main--live-anchor">
               {live && pulse.takeover && (
                 <SponsorTakeover
-                  businessName={sponsorship?.businessName ?? 'our presenting sponsor'}
+                  // The spot's OWN sponsor first (resolved above from its
+                  // sponsorshipId); the page's sponsor as a same-tick fallback
+                  // while that request is in flight; the generic line only when
+                  // neither is available.
+                  businessName={
+                    takeoverName ??
+                    sponsorship?.businessName ??
+                    'our presenting sponsor'
+                  }
                   onDismiss={pulse.dismissTakeover}
                 />
               )}
