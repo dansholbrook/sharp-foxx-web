@@ -243,6 +243,10 @@ function RoundCard({
   // once above the timeline and never repeated per round. All a round needs to
   // know is that its pick affordance is closed.
   covered,
+  // Whether this entry is still ALIVE. A round is only pickable by someone still
+  // in the contest -- see the note on the pick affordance below for why this
+  // closes the picker and deliberately leaves everything else alone.
+  alive,
   onToggle,
   onPick,
 }: {
@@ -256,6 +260,7 @@ function RoundCard({
   eventsError: string | null;
   error: string | null;
   covered: boolean;
+  alive: boolean;
   onToggle: () => void;
   onPick: (eventId: string, teamId: string) => void;
 }) {
@@ -292,8 +297,27 @@ function RoundCard({
           you'd otherwise be doing. Here the control opens a PANEL, and a dead
           "Pick your team" button that refuses to expand is a worse answer than
           no button: the readout above still shows any pick they made, so the
-          round is not left blank. */}
-      {!locked && !covered && (
+          round is not left blank.
+
+          AN ELIMINATED ENTRY DROPS IT FOR THE SAME REASON, and the server agrees:
+          submitPick answers 403 "You've been eliminated from this survivor
+          contest — no more picks." Without `alive` here the board offered a
+          picker for every future round to a fan who was already out, which is a
+          button that cannot work.
+
+          !! DO NOT EXTEND THIS INTO HIDING THE ROUNDS THEMSELVES. !!
+          The obvious next tidy — an eliminated fan has no business seeing
+          rounds after the one that knocked them out — would delete something
+          true. A survivor entry may legitimately hold picks for rounds it never
+          reached, because picks are made per round WHENEVER THAT ROUND IS OPEN
+          and rounds open long before earlier ones settle. On the board that
+          produced this fix, the fan's round-2 pick was committed two seconds
+          after their round-1 pick and TEN SECONDS BEFORE round 1 finalized and
+          eliminated them; it then graded correct on its own merits. Being
+          knocked out in round 1 does not un-make a round-2 pick that was already
+          committed, and a later round's result is a real outcome the fan is
+          entitled to see. So: the PICKER closes, the READOUT stays. */}
+      {!locked && !covered && alive && (
         <div className="survivor-round__pickarea">
           <button
             type="button"
@@ -623,6 +647,7 @@ export function SurvivorBoard({
             eventsError={eventsError}
             error={roundError?.round === r.round ? roundError.message : null}
             covered={covering !== null}
+            alive={alive}
             onToggle={() => onToggleRound(r.round)}
             onPick={(eventId, teamId) => void onPick(r.round, eventId, teamId)}
           />
