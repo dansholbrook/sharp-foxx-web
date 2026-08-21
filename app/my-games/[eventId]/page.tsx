@@ -41,10 +41,28 @@ function formatWhen(iso: string): string {
 
 // The matchup as readable team names ("Home vs Away"), or null when either side
 // is missing a name -- in which case the header falls back to the sport headline.
+// ---- E7 ON THE WORKSPACE ASSIGNMENT SHAPE -------------------------------
+// This read `${homeTeam} vs ${awayTeam}` off the RAW team names, so a covered
+// college fixture rendered "Georgia State University Basketball (M) Vs Albany
+// State University Basketball (M)" -- the sport and the gender repeated twice
+// in a line that is supposed to say which game you are at.
+//
+// `assignment.event` is the inline shape E8 called out as missing from BOTH
+// halves of its own sweep: it is not EventListItem, so grepping for that type
+// never found this call site. teamLabel prefers the linked institution name and
+// falls back to the raw name, which is the same rule the ten fan-facing
+// projections use.
+//
+// WHAT THIS DOES NOT DO, deliberately: it yields "Georgia State University vs
+// Albany State University", not "Georgia State vs Albany State".
+// `institutions.name` is literally "Georgia State University". Trimming the
+// suffix would be a regex over editorial data -- see RESOLVER_TICKETS.md D8 for
+// why that is a data decision rather than a string trick.
 function matchup(a: MyAssignment): string | null {
-  const { homeTeam, awayTeam } = a.event;
-  if (!homeTeam || !awayTeam) return null;
-  return `${homeTeam} vs ${awayTeam}`;
+  const home = teamLabel(a.event.homeInstitution, a.event.homeTeam);
+  const away = teamLabel(a.event.awayInstitution, a.event.awayTeam);
+  if (!home || !away) return null;
+  return `${home} vs ${away}`;
 }
 
 // The shared pulsing LIVE badge (dot + wordmark) — same scoped .live-badge
@@ -596,6 +614,21 @@ function scoreErrorMessage(err: unknown): string {
 // buttons, a timeout button, the gold sponsor-spot button, and a reverse-chron
 // feed of tonight's emitted events with a confirm-first retract. Score updates
 // also sync the events scoreboard server-side, so fans see them via the poller.
+// The console's own view. First in the bar, selected by default, and the one a
+// correspondent returns to -- so it is a value in the same set as the others
+// rather than a special case outside them.
+const COURTSIDE = 'courtside';
+
+// One view besides the console. `chip: false` keeps the body MOUNTED but offers
+// no chip -- the Call uses it, because the tile has to fetch before anyone can
+// know whether this game has a card to show.
+interface ConsolePanel {
+  id: string;
+  label: string;
+  body: React.ReactNode;
+  chip?: boolean;
+}
+
 function LiveConsole({
   token,
   eventId,
@@ -607,6 +640,8 @@ function LiveConsole({
   canAskWinner,
   canEndGame,
   onEndGame,
+  label,
+  panels,
 }: {
   token: string;
   eventId: string;
@@ -628,6 +663,21 @@ function LiveConsole({
   // lives here — the console is the page courtside. Resolves once the PATCH
   // lands; throws so the console can surface the failure on its own error line.
   onEndGame: (homeScore: number, awayScore: number) => Promise<void>;
+  // ---- WHAT THIS COMPONENT PLACES BUT DOES NOT OWN ------------------------
+  // While a game is live the console IS the page, so the console owns the page
+  // LAYOUT -- and the things that are not console state get passed in rather
+  // than lifted out.
+  //
+  // `label` is the one-line matchup + status. `panels` are the views the bar
+  // switches to besides Courtside: stream, predictions, the Call, notes,
+  // article, sponsor, photos.
+  //
+  // The alternative was lifting `feed` to the page so the page could lay the
+  // three columns out itself. That would move the emit surface's own state
+  // (scoreEntered reads the feed, so does the sponsor-spot counter) away from
+  // the controls that write it, to buy a layout the console expresses here.
+  label: React.ReactNode;
+  panels: ConsolePanel[];
 }) {
   // null means NOBODY HAS SCORED THIS GAME YET -- it is not zero. Defaulting it
   // to 0 would render a 0 - 0 board that End Game would then publish as a real
@@ -829,284 +879,391 @@ function LiveConsole({
   const sponsorSpots = feed.filter((e) => e.type === 'sponsor_spot');
   const lastSpot = sponsorSpots[0];
 
+  // ---- WHICH VIEW IS ON THE STAGE -----------------------------------------
+  // A STRING, NEVER NULL, and that is the whole change from the drawer this
+  // replaced. The console is not the thing an overlay covers -- it is
+  // 'courtside', the first view and the default one. Every chip swaps the
+  // working area for another view of the same screen.
+  //
+  // THERE IS NO STATE YOU CAN BE STUCK IN. The drawer had an open state and a
+  // shut state and needed an exit from one to the other; a correspondent who
+  // could not find the exit was locked out of the scoreboard mid-game. A view
+  // switcher has no exit because it has no modality: you are always in a view,
+  // and one tap is always a move to another. Nothing to dismiss, so nothing to
+  // fail to dismiss.
+  const [view, setView] = useState<string>(COURTSIDE);
+
   // Keep the feed calm courtside: show only the latest 8 until the rep expands
   // it. Retract still works on every shown row.
   const FEED_CAP = 8;
   const shownFeed = showAllFeed ? feed : feed.slice(0, FEED_CAP);
 
   return (
-    <section className="card game ws-section console-card">
-      <div className="console-head">
+    // ========================================================================
+    // THE COURTSIDE DASHBOARD. A correspondent running a live game does not
+    // scroll: everything they act on is on one screen at once and stays there.
+    //
+    // THREE ROWS -- label / working area / bar -- and the middle one is the
+    // only elastic thing on the page. See .cdash in globals.css for the height
+    // arithmetic and for the 813-in-495 measurement that rules out the old
+    // stacked shape.
+    // ========================================================================
+    <div className="cdash">
+      {/* ---- ROW 1: WHICH GAME. A LABEL, NOT A MASTHEAD. -------------------
+          One line at body scale. A correspondent knows which game they are at;
+          this is here so the screen can be identified at a glance, not so the
+          matchup can be announced. It replaced a 2.4rem display headline that
+          ran nine lines down a 261px column. ---- */}
+      <div className="cdash__label">
         <LiveBadge />
-        <span className="game-kicker">Live console · courtside</span>
-      </div>
-
-      {/* (a) PRIMARY — two-team scoreboard with editable scores + one Sync */}
-      <div className="console-board">
-        <div className="console-board__label console-board__label--home">
-          <span className="console-board__tag">Home</span>
-          <span className="console-board__name">{homeLabel}</span>
-        </div>
-        <div className="console-board__label console-board__label--away">
-          <span className="console-board__tag">Away</span>
-          <span className="console-board__name">{awayLabel}</span>
-        </div>
-        <input
-          type="number"
-          min="0"
-          inputMode="numeric"
-          className="console-board__score console-board__score--home"
-          aria-label={`${homeLabel} score`}
-          placeholder="—"
-          value={homeDraft}
-          disabled={emitting}
-          onChange={(e) => setHomeDraft(e.target.value)}
-          onFocus={(e) => e.target.select()}
-        />
-        <span className="console-board__dash" aria-hidden="true">
-          –
+        {/* ---- THE SCORE, IN EVERY VIEW -------------------------------------
+            Someone writing notes still needs to know the score without
+            switching back. It lives in the label row rather than the working
+            area precisely so it survives a view change -- the label row is the
+            one band that never swaps.
+            It is a READOUT, not a control: the editable board is in Courtside,
+            and there is exactly one place to change a score. An em dash rather
+            than a hyphen, and tabular figures, so the pair does not jitter as
+            the numbers change. ---- */}
+        <span
+          className="cdash__score"
+          aria-label={`Score: ${homeLabel} ${home ?? 0}, ${awayLabel} ${away ?? 0}`}
+        >
+          <span className="cdash__score-n">{home ?? '–'}</span>
+          <span className="cdash__score-sep" aria-hidden="true">
+            —
+          </span>
+          <span className="cdash__score-n">{away ?? '–'}</span>
         </span>
-        <input
-          type="number"
-          min="0"
-          inputMode="numeric"
-          className="console-board__score console-board__score--away"
-          aria-label={`${awayLabel} score`}
-          placeholder="—"
-          value={awayDraft}
-          disabled={emitting}
-          onChange={(e) => setAwayDraft(e.target.value)}
-          onFocus={(e) => e.target.select()}
-        />
+        {label}
       </div>
-      <button
-        type="button"
-        className="console-sync"
-        disabled={emitting || !scoreDirty || !scoreDraftsFilled}
-        onClick={syncScore}
-      >
-        {emitting ? 'Syncing…' : 'Sync score'}
-      </button>
 
-      {/* (a2) SECONDARY — quick add (+1/+2/+3 per team), quieter than Sync */}
-      <div className="console-group">
-        <span className="console-label">Quick add</span>
-        <div className="console-quickadd">
-          {(['home', 'away'] as const).map((side) => (
-            <div key={side} className="console-quickadd__row">
-              <span className="console-quickadd__team">
-                {side === 'home' ? homeLabel : awayLabel}
+      {/* ---- ROW 2: THE WORKING AREA ---------------------------------------
+          A -- SCORE & SCORING: the board and the two ways to move it.
+          B -- CALLS:           period, big play, timeout, sponsor spot.
+          C -- FEED:            what you have put on the air tonight.
+
+          A and B are sized to their contents and carry real slack (~109px and
+          ~169px at a 700px viewport). C takes the remainder and scrolls
+          INTERNALLY, so it is the only thing that shortens as the window does.
+          That is deliberate: the feed is the one block whose value degrades
+          gracefully with fewer rows, and every control keeps its full size at
+          every height the dashboard is switched on for. ---- */}
+      <div className="cdash__stage">
+        <div className="cdash__grid" hidden={view !== COURTSIDE}>
+          <section className="card game cdash__col cdash-score">
+            {/* (a) PRIMARY — two-team scoreboard with editable scores + one Sync */}
+            <div className="console-board">
+              <div className="console-board__label console-board__label--home">
+                <span className="console-board__tag">Home</span>
+                <span className="console-board__name">{homeLabel}</span>
+              </div>
+              <div className="console-board__label console-board__label--away">
+                <span className="console-board__tag">Away</span>
+                <span className="console-board__name">{awayLabel}</span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                className="console-board__score console-board__score--home"
+                aria-label={`${homeLabel} score`}
+                placeholder="—"
+                value={homeDraft}
+                disabled={emitting}
+                onChange={(e) => setHomeDraft(e.target.value)}
+                onFocus={(e) => e.target.select()}
+              />
+              <span className="console-board__dash" aria-hidden="true">
+                –
               </span>
-              <div className="console-bumps">
-                {[1, 2, 3].map((p) => (
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                className="console-board__score console-board__score--away"
+                aria-label={`${awayLabel} score`}
+                placeholder="—"
+                value={awayDraft}
+                disabled={emitting}
+                onChange={(e) => setAwayDraft(e.target.value)}
+                onFocus={(e) => e.target.select()}
+              />
+            </div>
+            <button
+              type="button"
+              className="console-sync"
+              disabled={emitting || !scoreDirty || !scoreDraftsFilled}
+              onClick={syncScore}
+            >
+              {emitting ? 'Syncing…' : 'Sync score'}
+            </button>
+
+            {/* (a2) SECONDARY — quick add (+1/+2/+3 per team), quieter than Sync */}
+            <div className="console-group">
+              <span className="console-label">Quick add</span>
+              <div className="console-quickadd">
+                {(['home', 'away'] as const).map((side) => (
+                  <div key={side} className="console-quickadd__row">
+                    <span className="console-quickadd__team">
+                      {side === 'home' ? homeLabel : awayLabel}
+                    </span>
+                    <div className="console-bumps">
+                      {[1, 2, 3].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          className="console-bump"
+                          disabled={emitting}
+                          onClick={() => bumpScore(side, p)}
+                        >
+                          +{p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="card game cdash__col cdash-calls">
+            {/* (b) Period chips */}
+            <div className="console-group">
+              <span className="console-label">Period</span>
+              <div className="console-chips">
+                {PERIOD_LABELS.map((label) => (
                   <button
-                    key={p}
+                    key={label}
                     type="button"
-                    className="console-bump"
+                    className="console-chip"
                     disabled={emitting}
-                    onClick={() => bumpScore(side, p)}
+                    onClick={() => emit('period', { label })}
                   >
-                    +{p}
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* (b) Period chips */}
-      <div className="console-group">
-        <span className="console-label">Period</span>
-        <div className="console-chips">
-          {PERIOD_LABELS.map((label) => (
-            <button
-              key={label}
-              type="button"
-              className="console-chip"
-              disabled={emitting}
-              onClick={() => emit('period', { label })}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+            {/* (c) Big play */}
+            <div className="console-group">
+              <span className="console-label">Big play</span>
+              <div className="console-bigplay">
+                <input
+                  value={bigPlay}
+                  placeholder="Describe the moment…"
+                  disabled={emitting}
+                  onChange={(e) => setBigPlay(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') emitBigPlay(bigPlay);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-inline"
+                  disabled={emitting || bigPlay.trim().length < 2}
+                  onClick={() => emitBigPlay(bigPlay)}
+                >
+                  Emit
+                </button>
+              </div>
+              <div className="console-chips">
+                {BIG_PLAY_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className="console-chip"
+                    disabled={emitting}
+                    onClick={() => emitBigPlay(preset)}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-      {/* (c) Big play */}
-      <div className="console-group">
-        <span className="console-label">Big play</span>
-        <div className="console-bigplay">
-          <input
-            value={bigPlay}
-            placeholder="Describe the moment…"
-            disabled={emitting}
-            onChange={(e) => setBigPlay(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') emitBigPlay(bigPlay);
-            }}
-          />
-          <button
-            type="button"
-            className="btn-inline"
-            disabled={emitting || bigPlay.trim().length < 2}
-            onClick={() => emitBigPlay(bigPlay)}
-          >
-            Emit
-          </button>
-        </div>
-        <div className="console-chips">
-          {BIG_PLAY_PRESETS.map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              className="console-chip"
-              disabled={emitting}
-              onClick={() => emitBigPlay(preset)}
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-      </div>
+            {/* (d) Timeout + (e) Sponsor spot */}
+            <div className="console-group console-actions">
+              <button
+                type="button"
+                className="btn-inline btn-ghost"
+                disabled={emitting}
+                onClick={() => emit('timeout', {})}
+              >
+                Timeout
+              </button>
+              {sponsorship && (
+                <div className="console-sponsor">
+                  <button
+                    type="button"
+                    className="console-sponsor-btn"
+                    disabled={emitting}
+                    onClick={() => emit('sponsor_spot', { sponsorshipId: sponsorship.id })}
+                  >
+                    Run {sponsorship.businessName} spot
+                  </button>
+                  {lastSpot && (
+                    <span className="console-sponsor-meta">
+                      Aired at {formatClock(lastSpot.createdAt)} · run {sponsorSpots.length}{' '}
+                      tonight
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
 
-      {/* (d) Timeout + (e) Sponsor spot */}
-      <div className="console-group console-actions">
-        <button
-          type="button"
-          className="btn-inline btn-ghost"
-          disabled={emitting}
-          onClick={() => emit('timeout', {})}
-        >
-          Timeout
-        </button>
-        {sponsorship && (
-          <div className="console-sponsor">
-            <button
-              type="button"
-              className="console-sponsor-btn"
-              disabled={emitting}
-              onClick={() => emit('sponsor_spot', { sponsorshipId: sponsorship.id })}
-            >
-              Run {sponsorship.businessName} spot
-            </button>
-            {lastSpot && (
-              <span className="console-sponsor-meta">
-                Aired at {formatClock(lastSpot.createdAt)} · run {sponsorSpots.length}{' '}
-                tonight
-              </span>
-            )}
+          <section className="card game cdash__col cdash-feed">
+            <div className="console-feed">
+              <span className="console-label">Tonight&apos;s feed</span>
+              {feed.length === 0 ? (
+                <p className="muted console-feed__empty">
+                  No events yet — tap a control above to go on the air.
+                </p>
+              ) : (
+                <>
+                  <ul className="console-feed__list">
+                    {shownFeed.map((ev) => (
+                      <li key={ev.id} className="console-feed__item">
+                        <span className="console-feed__time">{formatClock(ev.createdAt)}</span>
+                        <span className="console-feed__text">{liveEventSummary(ev)}</span>
+                        <button
+                          type="button"
+                          className="console-retract"
+                          aria-label="Retract event"
+                          onClick={() => retract(ev)}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {feed.length > FEED_CAP && (
+                    <button
+                      type="button"
+                      className="link-btn console-feed__more"
+                      onClick={() => setShowAllFeed((v) => !v)}
+                    >
+                      {showAllFeed ? 'Show less' : `Show all (${feed.length})`}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+
+        {/* ---- THE OTHER VIEWS -----------------------------------------------
+            One card each, filling the same stage the three columns fill, so a
+            view change swaps CONTENT and never moves the label row or the bar.
+
+            EVERY VIEW STAYS MOUNTED, hidden rather than unmounted, for the two
+            reasons the drawer had and one it did not:
+              * an in-flight PHOTO UPLOAD survives switching views;
+              * the CALL TILE fetches on mount and reports whether this game has
+                a card, which is what lets its chip be conditional;
+              * and now the working state of every view -- a half-typed note, a
+                prediction being drafted -- survives a glance at the score and a
+                tap back. Switching views courtside must cost nothing. ---- */}
+        {panels.map((pnl) => (
+          <div key={pnl.id} className="cdash__view" hidden={view !== pnl.id}>
+            <section className="card game cdash__viewcard">{pnl.body}</section>
           </div>
-        )}
+        ))}
       </div>
-
-      {/* ---- (g) END GAME, ON ITS OWN DOCKED ROW ---------------------------
-           It used to sit inside the row above, one flex item along from
-           Timeout. Two reasons it moved, and only one of them is the phone:
-
-           * COURTSIDE. Below the console lies the predictions tool and the
-             night's feed, so on a phone this button is a long way down a very
-             tall card and it scrolls away exactly when the game ends. The dock
-             is sticky at <=767px, and sticky is bounded by the containing
-             block -- which is why the row had to become a direct child of the
-             console section rather than stay inside .console-actions. Stuck to
-             a two-line flex row it would have had almost no scroll run to
-             travel over, which is the trap this shape avoids.
-           * It was never meant to read as Timeout's neighbour anyway (see the
-             note on .console-endgame). Its own row says that louder than a
-             tint does, at every width.
-
-           The --idle class un-sticks it on a board nobody has scored: the
-           button is disabled in that state, so docking it would nail a
-           permanently disabled button and its hint across the bottom of a
-           390px screen. Same argument, same shape, as .call-slip--empty and
-           .parlay-stub--empty. ------------------------------------------- */}
-      {/* A manager gets the sentence, not the button. The dock keeps its
-          --idle shape so nothing is nailed across the bottom of a phone. */}
-      {!canEndGame ? (
-        <div className="console-endgame-dock console-endgame-dock--idle">
-          <span className="console-endgame-hint">
-            Ending the game is the assigned correspondent&apos;s to do, or an
-            admin&apos;s.
-          </span>
-        </div>
-      ) : (
-      <div
-        className={`console-endgame-dock${
-          scoreEntered ? '' : ' console-endgame-dock--idle'
-        }`}
-      >
-        <button
-          type="button"
-          className="btn-inline btn-ghost console-endgame"
-          disabled={emitting || ending || !scoreEntered}
-          title={
-            scoreEntered ? undefined : 'Enter a score before ending the game'
-          }
-          onClick={handleEndGame}
-        >
-          {ending ? 'Ending…' : 'End Game (Final)'}
-        </button>
-        {/* Reads as a precondition rather than a broken button. An entered
-            0 - 0 clears this; a never-entered board does not. */}
-        {!scoreEntered && (
-          <span className="console-endgame-hint">
-            Enter a score before ending the game
-          </span>
-        )}
-      </div>
-      )}
 
       {error && <div className="error">{error}</div>}
 
-      {/* (h) Predictions — the fan game the rep runs from courtside. Owns its
-          own busy/error state, so it sits below the console's error line. */}
-      <ConsolePredictions
-        token={token}
-        eventId={eventId}
-        homeLabel={homeLabel}
-        awayLabel={awayLabel}
-        canAskWinner={canAskWinner}
-      />
+      {/* ---- ROW 3: THE BAR. The view switcher, and End Game. --------------
+          Left: one chip per view, Courtside first and selected by default.
+          Right: End Game, in every view without exception -- a correspondent
+          must be able to end the game from wherever they are, and the bar is
+          the band that never swaps.
 
-      {/* (f) Emitted feed with retract */}
-      <div className="console-feed">
-        <span className="console-label">Tonight&apos;s feed</span>
-        {feed.length === 0 ? (
-          <p className="muted console-feed__empty">
-            No events yet — tap a control above to go on the air.
-          </p>
-        ) : (
-          <>
-            <ul className="console-feed__list">
-              {shownFeed.map((ev) => (
-                <li key={ev.id} className="console-feed__item">
-                  <span className="console-feed__time">{formatClock(ev.createdAt)}</span>
-                  <span className="console-feed__text">{liveEventSummary(ev)}</span>
-                  <button
-                    type="button"
-                    className="console-retract"
-                    aria-label="Retract event"
-                    onClick={() => retract(ev)}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {feed.length > FEED_CAP && (
+          The bar costs the 44px End Game was already spending, which is how six
+          other surfaces reach the screen without taking a pixel from the
+          controls.
+
+          role="tablist" and aria-selected rather than aria-expanded: these are
+          peer views now, not a thing that opens. The markup says so for the
+          same reason the model changed. ---- */}
+      <div className="cdash__bar">
+        <div className="cdash__chips" role="tablist" aria-label="Console views">
+          {[{ id: COURTSIDE, label: 'Courtside', chip: true }, ...panels]
+            .filter((pnl) => pnl.chip !== false)
+            .map((pnl) => (
               <button
+                key={pnl.id}
                 type="button"
-                className="link-btn console-feed__more"
-                onClick={() => setShowAllFeed((v) => !v)}
+                role="tab"
+                className={`cdash__chip${view === pnl.id ? ' cdash__chip--on' : ''}`}
+                aria-selected={view === pnl.id}
+                onClick={() => setView(pnl.id)}
               >
-                {showAllFeed ? 'Show less' : `Show all (${feed.length})`}
+                {pnl.label}
               </button>
+            ))}
+        </div>
+          {/* ---- (g) END GAME, ON ITS OWN DOCKED ROW ---------------------------
+               It used to sit inside the row above, one flex item along from
+               Timeout. Two reasons it moved, and only one of them is the phone:
+
+               * COURTSIDE. Below the console lies the predictions tool and the
+                 night's feed, so on a phone this button is a long way down a very
+                 tall card and it scrolls away exactly when the game ends. The dock
+                 is sticky at <=767px, and sticky is bounded by the containing
+                 block -- which is why the row had to become a direct child of the
+                 console section rather than stay inside .console-actions. Stuck to
+                 a two-line flex row it would have had almost no scroll run to
+                 travel over, which is the trap this shape avoids.
+               * It was never meant to read as Timeout's neighbour anyway (see the
+                 note on .console-endgame). Its own row says that louder than a
+                 tint does, at every width.
+
+               The --idle class un-sticks it on a board nobody has scored: the
+               button is disabled in that state, so docking it would nail a
+               permanently disabled button and its hint across the bottom of a
+               390px screen. Same argument, same shape, as .call-slip--empty and
+               .parlay-stub--empty. ------------------------------------------- */}
+          {/* A manager gets the sentence, not the button. The dock keeps its
+              --idle shape so nothing is nailed across the bottom of a phone. */}
+          {!canEndGame ? (
+            <div className="console-endgame-dock console-endgame-dock--idle">
+              <span className="console-endgame-hint">
+                Ending the game is the assigned correspondent&apos;s to do, or an
+                admin&apos;s.
+              </span>
+            </div>
+          ) : (
+          <div
+            className={`console-endgame-dock${
+              scoreEntered ? '' : ' console-endgame-dock--idle'
+            }`}
+          >
+            <button
+              type="button"
+              className="btn-inline btn-ghost console-endgame"
+              disabled={emitting || ending || !scoreEntered}
+              title={
+                scoreEntered ? undefined : 'Enter a score before ending the game'
+              }
+              onClick={handleEndGame}
+            >
+              {ending ? 'Ending…' : 'End Game (Final)'}
+            </button>
+            {/* Reads as a precondition rather than a broken button. An entered
+                0 - 0 clears this; a never-entered board does not. */}
+            {!scoreEntered && (
+              <span className="console-endgame-hint">
+                Enter a score before ending the game
+              </span>
             )}
-          </>
-        )}
+          </div>
+          )}
       </div>
-    </section>
+
+    </div>
   );
 }
 
@@ -1433,9 +1590,17 @@ function CallTile({
   token,
   eventId,
   kickoff,
+  onAvailable,
 }: {
   token: string;
   eventId: string;
+  // Told whether this game HAS a Call, so the console can decide whether to
+  // offer its chip. The tile has always self-hidden by returning null, which is
+  // right when it sits in a stack -- but a chip that switches to an empty view
+  // is not the same thing as a section that isn't there, so the console has to
+  // know. Views stay mounted, so this fires whether or not the view has ever
+  // been opened.
+  onAvailable?: (has: boolean) => void;
   // The game's scheduledAt, used ONLY to decide whether the 'past' scope is
   // worth a second request. Not for display and not for phase — the card's own
   // locksAt owns that.
@@ -1479,6 +1644,10 @@ function CallTile({
       cancelled = true;
     };
   }, [token, eventId, kickoff]);
+
+  useEffect(() => {
+    onAvailable?.(call !== null);
+  }, [call, onAvailable]);
 
   if (!call) return null;
 
@@ -1589,53 +1758,21 @@ function Section({
 }
 
 // One collapsible entry in the live strip. Shape mirrors a Section body.
+// One "everything else" surface: notes, article, sponsor, photos. Built once
+// and used twice -- as a console VIEW while the game is live, and as an
+// expandable Section in the pre-game and final stacks.
+//
+// `kicker` has no reader while live (the bar labels the view from `title`) and
+// is kept because the stacked phases still render it. The LiveStrip component
+// that used to consume these below the console is gone: the dashboard's view
+// switcher replaced it, and a tab strip below a no-scroll screen is a row of
+// height for something nobody can see.
 type StripSection = {
   id: string;
   kicker: string;
   title: string;
   body: React.ReactNode;
 };
-
-// The live "everything else" strip: a compact wrapping row of section-header
-// tabs below the console, one open at a time (tapping the open one closes it).
-// EVERY body stays mounted and is toggled with [hidden] rather than unmounted,
-// so switching tabs never drops a mid-upload photo or an unsaved article edit.
-function LiveStrip({ sections }: { sections: StripSection[] }) {
-  const [active, setActive] = useState<string | null>(null);
-  return (
-    <div className="wsx-strip">
-      <div className="wsx-strip__tabs">
-        {sections.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={`wsx-strip__tab${
-              active === s.id ? ' wsx-strip__tab--active' : ''
-            }`}
-            aria-expanded={active === s.id}
-            onClick={() => setActive((a) => (a === s.id ? null : s.id))}
-          >
-            {s.title}
-            <span className="wsx-strip__chev" aria-hidden="true">
-              ›
-            </span>
-          </button>
-        ))}
-      </div>
-      {sections.map((s) => (
-        <section
-          key={s.id}
-          className="card game ws-section wsx-strip__panel"
-          hidden={active !== s.id}
-        >
-          <span className="wsx-kicker">{s.kicker}</span>
-          <h2 className="ws-section__title">{s.title}</h2>
-          {s.body}
-        </section>
-      ))}
-    </div>
-  );
-}
 
 // The courtside workspace for a single assigned game: live controls + result
 // reporting, the assignment status/notes, the AI article editor, and the
@@ -1653,6 +1790,7 @@ function GameWorkspace({
   canFileResult,
   myOrders,
   advertisersById,
+  onLiveChange,
 }: {
   assignment: MyAssignment;
   resultSeed?: ResultSeed;
@@ -1669,6 +1807,17 @@ function GameWorkspace({
   canFileResult: boolean;
   myOrders: AdOrder[];
   advertisersById: Record<string, string>;
+  // ---- WHY THE PHASE IS REPORTED UPWARD ---------------------------------
+  // The page measure lives on <main>, and only the LIVE phase has a rail to
+  // make room for -- so the width is conditional and the condition is computed
+  // HERE, from `result` (which this component owns, because the rep changes it
+  // by filing a score or ending the game).
+  //
+  // The parent seeds the same value from `resultSeed`, so the first paint is
+  // already the right width and this callback only carries TRANSITIONS: the
+  // moment Go Live lands, and the moment End Game does. No flash, and no
+  // duplicated source of truth -- the parent never derives the phase itself.
+  onLiveChange: (live: boolean) => void;
 }) {
   const eventId = assignment.event.id;
 
@@ -1780,6 +1929,16 @@ function GameWorkspace({
   // header and NOTHING else: no result form, no notes, no article, no photos.
   // My Games happily linked to it, so a row led straight into a dead page.
   const isPreGame = !isLive && !isFinal;
+  // Whether this game is the week's Correspondent's Call. Reported by the tile
+  // itself once it has looked, so its chip can be conditional without the page
+  // duplicating that fetch.
+  const [hasCall, setHasCall] = useState(false);
+
+  // Tell the page which measure to use. Effect rather than render-time so the
+  // parent's setState never runs during this component's render.
+  useEffect(() => {
+    onLiveChange(isLive);
+  }, [isLive, onLiveChange]);
   const resultBusy = resultSaving || liveSaving;
 
   // At least one field must be sent (empty body -> 400), so gate Save on that.
@@ -1904,6 +2063,35 @@ function GameWorkspace({
     } catch (err) {
       // 403 (not your game) / 400 (bad body) surface as "<status> <message>".
       setResultError(err instanceof Error ? err.message : 'Failed to save result');
+    } finally {
+      setResultSaving(false);
+    }
+  }
+
+  // ---- THE STREAM URL, SAVED ON ITS OWN --------------------------------
+  // A SEPARATE SAVE FROM saveResult, and the separation is the point.
+  //
+  // saveResult sends every non-empty draft it holds -- scores included -- which
+  // is right on the pre-game and final forms where the rep is looking at those
+  // fields. Reached from the live Stream view it would be a hazard: homeScoreDraft
+  // and awayScoreDraft are seeded from whatever the score was when the page
+  // loaded, so saving a stream URL mid-game could PATCH a stale score over the
+  // running one. The console owns the live score; nothing else may write it.
+  //
+  // The API takes a partial patch (events.service.ts reportResult builds it
+  // field by field from what is defined), so a videoUrl-only body touches
+  // nothing else. Status is untouched too: this is not Go Live.
+  async function saveStreamUrl() {
+    const url = videoUrlDraft.trim();
+    if (url === '') return;
+    setResultSaving(true);
+    setResultError(null);
+    setResultNotice(null);
+    try {
+      const updated = await updateEventResult(token, eventId, { videoUrl: url });
+      applyResult(updated, 'Stream URL saved.');
+    } catch (err) {
+      setResultError(err instanceof Error ? err.message : 'Failed to save the stream URL');
     } finally {
       setResultSaving(false);
     }
@@ -2404,27 +2592,13 @@ function GameWorkspace({
     { id: 'photos', kicker: 'Gallery', title: 'Photos', body: photosBody },
   ];
 
-  return (
-    <>
-      {/* ---- Live console: courtside top priority, only while the game is live ---- */}
-      {isLive && (
-        <LiveConsole
-          token={token}
-          eventId={eventId}
-          sponsorship={sponsorship}
-          initialHome={result?.homeScore ?? null}
-          initialAway={result?.awayScore ?? null}
-          homeLabel={teamLabel(assignment.event.homeInstitution, assignment.event.homeTeam) || 'Home'}
-          awayLabel={teamLabel(assignment.event.awayInstitution, assignment.event.awayTeam) || 'Away'}
-          canAskWinner={
-            !!assignment.event.homeTeamId && !!assignment.event.awayTeamId
-          }
-          canEndGame={canFileResult}
-          onEndGame={endGame}
-        />
-      )}
-
-      {/* ---- Header: matchup + meta on the left, status pills + public link ---- */}
+  // ---- THE HEADER, BUILT ONCE AND PLACED BY PHASE ------------------------
+  // Live: it goes in the console's RAIL, above the feed -- "which game am I
+  // running" is standing-read context by the same test that puts the feed
+  // there, and putting it above the grid would push the console down the screen
+  // when the console being first is the whole point of the live shape.
+  // Otherwise: it is the page's first block, where it has always been.
+  const headerBlock = (
       <header className="ws-header">
         <span className="game-kicker">{assignment.event.sport}</span>
         <h1 className="ws-title">{matchup(assignment) ?? assignment.event.sport}</h1>
@@ -2454,17 +2628,176 @@ function GameWorkspace({
           </Link>
         </div>
       </header>
+  );
 
-      {/* ---- The Call, if this game is the week's. Directly under the header in
-           every lifecycle shape: the tile is only urgent post-game, but a
-           correspondent checking on their published card pre-game should not
-           have to hunt for it either. Self-hides on every other game. ---- */}
+  // The Call, if this game is the week's. Directly under the header in every
+  // lifecycle shape: the tile is only urgent post-game, but a correspondent
+  // checking on their published card pre-game should not have to hunt for it
+  // either. Self-hides on every other game. Live, it rides in `below`.
+  const callTile = (
       <CallTile
         token={token}
         eventId={eventId}
         kickoff={assignment.event.scheduledAt}
       />
 
+  );
+
+  return (
+    <>
+      {/* ---- Live console: courtside top priority, only while the game is live ---- */}
+      {isLive && (
+        <LiveConsole
+          token={token}
+          eventId={eventId}
+          sponsorship={sponsorship}
+          initialHome={result?.homeScore ?? null}
+          initialAway={result?.awayScore ?? null}
+          homeLabel={teamLabel(assignment.event.homeInstitution, assignment.event.homeTeam) || 'Home'}
+          awayLabel={teamLabel(assignment.event.awayInstitution, assignment.event.awayTeam) || 'Away'}
+          canAskWinner={
+            !!assignment.event.homeTeamId && !!assignment.event.awayTeamId
+          }
+          canEndGame={canFileResult}
+          onEndGame={endGame}
+          // ---- THE LABEL. One line, body scale, and that is the whole
+          // brief: a correspondent knows which game they are at. This is
+          // identification, not an announcement. ----
+          label={
+            <>
+              <span className="cdash__matchup">
+                {matchup(assignment) ?? assignment.event.sport}
+              </span>
+              {assignment.event.venue && (
+                <span className="cdash__meta">{assignment.event.venue}</span>
+              )}
+              <span className="cdash__meta">{assignmentStatus}</span>
+              {sponsorship && (
+                <span className="cdash__meta">
+                  Presented by {sponsorship.businessName}
+                </span>
+              )}
+              <Link href={`/games/${eventId}`} className="cdash__link">
+                Public page →
+              </Link>
+            </>
+          }
+          // ---- THE DRAWER'S CONTENTS, in the order the chips read. Every one
+          // of these is either after-the-game work or occasional, which is the
+          // test for being in here rather than on the screen. ----
+          panels={[
+            {
+              // ---- FIRST IN THE DRAWER, AND THE ONLY ONE THAT IS NOT
+              // "after the game" work. A correspondent pastes the stream URL
+              // when they START STREAMING, which is routinely after the game
+              // has gone live -- and if the stream drops and comes back on a
+              // new URL, it changes mid-game. It used to exist only on the
+              // pre-game Result card, which the dashboard replaces the moment
+              // the game goes live, so the field became unreachable exactly
+              // when it was most likely to be needed.
+              //
+              // It is NOT on the console itself: it is touched once or twice a
+              // night, and the working area is reserved for the things touched
+              // every minute. A view of its own is the right weight.
+              id: 'stream',
+              label: 'Stream URL',
+              body: (
+                <div className="stream-panel">
+                  <label className="stream-panel__label" htmlFor="stream-url">
+                    Stream URL
+                  </label>
+                  <input
+                    id="stream-url"
+                    type="url"
+                    className="result-video-input"
+                    placeholder="https://…"
+                    value={videoUrlDraft}
+                    disabled={resultBusy}
+                    onChange={(e) => {
+                      setVideoUrlDraft(e.target.value);
+                      setResultNotice(null);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-inline"
+                    disabled={resultBusy || videoUrlDraft.trim() === ''}
+                    onClick={saveStreamUrl}
+                  >
+                    {resultSaving ? 'Saving…' : 'Save stream URL'}
+                  </button>
+                  {/* Saves the URL and NOTHING ELSE -- see saveStreamUrl for
+                      why the score must not ride along. */}
+                  <p className="muted stream-panel__note">
+                    Saved on its own. This does not touch the live score.
+                  </p>
+                  {resultError && <div className="error">{resultError}</div>}
+                  {resultNotice && (
+                    <p className="stream-panel__ok">{resultNotice}</p>
+                  )}
+                </div>
+              ),
+            },
+            {
+              id: 'predictions',
+              label: 'Predictions',
+              body: (
+                <ConsolePredictions
+                  token={token}
+                  eventId={eventId}
+                  homeLabel={
+                    teamLabel(assignment.event.homeInstitution, assignment.event.homeTeam) ||
+                    'Home'
+                  }
+                  awayLabel={
+                    teamLabel(assignment.event.awayInstitution, assignment.event.awayTeam) ||
+                    'Away'
+                  }
+                  canAskWinner={
+                    !!assignment.event.homeTeamId && !!assignment.event.awayTeamId
+                  }
+                />
+              ),
+            },
+            {
+              id: 'call',
+              label: 'The Call',
+              // NO CHIP UNTIL THE TILE SAYS THERE IS A CARD. The body mounts
+              // either way -- that is what performs the lookup this flag is
+              // waiting on -- so the chip appears a moment after load on the
+              // one game a week that has a Call, and never on the others.
+              chip: hasCall,
+              body: (
+                <CallTile
+                  token={token}
+                  eventId={eventId}
+                  kickoff={assignment.event.scheduledAt}
+                  onAvailable={setHasCall}
+                />
+              ),
+            },
+            ...stripSections.map((sec) => ({
+              id: sec.id,
+              label: sec.title,
+              body: sec.body,
+            })),
+          ]}
+        />
+      )}
+
+      {/* ---- EVERY OTHER PHASE keeps the shape it has always had: the header
+           first, then the Call tile, then the phase's own sections in one
+           column. There is no rail off-live -- nothing on a scheduled or
+           finished game is a standing read while you act -- which is also why
+           the page must not widen. See .ws-page--console. ---- */}
+      {!isLive && (
+        <>
+          {headerBlock}
+          {callTile}
+        </>
+      )}
+
+      {/* ---- Header: matchup + meta on the left, status pills + public link ---- */}
       {/* ---- PRE-GAME (scheduled, postponed, canceled): filing the result is
            the job, and Go-Live starts it. Notes + Sponsor open for prep;
            Article + Photos collapsed (mostly post-game work). The kicker no
@@ -2508,11 +2841,12 @@ function GameWorkspace({
         </>
       )}
 
-      {/* ---- LIVE (courtside): the console above IS the page; everything else
-           collapses into a compact strip, one open at a time. The standalone
-           Live & Result section does not render — its live controls (running
-           score via the console board + Sync, End Game) live in the console. ---- */}
-      {isLive && <LiveStrip key="live-strip" sections={stripSections} />}
+      {/* ---- LIVE (courtside): the console IS the page. Its three regions --
+           the emit surface, the rail, and everything else -- are laid out by
+           LiveConsole itself, so nothing for the live phase is rendered here.
+           The standalone Live & Result section does not render either: its live
+           controls (running score via the console board + Sync, End Game) live
+           in the console. ---- */}
 
       {/* ---- FINAL (post-game): writing the recap + uploading shots is the
            job, so Article + Photos open; Result summary compact; notes +
@@ -2604,6 +2938,12 @@ export default function GameWorkspacePage() {
 
   const [assignment, setAssignment] = useState<MyAssignment | null>(null);
   const [resultSeed, setResultSeed] = useState<ResultSeed | undefined>(undefined);
+  // Which measure <main> is using. See .ws-page--console: 1040px ONLY while a
+  // game is live, because that is the only phase with a rail. Seeded below from
+  // the same inputs the workspace derives its phase from, so the first paint is
+  // right; the workspace's onLiveChange carries the Go-Live / End-Game
+  // transitions after that.
+  const [liveNow, setLiveNow] = useState(false);
   // The rep's own ad orders + an advertiserId -> businessName map, needed only by
   // the attach-sponsor modal (its picker options, and matching a sponsorship's
   // adOrderId to know the rep attached it). Best-effort: a failure leaves it empty.
@@ -2723,7 +3063,7 @@ export default function GameWorkspacePage() {
   if (ownRep?.status === 'onboarding') return <TrainingGate />;
 
   return (
-    <main className="feed-home ws-page">
+    <main className={`feed-home ws-page${liveNow ? ' ws-page--console' : ''}`}>
       <Link href="/my-games" className="game-back">
         ← Back to My Games
       </Link>
@@ -2735,6 +3075,7 @@ export default function GameWorkspacePage() {
         <GameWorkspace
           assignment={assignment}
           resultSeed={resultSeed}
+          onLiveChange={setLiveNow}
           token={token}
           authorId={user?.id ?? ''}
           canSponsor={isFieldRep}

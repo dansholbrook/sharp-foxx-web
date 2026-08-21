@@ -2834,6 +2834,295 @@ tfoot td {
   max-width: 720px;
 }
 
+/* ============================================================================
+   THE COURTSIDE DASHBOARD -- one screen, no scroll, while a game is live.
+   ============================================================================
+   A correspondent running a live game should not scroll. Everything they act
+   on is on screen at once and stays there.
+
+   ---- WHY THE OLD STACKED CONSOLE COULD NOT BE RESCUED BY REARRANGING ----
+   Measured from the declared CSS at 1020px wide, where `14vw` clamps the score
+   to its 4rem ceiling:
+
+       card padding (24 x 2) ....................  48
+       console head (badge + kicker) ............  38
+       SCOREBOARD -- 64px digits, 46px padding ..  191
+       Sync button (32px of padding on one) .....  73
+       QUICK ADD -- 6 buttons, 2 rows at 50px ...  153
+       period chips .............................  85
+       big play .................................  81
+       timeout + sponsor spot ...................  80
+       End Game dock ............................  64
+                                                  ----
+       the emit surface alone ................... 813px
+
+   And the hole it has to fit in, at a 700px laptop viewport:
+
+       700 viewport - 91 site header - 32 main padding-top
+                    - 48 main padding-bottom - 34 back link
+                                                  ----
+                                                   495px
+
+   !! 813 IN 495. THAT IS THE ANSWER TO "PUT THE BIG SCOREBOARD BACK". !!
+   The gap is 318px BEFORE the feed, the matchup or anything else, so it cannot
+   be closed by moving blocks around -- only by the controls being smaller than
+   a broadcast treatment. The score is 2.5rem here rather than 4rem for that
+   reason and no other. If it goes back up, something else has to leave the
+   screen, and the thing that leaves is always End Game, because it is last.
+
+   ---- THE THREE ROWS ----
+   label (26) + gap (20) + working area (385) + gap (20) + bar (44) = 495.
+
+   205px is the chrome this page sits inside: 91 + 32 + 34 + 48, from the
+   arithmetic above. It is a magic number and it is derived; if .header-row's
+   padding or the back link's margin ever move, this moves with them.
+   ========================================================================= */
+
+/* Ungated, this is a plain stack -- the shape the page has always had, which is
+   also the fallback below. Only the gated block turns it into a dashboard. */
+.cdash__label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 14px;
+  margin-bottom: 18px;
+}
+
+.cdash__matchup {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cdash__meta {
+  font-size: 0.74rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cdash__link {
+  font-size: 0.74rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+.cdash__link:hover {
+  text-decoration: underline;
+}
+
+.cdash__grid {
+  display: grid;
+  gap: 20px;
+}
+
+.cdash__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cdash__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cdash__chip {
+  padding: 9px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
+  letter-spacing: var(--tracking);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.cdash__chip:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.cdash__chip--on {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--panel-raised);
+}
+
+/* ---- THE SCORE READOUT. In the label row, so it survives a view change.
+   A readout, never a control: the editable board lives in Courtside and there
+   is exactly one place a score can be changed. ---- */
+.cdash__score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+  font-variant-numeric: tabular-nums;
+}
+
+.cdash__score-sep {
+  color: var(--faint-strong, var(--muted));
+  font-weight: 400;
+}
+
+/* ---- THE STAGE. One view at a time, swapped by the bar.
+   ---------------------------------------------------------------------------
+   !! THE [hidden] RULES BELOW ARE LOAD-BEARING, AND THE REASON IS THE CASCADE.
+   The HTML `hidden` attribute is `display: none` in the UA stylesheet, and ANY
+   author rule that sets `display` beats it -- author styles win over UA styles
+   regardless of specificity. `.cdash__grid { display: grid }` would therefore
+   un-hide the Courtside view in every other view, silently, and the page would
+   render two views stacked.
+
+   So the hidden state is restated as an author rule with a higher specificity
+   than the rules that set display. Do not remove these on the grounds that
+   `hidden` already does it -- here it does not. ---- */
+.cdash__stage {
+  display: grid;
+}
+
+.cdash__grid[hidden],
+.cdash__view[hidden] {
+  display: none;
+}
+
+/* ============================================================================
+   THE GATE. min-width 1024 AND min-height 560.
+   ============================================================================
+   BOTH BOUNDS, and the height one is the point. A no-scroll promise is only
+   keepable in a window tall enough to hold the controls; below 560px of
+   viewport the working area cannot carry the score block, the calls and a
+   readable feed at once.
+
+   WHAT HAPPENS BELOW EITHER BOUND: nothing. Every rule here is additive, so the
+   page falls back to the plain stack it has always been -- which scrolls, and
+   says so honestly.
+
+   !! DO NOT MAKE THIS FIT BY CLIPPING. !! The tempting fix at 500px is to let
+   the bar fall off the bottom, and the bar is where End Game lives. A dashboard
+   that fits by hiding the button that ends the game is worse than a page that
+   scrolls. If the arithmetic stops working, the dashboard turns off; it does
+   not shrink into a lie.
+   ========================================================================= */
+@media (min-width: 1024px) and (min-height: 560px) {
+  .ws-page--console {
+    max-width: 1020px;
+  }
+
+  .cdash {
+    display: grid;
+    /* auto / elastic / auto. minmax(0, 1fr) NOT 1fr, so the working area can be
+       SHORTER than its content's min-content height and the feed inside it
+       scrolls -- with plain `1fr` the row would grow to fit and push the bar
+       off the bottom, which is the clipping failure the note above forbids. */
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 20px;
+    height: calc(100vh - 205px);
+  }
+
+  .cdash__label {
+    margin-bottom: 0;
+  }
+
+  /* 300 / 300 / the rest. A and B are sized to their contents (276 and 216 at a
+     700px viewport, so ~109px and ~169px of slack); C takes the remainder and
+     is the only column that shortens as the window does. */
+  .cdash__grid {
+    grid-template-columns: minmax(0, 300px) minmax(0, 300px) minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  /* Columns own their overflow so the GRID never grows. A column that needs
+     more room scrolls inside itself; the page does not. */
+  .cdash__col {
+    margin-bottom: 0;
+    padding: 20px;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cdash-feed {
+    overflow-y: auto;
+  }
+
+  /* ---- THE CONTROLS AT DASHBOARD SCALE ----
+     Every number here is the 318px being paid back. None of it is taste. */
+  .cdash .console-board {
+    padding: 14px 12px 16px;
+    margin-bottom: 12px;
+  }
+  .cdash .console-board__score {
+    font-size: 2.5rem;
+  }
+  .cdash .console-board__name {
+    font-size: 0.95rem;
+  }
+  .cdash .console-sync {
+    margin: 0 0 14px;
+    padding: 10px;
+  }
+  .cdash .console-bump {
+    padding: 8px 0;
+  }
+  .cdash .console-chip {
+    padding: 8px 12px;
+  }
+  .cdash .console-sponsor-btn {
+    padding: 9px 16px;
+  }
+  .cdash .console-group {
+    margin-bottom: 14px;
+  }
+  .cdash .console-group:last-child {
+    margin-bottom: 0;
+  }
+  .cdash .console-bigplay {
+    margin-bottom: 14px;
+  }
+  /* The feed is the column now, so its in-card divider has nothing to divide. */
+  .cdash .console-feed {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+    min-height: 0;
+  }
+  /* End Game keeps its place at the right of the bar; the dock's stacking
+     margin belongs to the stacked layout, not to a flex row. */
+  .cdash .console-endgame-dock {
+    margin-bottom: 0;
+  }
+
+  /* ---- THE STAGE AT DASHBOARD HEIGHT -------------------------------------
+     The middle grid row. Whichever view is showing is its only in-flow child,
+     so it stretches to the row and the row is the height budget. A view that
+     needs more room scrolls INSIDE its own card; the page never grows. ---- */
+  .cdash__stage {
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .cdash__view {
+    display: flex;
+    min-height: 0;
+  }
+
+  .cdash__viewcard {
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 0;
+    padding: 20px;
+    overflow-y: auto;
+  }
+}
+
 /* Header block: kicker + serif matchup, meta line, then the status pills and
    the public-page link. */
 .ws-header {
@@ -3013,64 +3302,6 @@ tfoot td {
   }
 }
 
-/* ---- Live strip: the compact "everything else" rail below the console. A
-   wrapping row of quiet header tabs; the open one's panel shows beneath. ---- */
-.wsx-strip {
-  margin-bottom: 20px;
-}
-
-.wsx-strip__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-/* Each tab sheds the global button fill and reads as a pill of the section
-   name; the active one lifts to the gold hairline. */
-.wsx-strip__tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  padding: 8px 14px;
-  background: var(--panel);
-  color: var(--muted);
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-
-.wsx-strip__tab:hover:not(:disabled) {
-  background: var(--panel);
-  color: var(--accent);
-  border-color: var(--accent-dim);
-}
-
-.wsx-strip__tab--active {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.wsx-strip__chev {
-  font-size: 1rem;
-  line-height: 1;
-  transition: transform 0.2s ease;
-}
-
-.wsx-strip__tab--active .wsx-strip__chev {
-  transform: rotate(90deg);
-}
-
-.wsx-strip__panel[hidden] {
-  display: none;
-}
-
 /* ---- Console End Game: quiet ghost that reads distinct from Timeout via a
    faint danger tint, so ending the game isn't a same-weight neighbor. ---- */
 .console-endgame {
@@ -3139,8 +3370,7 @@ tfoot td {
   .wsx-body {
     animation: none;
   }
-  .wsx-chevron,
-  .wsx-strip__chev {
+  .wsx-chevron {
     transition: none;
   }
 }
