@@ -524,7 +524,7 @@ tfoot td {
   line-height: 1.1;
   color: var(--accent);
   margin-bottom: 4px;
-  /* THE NAME OF THE PLATFORM DOES NOT BREAK IN HALF. "Sharp Foxx" wrapping to
+  /* THE NAME OF THE PLATFORM DOES NOT BREAK IN HALF. "SharpFoxx" wrapping to
      two lines was doing more visible damage to the header than anything else
      in it. The header row is space-between against a fixed-width control
      cluster, so without this the left column simply compresses until the
@@ -10733,12 +10733,12 @@ a.follow-sugcard__name:hover {
    WATCH / PLAY split — the covered-vs-feed surfaces.
    Scoped to .gamescope-* (the /games schedule + the lean game page) and
    .playcard-* (feed/rail play cards). Feed games (events.source != null) are
-   ingested scores, contest material for picks — never a Sharp Foxx broadcast —
+   ingested scores, contest material for picks — never a SharpFoxx broadcast —
    so every treatment here reads QUIETER than a covered card and carries no
    watch affordance. See THE RULE in app/api.ts.
    ================================================================= */
 
-/* Compact Sharp Foxx | All games toggle on /games. Chips are already styled;
+/* Compact SharpFoxx | All games toggle on /games. Chips are already styled;
    this only lays them in a row. Wraps cleanly at narrow widths. */
 .gamescope-toggle {
   display: flex;
@@ -12037,8 +12037,8 @@ a.follow-sugcard__name:hover {
   }
 }
 
-/* ---- v2: SHARP FOXX SQUARES + DEDICATED PRIZES ----
-   A board that locks partially filled plays AS-IS and Sharp Foxx owns the empty
+/* ---- v2: SHARPFOXX SQUARES + DEDICATED PRIZES ----
+   A board that locks partially filled plays AS-IS and SharpFoxx owns the empty
    squares. They are deliberately QUIETER than a claimed square, not louder: the
    fox mark is a faint watermark, because an SF square is the absence of a fan,
    not a house player to root against. */

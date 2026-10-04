@@ -511,7 +511,7 @@ function kickerFor(item: NotificationItem): string {
   // band. The title carries the specific.
   if (item.type.startsWith('pickem_')) return 'Contests';
   if (item.type === 'streak_jeopardy') return 'Your streak';
-  return 'Sharp Foxx';
+  return 'SharpFoxx';
 }
 
 // The day a notification belongs to, named. Driven by `sentOnEt` — the ET

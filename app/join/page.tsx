@@ -158,7 +158,7 @@ function JoinForm() {
         <span className="masthead-kicker">Join free</span>
         <h1 className="masthead-title">Get closer to the game</h1>
         <p className="masthead-standfirst">
-          Sharp Foxx covers the local games the big networks skip — live, with a
+          SharpFoxx covers the local games the big networks skip — live, with a
           correspondent on the ground. Create a free account to follow your teams,
           make picks, and play the contests.
         </p>
@@ -167,7 +167,7 @@ function JoinForm() {
       {refFromUrl && (
         <div className="join-ref-note">
           <span className="join-ref-note__badge">Invite</span>
-          Invited by a Sharp Foxx correspondent — your account will be linked to
+          Invited by a SharpFoxx correspondent — your account will be linked to
           them.
         </div>
       )}

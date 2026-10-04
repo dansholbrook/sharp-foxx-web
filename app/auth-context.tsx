@@ -100,7 +100,7 @@ function SessionRestoring() {
   return (
     <>
       <div className="header-row">
-        <span className="wordmark">Sharp Foxx</span>
+        <span className="wordmark">SharpFoxx</span>
       </div>
       <main className="feed-home">
         <div className="card muted">Restoring your session…</div>

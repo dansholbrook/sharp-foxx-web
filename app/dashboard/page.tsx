@@ -31,10 +31,10 @@ const SOURCE_KEYS = Object.keys(SOURCE_LABELS);
 
 // Labels for /reports/executive's revenueByStream keys.
 //
-// 'nil_fees' WAS HERE AND IS DELIBERATELY NOT. It labelled the 15% Sharp Foxx
+// 'nil_fees' WAS HERE AND IS DELIBERATELY NOT. It labelled the 15% SharpFoxx
 // took off a NIL release, and the comment here used to explain at length why the
 // number was so much smaller than NIL volume -- because it was a fee on the
-// school's money, not revenue we earned. That fee is gone entirely: Sharp Foxx
+// school's money, not revenue we earned. That fee is gone entirely: SharpFoxx
 // takes no part of an athlete's money. The stream is not emitted by the backend
 // any more, so a label for it would never be read; it is recorded here as a
 // removal rather than dropped silently, because "why is there no NIL line on the
@@ -136,7 +136,7 @@ export default function DashboardPage() {
         <h1 className="masthead-title">Dashboard</h1>
         <p className="masthead-standfirst">
           Every revenue stream, territory and NIL pool on the platform, pulled
-          live from the Sharp Foxx ledger.
+          live from the SharpFoxx ledger.
         </p>
       </div>
 

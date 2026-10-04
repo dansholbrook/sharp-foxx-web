@@ -503,7 +503,7 @@ function ShareRow({ event }: { event: EventListItem }) {
     setPageUrl(window.location.href);
   }, []);
 
-  const shareText = `${home} vs ${away} — Sharp Foxx`;
+  const shareText = `${home} vs ${away} — SharpFoxx`;
   const tweetUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(
     pageUrl,
   )}&text=${encodeURIComponent(shareText)}`;
@@ -1102,7 +1102,7 @@ export default function GamePage() {
   }, [latest, event]);
 
   // Branch the whole page on WHO made this game. A feed game (source != null) is
-  // an ingested score, not a Sharp Foxx broadcast, so it gets a lean PLAY layout
+  // an ingested score, not a SharpFoxx broadcast, so it gets a lean PLAY layout
   // -- scoreboard + predictions + more games -- with no video, photos, courtside
   // feed, sponsor strip, or watch language. A covered game (source IS NULL) is
   // untouched. See THE RULE in api.ts.
@@ -1164,7 +1164,7 @@ export default function GamePage() {
 
   // "Watch a live game" earns after three minutes of VISIBLE time on this page.
   // Same gate as the pulse — COVERED and LIVE: an ingested feed game is a
-  // scoreboard, not a Sharp Foxx broadcast, and there is nothing to watch on it.
+  // scoreboard, not a SharpFoxx broadcast, and there is nothing to watch on it.
   // A backgrounded tab doesn't accumulate (see useWatchLiveGameEarn).
   useWatchLiveGameEarn(id, live && !isFeed);
 
@@ -1215,7 +1215,7 @@ export default function GamePage() {
               <PredictionsSection token={token} eventId={id} live={live} />
             </div>
           ) : (
-            // ---- COVERED layout: the full Sharp Foxx broadcast experience,
+            // ---- COVERED layout: the full SharpFoxx broadcast experience,
             // unchanged. ----
             <div className="game-main game-main--live-anchor">
               {live && pulse.takeover && (

@@ -382,7 +382,7 @@ export function NationalBoardBand({ token }: { token: string }) {
 // `isFeed` flags an ingested feed game (source != null). "Make your picks" is a
 // PLAY surface, so it lists games of BOTH kinds -- a feed entry just gets the
 // muted "Scores" tag (no watch language, no live pulse card) so a fan reads it
-// as external contest material, not a Sharp Foxx broadcast. See THE RULE in
+// as external contest material, not a SharpFoxx broadcast. See THE RULE in
 // api.ts. The link still points at /games/[id], which renders the lean
 // feed-variant page for these.
 function OpenGameCard({ game, isFeed }: { game: OpenPickGame; isFeed: boolean }) {

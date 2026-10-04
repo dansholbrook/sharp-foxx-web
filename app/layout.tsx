@@ -9,8 +9,8 @@ import { NotificationsProvider } from './notifications-context';
 import { SiteHeader } from './site-header';
 
 export const metadata: Metadata = {
-  title: 'Sharp Foxx — Admin',
-  description: 'Dev admin frontend for the Sharp Foxx API',
+  title: 'SharpFoxx — Admin',
+  description: 'Dev admin frontend for the SharpFoxx API',
 };
 
 // Without this, mobile Safari/Chrome assume a ~980px desktop viewport and paint

@@ -109,7 +109,7 @@ function NilReviewDetail({
       <>
         {/* ---- ONE NUMBER, BECAUSE THERE IS ONLY ONE NUMBER NOW.
             This was a three-cell split -- gross, platform fee, net to athlete --
-            previewing the 15% that came off the release. Sharp Foxx takes no
+            previewing the 15% that came off the release. SharpFoxx takes no
             part of the athlete's money, so gross IS net and a "fee: $0" row
             would be a permanent reminder of a deduction that no longer happens.
             See approveDeliverable in the API for why it went. ---- */}
@@ -125,7 +125,7 @@ function NilReviewDetail({
         </div>
 
         <p className="game-hint">
-          Paid in full from the school&apos;s pool — Sharp Foxx takes no fee on
+          Paid in full from the school&apos;s pool — SharpFoxx takes no fee on
           an athlete&apos;s money. The exact amount is confirmed on approval.
         </p>
 

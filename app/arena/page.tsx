@@ -186,7 +186,7 @@ function ArenaHero() {
       <div className="arena-hero__mark" aria-hidden="true">
         <span className="arena-hero__fox">🦊</span>
       </div>
-      <h1 className="arena-hero__title">Sharp Foxx Arena</h1>
+      <h1 className="arena-hero__title">SharpFoxx Arena</h1>
       {lifetimeEarned === 0 && (
         <p className="arena-hero__standfirst">
           Free games, daily and weekly. Real sports. Bragging rights forever.

@@ -17,7 +17,7 @@
 // server routes claims to the filling board); the switcher is pure navigation.
 //
 // At game start every board locks AS-IS. A partially-filled board plays with its
-// holes and SHARP FOXX OWNS the unclaimed squares — rendered with a subtle fox
+// holes and SHARPFOXX OWNS the unclaimed squares — rendered with a subtle fox
 // mark. If an SF-owned square wins a period, the prize is DEDICATED TO THE NEXT
 // PROMOTION: shown as such in the results, paid to nobody, never kept.
 //
@@ -115,7 +115,7 @@ function PrizeRow({ row, meId }: { row: SquaresPrizeRow; meId: string | undefine
   }
 
   // Graded: 'won' (a fan owned the winning square) or 'dedicated' (it landed on a
-  // Sharp Foxx square, so the prize goes to the next promotion — never paid out,
+  // SharpFoxx square, so the prize goes to the next promotion — never paid out,
   // never kept).
   const won = row.status === 'won';
   const mineWon = won && row.winner?.userId === meId;
@@ -253,7 +253,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
   }, [board]);
 
   // Winning squares on the SHOWN board. 'won' rows get the green treatment;
-  // 'dedicated' rows (Sharp Foxx's square hit) get their own, so a fan can see the
+  // 'dedicated' rows (SharpFoxx's square hit) get their own, so a fan can see the
   // digits landed there without it reading as somebody's payday.
   const winMap = useMemo(() => {
     const m = new Map<string, { dedicated: boolean; winnerId?: string }>();
@@ -494,7 +494,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
   // Digits belong to THIS board — each board is randomized independently.
   const revealed = board.rowDigits != null && board.colDigits != null;
   const hasScore = ev?.homeScore != null && ev?.awayScore != null;
-  // A locked board that never filled: its empty squares are Sharp Foxx's.
+  // A locked board that never filled: its empty squares are SharpFoxx's.
   const sfBoard = (board.status === 'locked' || board.status === 'settled') && board.sfOwnedCount > 0;
 
   const whenLine =
@@ -611,7 +611,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
             {grid.totalBoards > 1
               ? 'Each board is its own prize pool over the same game, with its own digits. '
               : ''}
-            If a period lands on a Sharp Foxx square, that prize is dedicated to the next
+            If a period lands on a SharpFoxx square, that prize is dedicated to the next
             promotion — never paid out, never kept.
           </p>
         </section>
@@ -676,7 +676,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
       {sfBoard && (
         <p className="sqgrid-note muted">
           <span aria-hidden="true">🦊</span> This board locked with {board.sfOwnedCount} square
-          {board.sfOwnedCount === 1 ? '' : 's'} unclaimed — Sharp Foxx holds them. If one wins, that
+          {board.sfOwnedCount === 1 ? '' : 's'} unclaimed — SharpFoxx holds them. If one wins, that
           prize is dedicated to the next promotion.
         </p>
       )}
@@ -748,7 +748,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
                 // Only the filling board takes taps — that is the whole model, so
                 // the UI never lets a tap look possible anywhere else.
                 const tappable = claimable && (mine || !claim);
-                // On a LOCKED board an empty square is Sharp Foxx's; before lock
+                // On a LOCKED board an empty square is SharpFoxx's; before lock
                 // it's simply still for sale.
                 const sf = !claim && (board.status === 'locked' || board.status === 'settled');
                 const label = claim
@@ -779,7 +779,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
                     ? `Your square, row ${row} column ${col}${claimable ? ' — tap to release' : ''}`
                     : `Claimed by ${claim.displayName ?? 'a fan'}, row ${row} column ${col}`
                   : sf
-                    ? `Sharp Foxx square, row ${row} column ${col}`
+                    ? `SharpFoxx square, row ${row} column ${col}`
                     : `Open square, row ${row} column ${col}${claimable ? ' — tap to claim' : ''}`;
 
                 return (

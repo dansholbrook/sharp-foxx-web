@@ -89,7 +89,7 @@ export function TrainingGate() {
     <main className="feed-home">
       <div className="masthead">
         <span className="masthead-kicker">Onboarding</span>
-        <h1 className="masthead-title">Welcome to Sharp Foxx Academy</h1>
+        <h1 className="masthead-title">Welcome to SharpFoxx Academy</h1>
         <p className="masthead-standfirst">
           Complete your correspondent training to unlock your games portal.
         </p>

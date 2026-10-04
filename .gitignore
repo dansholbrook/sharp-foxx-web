@@ -6,3 +6,7 @@ next-env.d.ts
 *.tsbuildinfo
 .DS_Store
 .env*.local
+
+# backups of env files -- .env*.local did not catch .env.local.bak
+.env*.local*
+*.bak

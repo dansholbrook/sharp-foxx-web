@@ -50,7 +50,7 @@ const PAGE_SIZE = 20;
 
 type Tab = 'upcoming' | 'results';
 type Window = 'week' | 'month' | 'all';
-// The WATCH/PLAY scope toggle. 'foxx' (default) = covered Sharp Foxx broadcasts
+// The WATCH/PLAY scope toggle. 'foxx' (default) = covered SharpFoxx broadcasts
 // only; 'all' also surfaces ingested feed games, rendered as the quieter,
 // play-only card. It maps to the coverage query param, so this is a server
 // filter like the rest -- isFeedEvent still picks the CARD, which is rendering,
@@ -151,7 +151,7 @@ function shiftDays(dayKey: string, days: number): string {
 
 // ---- Feed game card (source != null): the QUIETER, play-only variant shown
 // under "All games". No Watch affordance and no video-implying live pulse card --
-// these are ingested scores, contest material for picks, not a Sharp Foxx
+// these are ingested scores, contest material for picks, not a SharpFoxx
 // broadcast. A muted "Scores" tag stands in for the watch treatment; a live feed
 // game still gets the subtle LIVE text pill (a status, not a stream). Same tcard
 // shell so the grid stays uniform; the .playcard/.gamescope-* scope knocks it
@@ -303,7 +303,7 @@ function Games() {
   // the client can't re-filter, because paging happened server-side and the
   // stale rows already consumed slots in this page.
   const [unfilteredUpcoming, setUnfilteredUpcoming] = useState(false);
-  // The same skew, for the coverage filter: we asked for Sharp Foxx games and
+  // The same skew, for the coverage filter: we asked for SharpFoxx games and
   // the API didn't confirm it, so this is a build that predates the parameter
   // and stripped it. Every row it sent is real, but feed games are mixed in and
   // `total` counts them. Detection only, for the same reason as above -- the
@@ -385,7 +385,7 @@ function Games() {
         // Upcoming tab — every other empty result is one the user asked for.
         if (offset === 0 && tab === 'upcoming' && !hasFilters && page.total === 0) {
           // Same scope as the list it stands in for: offering feed scores under
-          // the Sharp Foxx toggle would answer a question nobody asked.
+          // the SharpFoxx toggle would answer a question nobody asked.
           const recent = await getGames(token, {
             status: 'final',
             coverage: wantsCoverage,
@@ -507,7 +507,7 @@ function Games() {
           alignment is what lines the label-over-select fields up with the chips
           beside them, and it is load-bearing rather than decorative. ---- */}
       <div className="page-controls">
-        {/* WATCH/PLAY scope toggle: Sharp Foxx broadcasts (default) vs. every game
+        {/* WATCH/PLAY scope toggle: SharpFoxx broadcasts (default) vs. every game
             incl. ingested feed scores. Compact chips, URL-synced like the rest. */}
         <div
           className="gamescope-toggle"
@@ -515,7 +515,7 @@ function Games() {
           aria-label="Which games to show"
         >
         {([
-          ['foxx', 'Sharp Foxx'],
+          ['foxx', 'SharpFoxx'],
           ['all', 'All games'],
         ] as Array<[Scope, string]>).map(([value, label]) => (
           <button
@@ -595,7 +595,7 @@ function Games() {
             number there would describe a list the user did not ask for. ---- */}
         {!showSkeleton && !error && !inFallback && (
           <p className="result-count">
-            {`${total.toLocaleString()} ${scope === 'foxx' ? 'Sharp Foxx ' : ''}${
+            {`${total.toLocaleString()} ${scope === 'foxx' ? 'SharpFoxx ' : ''}${
               total === 1 ? noun : `${noun}s`
             }${hasFilters ? ' match your filters' : ''}`}
           </p>
@@ -619,7 +619,7 @@ function Games() {
 
       {unfilteredCoverage && !error && (
         <div className="notice">
-          Showing every game, not just Sharp Foxx ones — this API build
+          Showing every game, not just SharpFoxx ones — this API build
           doesn&apos;t support the coverage filter, so external feed scores are
           mixed in below and counted in the total. Refresh once the API finishes
           deploying.

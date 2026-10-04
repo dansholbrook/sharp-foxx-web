@@ -519,7 +519,7 @@ function FeedIntro() {
     <div className="feed-intro">
       {lifetimeEarned === 0 && (
         <p className="feed-intro__text">
-          Sharp Foxx covers the local games the big networks skip, with a
+          SharpFoxx covers the local games the big networks skip, with a
           correspondent in the building. Follow your teams, call the games with
           free points, and play the Arena daily — one score, no cash value, and
           bragging rights on the leaderboard.

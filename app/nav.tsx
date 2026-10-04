@@ -515,7 +515,7 @@ export function AppNav() {
       {menuOpen && (
         <div className="nav-sheet" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="nav-sheet__top">
-            <span className="wordmark">Sharp Foxx</span>
+            <span className="wordmark">SharpFoxx</span>
             <button
               type="button"
               className="nav-sheet__close"

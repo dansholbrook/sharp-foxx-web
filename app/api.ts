@@ -1,4 +1,4 @@
-// Tiny typed client for the Sharp Foxx API. No axios, no react-query -- just
+// Tiny typed client for the SharpFoxx API. No axios, no react-query -- just
 // fetch. Base URL comes from NEXT_PUBLIC_API_BASE (see .env.local) and already
 // includes the /api/v1 prefix.
 
@@ -48,7 +48,7 @@ export interface RevenueReport {
 // -- the backend normalizes both conventions at its output boundary, so nothing
 // here needs to know which table a number came from.
 //
-// Note on streams: nil_fees USED TO BE a stream here -- Sharp Foxx's platform
+// Note on streams: nil_fees USED TO BE a stream here -- SharpFoxx's platform
 // fee on NIL releases. It is gone: the fee was a deduction from the school's
 // money on its way to the athlete rather than a margin, and is now hard zero.
 // The remaining note is kept because the same distinction still matters for
@@ -339,7 +339,7 @@ export interface EventListItem {
   updatedAt: string;
 }
 
-// THE WATCH/PLAY SPLIT, in one place. An event is COVERED -- a Sharp Foxx
+// THE WATCH/PLAY SPLIT, in one place. An event is COVERED -- a SharpFoxx
 // broadcast, with a correspondent, a stream, and photos -- exactly when its
 // source is null (a rep-created game). Any non-null source ('espn' etc.) is a
 // FEED game: ingested external scores that are contest material for picks, never
@@ -347,7 +347,7 @@ export interface EventListItem {
 // rows, the game page's video experience) render covered; play surfaces (the
 // rail's pick bands, the lean feed game page) render feed. Undefined -- the
 // field absent on an old payload -- counts as covered: the conservative default
-// never hides a real Sharp Foxx game behind a missing column.
+// never hides a real SharpFoxx game behind a missing column.
 export function isFeedEvent(source: string | null | undefined): boolean {
   return source != null;
 }
@@ -1657,7 +1657,7 @@ export interface GameFilters {
   // job: dateFrom applies to the whole query and would delete the Live row.
   // Omitted by default -- the server's default is off too.
   upcomingOnly?: boolean;
-  // Narrows to Sharp Foxx broadcasts ('covered') or ingested scores ('feed').
+  // Narrows to SharpFoxx broadcasts ('covered') or ingested scores ('feed').
   // Omitted, or 'all', means no narrowing -- which is the server's default too.
   // This is the ONLY correct way to scope a list by coverage: the client can't
   // do it over a server-paged response, because the rows it would drop already
@@ -4209,7 +4209,7 @@ export function squaresPerSquareLabel(config: ContestConfig): string {
 // square #100 spawns the next board in the same transaction. The client never
 // names a board — it claims { row, col } and the server routes to the filling one.
 // At game start EVERY board locks as-is: the partially-filled one plays with its
-// holes and SHARP FOXX OWNS the unclaimed squares. If an SF-owned square wins a
+// holes and SHARPFOXX OWNS the unclaimed squares. If an SF-owned square wins a
 // period, that prize is DEDICATED TO THE NEXT PROMOTION — recorded, paid to
 // nobody, never kept as revenue.
 //
@@ -4259,7 +4259,7 @@ export interface SquaresPrizePending {
 // A prize-table row AFTER grading, on one board. Carries the winning square + the
 // two digits that hit.
 //   'won'       — a fan owned the winning square; pointsPaid reached them.
-//   'dedicated' — the winning square was SHARP FOXX's (the board locked partially
+//   'dedicated' — the winning square was SHARPFOXX's (the board locked partially
 //                 filled). pointsPaid is 0 and dedicatedNote records where the
 //                 prize went: it is DEDICATED TO THE NEXT PROMOTION — not paid to
 //                 anyone, not rolled into the next period, never kept as revenue.
@@ -4298,7 +4298,7 @@ export interface SquaresPeriodResult {
 //   'filling' — the ONE board taking claims right now (isCurrent).
 //   'full'    — all 100 claimed; closed to claims AND releases; waiting for lock.
 //   'locked'  — the game started; digits revealed; plays as-is (a partial board
-//               keeps its holes, and Sharp Foxx owns them).
+//               keeps its holes, and SharpFoxx owns them).
 //   'settled' — every configured period boundary graded.
 export type SquaresBoardStatus = 'filling' | 'full' | 'locked' | 'settled';
 
@@ -4316,7 +4316,7 @@ export interface SquaresBoard {
   colDigits: number[] | null; // THIS board's away-team digits, null until it locks
   lockedAt: string | null;
   claimedCount: number; // 0..100
-  sfOwnedCount: number; // unclaimed squares on a LOCKED board — Sharp Foxx's; 0 before
+  sfOwnedCount: number; // unclaimed squares on a LOCKED board — SharpFoxx's; 0 before
   myClaimCount: number; // the caller's squares on THIS board
   claimed: SquaresClaim[];
   prizeTable: SquaresPrizeRow[];
@@ -6154,7 +6154,7 @@ export interface CallSettlement {
   bands: CallSettlementBand[];
 }
 
-// The game the card is written on. A covered Sharp Foxx broadcast, always —
+// The game the card is written on. A covered SharpFoxx broadcast, always —
 // a feed game has no correspondent in the stands, and the backend refuses one.
 export interface CallEventInfo {
   id: string;
@@ -8441,7 +8441,7 @@ export function scoutBonusLabel(type: ScoutBonusType | string): string {
     case 'team_win':
       return 'Team win';
     case 'feature':
-      return 'Featured in a Sharp Foxx story';
+      return 'Featured in a SharpFoxx story';
     case 'conference_honor':
       return 'Conference weekly honour';
     case 'called_up':

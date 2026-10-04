@@ -90,10 +90,10 @@ export default function ArticlePage() {
     return [feedItem.eventSport, matchup].filter(Boolean).join(' · ') || 'Coverage';
   }, [feedItem]);
 
-  // Byline: name the author when we resolved one, always signed Sharp Foxx.
+  // Byline: name the author when we resolved one, always signed SharpFoxx.
   const byline = feedItem?.author
-    ? `By ${feedItem.author} · Sharp Foxx`
-    : 'By Sharp Foxx';
+    ? `By ${feedItem.author} · SharpFoxx`
+    : 'By SharpFoxx';
 
   // "Read an article" earns once the fan has actually spent 20s here AND scrolled
   // most of the way down — armed only once the story is on screen, so a loader,

@@ -149,7 +149,7 @@ export default function ApplyPage() {
           <span className="masthead-kicker">Recruiting</span>
           <h1 className="masthead-title">Application received</h1>
           <p className="masthead-standfirst">
-            Thanks for applying to the Sharp Foxx network — we&apos;ll be in touch.
+            Thanks for applying to the SharpFoxx network — we&apos;ll be in touch.
           </p>
         </div>
         <section className="card game apply-confirm">
@@ -169,7 +169,7 @@ export default function ApplyPage() {
     <main className="apply-page">
       <div className="masthead">
         <span className="masthead-kicker">Join the network</span>
-        <h1 className="masthead-title">Join the Sharp Foxx network</h1>
+        <h1 className="masthead-title">Join the SharpFoxx network</h1>
         <p className="masthead-standfirst">
           Two ways in. <strong>Correspondent:</strong> cover local games, publish
           stories, and earn from local ad sales.{' '}

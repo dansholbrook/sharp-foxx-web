@@ -68,7 +68,7 @@ export default function LoginPage() {
         <span className="masthead-kicker">Members</span>
         <h1 className="masthead-title">Sign in</h1>
         <p className="masthead-standfirst">
-          Welcome back to the Sharp Foxx network. Sign in with the email and
+          Welcome back to the SharpFoxx network. Sign in with the email and
           password from your welcome message.
         </p>
       </div>

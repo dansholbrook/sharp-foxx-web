@@ -9,7 +9,7 @@
 // IT USED TO STACK A SECOND SERIES: NIL platform fees, the 15% taken off a
 // deliverable release. That fee is gone -- it was a deduction from the school's
 // money on its way to the athlete rather than a margin on a transaction, so
-// Sharp Foxx no longer takes it (see approveDeliverable in the API). The series
+// SharpFoxx no longer takes it (see approveDeliverable in the API). The series
 // was removed rather than left to plot zero forever: a stacked bar with one
 // series permanently at 0 reads as a business doing badly instead of one we are
 // deliberately not in, and it invites someone to "fix" the flat line.

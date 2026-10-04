@@ -517,7 +517,7 @@ export function AddGameForm({
                 checked={isLocalStream}
                 onChange={(e) => setIsLocalStream(e.target.checked)}
               />
-              Local Sharp Foxx coverage
+              Local SharpFoxx coverage
             </label>
           </div>
 

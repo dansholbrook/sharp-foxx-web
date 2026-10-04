@@ -226,7 +226,7 @@ export function AgeGateProvider({ children }: { children: ReactNode }) {
             </div>
 
             <p className="agegate-lead muted">
-              Sharp Foxx contests and Arena games are for players {terms.minAge} and
+              SharpFoxx contests and Arena games are for players {terms.minAge} and
               over. Confirm once and you won&apos;t be asked again.
             </p>
 

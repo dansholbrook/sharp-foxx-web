@@ -1,6 +1,6 @@
-# Sharp Foxx Web — project guide for Claude
+# SharpFoxx Web — project guide for Claude
 
-Browser frontend for the Sharp Foxx API: **45 routes** across the fan product
+Browser frontend for the SharpFoxx API: **45 routes** across the fan product
 (feed, games, contests, the six Arena games, leaderboards, profiles, Scout Book)
 and the operator console (field reps, applicants, NIL review, economy, ad
 sales). Next.js 14 (App Router) + React + TypeScript, **no** auth framework,

@@ -116,7 +116,7 @@ export function SiteHeader() {
     const isLogin = pathname === '/';
     return (
       <div className="header-row">
-        <span className="wordmark">Sharp Foxx</span>
+        <span className="wordmark">SharpFoxx</span>
         {isLogin ? (
           <div className="login-header-links">
             <Link href="/join" className="link-btn">
@@ -148,7 +148,7 @@ export function SiteHeader() {
   const withSearch = pathname === '/feed';
   return (
     <div className={`header-row${withSearch ? ' header-row--search' : ''}`}>
-      <span className="wordmark">Sharp Foxx</span>
+      <span className="wordmark">SharpFoxx</span>
       {withSearch && <SearchBar />}
       <AppNav />
     </div>
