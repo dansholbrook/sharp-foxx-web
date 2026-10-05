@@ -142,7 +142,17 @@ function Row({
 // center, venue + date beneath. When a result is in, the score replaces the
 // "vs" and a FINAL badge shows; when a replay link is set, a watch indicator
 // appears. The whole card links to the game's watch page at /games/[id]. ----
-function GameCard({ event }: { event: EventListItem }) {
+// `tracked` is the QUIETER variant, used only by the Upcoming row's fallback when
+// no covered game exists -- see the WATCH/PLAY block above visibleEvents. It
+// reuses the treatment /games already built for the same distinction
+// (.gamescope-feedthumb scrim + the muted "Scores" tag that sits where a covered
+// card shows Watch), so the two surfaces teach a fan the same visual language
+// rather than inventing a second one. Default 'covered' leaves every existing
+// call site byte-identical.
+function GameCard({
+  event, variant = 'covered',
+}: { event: EventListItem; variant?: 'covered' | 'tracked' }) {
+  const tracked = variant === 'tracked';
   // The school, falling back to the stored name -- which carries the sport as a
   // suffix that the corner tag already says. This used to be a render-time strip
   // against a copy of the sport enum; it is now a field on the projection. See
@@ -164,22 +174,36 @@ function GameCard({ event }: { event: EventListItem }) {
       <Link
         className="tcard-open"
         href={`/games/${event.id}`}
-        aria-label={`View ${home} vs ${away}`}
+        // The label carries the difference too, so the distinction is not
+        // purely visual -- a screen reader hears "scores", not "view".
+        aria-label={tracked
+          ? `View ${home} vs ${away} scores`
+          : `View ${home} vs ${away}`}
       >
-        <div className={thumbClass(event.sport)}>
+        <div className={tracked
+          ? `${thumbClass(event.sport)} gamescope-feedthumb`
+          : thumbClass(event.sport)}
+        >
           <span className="thumb-tag">{event.sport ?? 'event'}</span>
           {isLive ? (
             <LiveBadge className="thumb-live" />
           ) : (
             isFinal && <span className="thumb-final">Final</span>
           )}
-          {hasVideo && (
-            <span className="thumb-watch">
-              <span className="thumb-watch__icon" aria-hidden="true">
-                ▶
+          {/* NEVER the Watch affordance on a tracked card: there is nothing to
+              watch, and offering it is the specific confusion the WATCH/PLAY
+              rule exists to prevent. The muted "Scores" tag takes its place. */}
+          {tracked ? (
+            <span className="gamescope-scorestag">Scores</span>
+          ) : (
+            hasVideo && (
+              <span className="thumb-watch">
+                <span className="thumb-watch__icon" aria-hidden="true">
+                  ▶
+                </span>
+                Watch
               </span>
-              Watch
-            </span>
+            )
           )}
           <div className="thumb-matchup">
             <span className="thumb-team">{home}</span>
@@ -683,25 +707,45 @@ export default function FeedPage() {
   // Results.
   //
   // ****************************************************************************
-  // AND WHEN THERE IS NO COVERAGE AT ALL, THE FIX IS THE EMPTY STATE -- NOT THIS
-  // FILTER. Read that before you widen the line above.
+  // THE RULE, IN FULL, INCLUDING WHAT HAPPENS WHEN THERE IS NO COVERAGE.
   //
-  // Covered games are HAND-ENTERED, so this set goes empty whenever nobody
-  // enters any -- it is not an edge case, it is the resting state between
-  // bookings. Measured on cloud: 0 upcoming covered against a 118-game schedule,
-  // which rendered this column's Upcoming row as the bare words "No upcoming
-  // games" while every one of those 118 games sat one click away on /games.
+  // COVERED-ONLY WHENEVER COVERAGE EXISTS. That is this filter, it is the normal
+  // case, and it is not negotiable: a covered game is something to WATCH, a feed
+  // game is contest material, and mixing them is how a fan clicks a row
+  // expecting a broadcast and finds a scoreboard.
   //
-  // The obvious repair is to let feed games into this filter when coverage is
-  // empty. DO NOT. It would put contest material into a WATCH row -- the exact
-  // thing the rule above exists to prevent -- and it would do it precisely when
-  // a fan is least able to tell the two apart. An inventory gap is not a reason
-  // to undo the WATCH/PLAY split.
+  // TRACKED GAMES AS A VISIBLE FALLBACK WHEN IT DOES NOT. The Upcoming row ONLY
+  // (see upcomingTracked below) falls back to showing feed games when no covered
+  // game is upcoming. Covered games are HAND-ENTERED, so the covered set going
+  // empty is not an edge case -- it is the resting state between bookings.
+  // Measured on cloud: 0 upcoming covered against a 118-game schedule.
   //
-  // So the empty state below is where the fan is handed the OTHER DOOR: it names
-  // what coverage is and links to /games?scope=all. The filter stays honest and
-  // the fan still gets somewhere to go. If you are here because the row looks
-  // empty, change the copy, not the predicate.
+  // WHY THE FALLBACK IS ACCEPTABLE WHERE LOOSENING THIS FILTER WAS NOT, which is
+  // the distinction the next reader needs:
+  //
+  //   Loosening the filter would mix the two sets WHENEVER BOTH EXIST -- a feed
+  //   game sitting beside a broadcast, competing for the same click, on a page
+  //   whose whole job is to say which is which. The fallback never does that. It
+  //   is reached only when the covered set is EMPTY, so the two never appear in
+  //   the same row, and the fan is never asked to tell apart two things that look
+  //   alike. An empty row teaches nothing; a labelled row of tracked games
+  //   teaches what tracked games are.
+  //
+  //   And the fallback carries the distinction VISUALLY and in the ACCESSIBLE
+  //   NAME -- the scrim, the muted "Scores" tag where a broadcast shows Watch,
+  //   and a "scores" aria-label (GameCard's `tracked` variant). A fan does not
+  //   have to read closely. That is the condition on which this is allowed.
+  //
+  // IT SELF-REVERTS, WITH NO CONFIG AND NO DEPLOY. The condition is recomputed on
+  // every render from the SAME payload that feeds the covered filter -- there is
+  // no flag, no cached decision, nothing to turn back off. The first covered
+  // upcoming game anyone enters makes upcomingEvents non-empty, and the tracked
+  // games are pushed straight back out on the next render. Nobody has to remember
+  // to undo this.
+  //
+  // SCOPED TO THE UPCOMING ROW. Live Now and Recent Results stay covered-only
+  // with no fallback; both are conditionally rendered and simply disappear when
+  // empty, so neither leaves a bare row to fix.
   // ****************************************************************************
   const visibleEvents = (events ?? []).filter(
     (ev) => isCoveredEvent(ev.source) && (sport === ALL || ev.sport === sport),
@@ -828,23 +872,38 @@ export default function FeedPage() {
               </Row>
             )}
 
+            {/* THE FALLBACK'S LABEL, deliberately OUTSIDE the Row.
+                Two reasons, both structural rather than aesthetic:
+
+                  Row does Children.toArray(children) and caps at ROW_CAP, so a
+                  fragment wrapping note + cards counts as ONE child and silently
+                  disables the expander -- every tracked game would render into
+                  the snap scroller at once. A flat array fixes the count but then
+                  puts a block of prose inside a horizontal strip of 280px cards.
+
+                  And "secondary to the games themselves" is literally this
+                  position: a line above the row, in the muted .row-empty
+                  treatment, with the games below it at full size. */}
+            {!loading && upcomingEvents.length === 0 && upcomingTracked.length > 0 && (
+              <div className="row-empty">
+                Games we track — scores only, not SharpFoxx broadcasts. This row
+                becomes local broadcasts when a correspondent is assigned to one.
+              </div>
+            )}
+
             {!loading && (
               <Row title="Upcoming Games" className="fmain-upcoming">
                 {upcomingEvents.length > 0 ? (
                   upcomingEvents.map((ev) => <GameCard key={ev.id} event={ev} />)
                 ) : upcomingTracked.length > 0 ? (
-                  // COVERAGE IS EMPTY BUT THE SCHEDULE IS NOT. Say what this row
-                  // holds and hand over the other door -- see the block above
-                  // visibleEvents. Reads as a quiet row, not a failed page: the
-                  // rail beside it still has the picks band, so this is one row
-                  // being thin rather than the page being broken.
-                  <div className="row-empty">
-                    {sport === ALL
-                      ? 'No SharpFoxx broadcasts on the schedule yet. This row fills up when a correspondent is assigned to a local game.'
-                      : `No SharpFoxx ${sport} broadcasts on the schedule yet. This row fills up when a correspondent is assigned to a local game.`}
-                    {' '}
-                    <Link href="/games?scope=all">Browse every game we track →</Link>
-                  </div>
+                  // COVERAGE IS EMPTY BUT THE SCHEDULE IS NOT. The tracked games
+                  // themselves, in the quieter `tracked` variant; their label is
+                  // the line above this row. See the WATCH/PLAY block above
+                  // visibleEvents for why this is allowed here and why loosening
+                  // the filter itself is not.
+                  upcomingTracked.map((ev) => (
+                    <GameCard key={ev.id} event={ev} variant="tracked" />
+                  ))
                 ) : (
                   // NOTHING SCHEDULED AT ALL, covered or not. The original
                   // wording is right here: there is no other door to offer,
