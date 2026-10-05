@@ -681,8 +681,45 @@ export default function FeedPage() {
   // covered-only (source IS NULL) -- feed games are contest material and appear
   // in the rail's "Make your picks" band, never in Live Now / Upcoming /
   // Results.
+  //
+  // ****************************************************************************
+  // AND WHEN THERE IS NO COVERAGE AT ALL, THE FIX IS THE EMPTY STATE -- NOT THIS
+  // FILTER. Read that before you widen the line above.
+  //
+  // Covered games are HAND-ENTERED, so this set goes empty whenever nobody
+  // enters any -- it is not an edge case, it is the resting state between
+  // bookings. Measured on cloud: 0 upcoming covered against a 118-game schedule,
+  // which rendered this column's Upcoming row as the bare words "No upcoming
+  // games" while every one of those 118 games sat one click away on /games.
+  //
+  // The obvious repair is to let feed games into this filter when coverage is
+  // empty. DO NOT. It would put contest material into a WATCH row -- the exact
+  // thing the rule above exists to prevent -- and it would do it precisely when
+  // a fan is least able to tell the two apart. An inventory gap is not a reason
+  // to undo the WATCH/PLAY split.
+  //
+  // So the empty state below is where the fan is handed the OTHER DOOR: it names
+  // what coverage is and links to /games?scope=all. The filter stays honest and
+  // the fan still gets somewhere to go. If you are here because the row looks
+  // empty, change the copy, not the predicate.
+  // ****************************************************************************
   const visibleEvents = (events ?? []).filter(
     (ev) => isCoveredEvent(ev.source) && (sport === ALL || ev.sport === sport),
+  );
+
+  // EVERY upcoming game in the payload, coverage ignored, sport filter respected.
+  //
+  // This is what tells the two empty states apart, and the discriminator is
+  // "do NON-covered upcoming games exist" -- not "does any coverage exist".
+  // Those differ: a day can hold covered FINALS and no covered upcoming, which
+  // would make an any-coverage test say yes while this row is still empty. What
+  // decides whether there is anywhere to send the fan is whether /games has
+  // something upcoming to show, so that is what is measured.
+  //
+  // Same payload, no extra request: getEvents() sends no coverage param, so the
+  // full set is already here and the covered split is done in the browser.
+  const upcomingTracked = (events ?? []).filter(
+    (ev) => isUpcomingEvent(ev) && (sport === ALL || ev.sport === sport),
   );
   // Live = in progress right now (its own row above Upcoming); Upcoming =
   // scheduled AND NOT YET KICKED OFF (excludes live so a game shows in one row,
@@ -795,11 +832,27 @@ export default function FeedPage() {
               <Row title="Upcoming Games" className="fmain-upcoming">
                 {upcomingEvents.length > 0 ? (
                   upcomingEvents.map((ev) => <GameCard key={ev.id} event={ev} />)
-                ) : (
+                ) : upcomingTracked.length > 0 ? (
+                  // COVERAGE IS EMPTY BUT THE SCHEDULE IS NOT. Say what this row
+                  // holds and hand over the other door -- see the block above
+                  // visibleEvents. Reads as a quiet row, not a failed page: the
+                  // rail beside it still has the picks band, so this is one row
+                  // being thin rather than the page being broken.
                   <div className="row-empty">
                     {sport === ALL
-                      ? 'No upcoming games'
-                      : `No upcoming games for ${sport}`}
+                      ? 'No SharpFoxx broadcasts on the schedule yet. This row fills up when a correspondent is assigned to a local game.'
+                      : `No SharpFoxx ${sport} broadcasts on the schedule yet. This row fills up when a correspondent is assigned to a local game.`}
+                    {' '}
+                    <Link href="/games?scope=all">Browse every game we track →</Link>
+                  </div>
+                ) : (
+                  // NOTHING SCHEDULED AT ALL, covered or not. The original
+                  // wording is right here: there is no other door to offer,
+                  // because /games would be empty too.
+                  <div className="row-empty">
+                    {sport === ALL
+                      ? 'No upcoming games scheduled.'
+                      : `No upcoming ${sport} games scheduled.`}
                   </div>
                 )}
               </Row>
