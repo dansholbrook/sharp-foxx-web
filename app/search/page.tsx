@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { getEvents, etDateTime, teamLabel, EventListItem } from '../api';
 import { eventTeamTreatment, thumbClass, treatmentStyle } from '../card-treatment';
+import { ThumbSubject } from '../thumb-subject';
 
 // Date-only ET formatting for compact thumbnail metadata (mirrors the feed page).
 function formatDate(iso: string): string {
@@ -67,17 +68,7 @@ function GameCard({ event }: { event: EventListItem }) {
               Watch
             </span>
           )}
-          <div className="thumb-matchup">
-            <span className="thumb-team">{home}</span>
-            {hasScore ? (
-              <span className="thumb-score">
-                {event.homeScore} – {event.awayScore}
-              </span>
-            ) : (
-              <span className="thumb-vs">vs</span>
-            )}
-            <span className="thumb-team">{away}</span>
-          </div>
+          <ThumbSubject event={event} home={home} away={away} />
         </div>
         <div className="tcard-body">
           <div className="tcard-meta">

@@ -340,6 +340,15 @@ export interface EventListItem {
   awayPrimaryColor?: string | null;
   awaySecondaryColor?: string | null;
   awayTertiaryColor?: string | null;
+  // The team's mark, served from OUR storage (R2), already composed into a full
+  // URL by the API. Never a provider URL -- see drizzle/team_logos.sql.
+  //
+  // NULL IS COMMON AND IS NOT AN ERROR: all 330 cwbb teams have no logo (the
+  // provider returns TeamLogoUrl null on every cwbb row), plus any team whose
+  // fetch was refused. The card renders its text matchup instead -- see
+  // cardLockup in card-treatment.ts for the both-or-neither rule.
+  homeLogoUrl?: string | null;
+  awayLogoUrl?: string | null;
   marketId: string | null;
   venue: string | null;
   status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';

@@ -1029,6 +1029,100 @@ tfoot td {
    reads as a visible blob on the card -- worst on light fields. Running the
    band off both edges gives it no silhouette to notice; it reads as the card
    being slightly deeper through the middle. */
+/* ============================================================================
+   THE LOGO LOCKUP -- the card's subject when both teams have a mark.
+
+   Replaces .thumb-matchup; the two never render together. When either team has
+   no logo the card keeps .thumb-matchup exactly as before, which is why this is
+   additive rather than a rewrite of the matchup styles.
+   ============================================================================ */
+.thumb-lockup {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  /* Clearance for the Watch / Scores pill, which is absolutely positioned at
+     bottom-right. The lockup is flex-centred, so a bottom margin lifts it: at
+     card width the away name would otherwise sit a few pixels above the pill
+     and read as colliding with it. The text matchup does not need this --
+     it is a third the height. */
+  margin-bottom: 12px;
+}
+
+.thumb-lockup__side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  /* flex:1 with min-width:0 so two long names share the width evenly and
+     neither pushes the "vs" off-centre. */
+  flex: 1;
+  min-width: 0;
+}
+
+/* THE DISC IS THE WHOLE REASON THIS WORKS, and it is not decoration.
+   A team's logo is drawn in that team's own colours, so a mark sitting directly
+   on that team's colour field is the WORST available pairing -- Detroit's navy
+   D on a navy field was effectively invisible, and a drop shadow cannot
+   separate navy from navy. A solid light disc puts every mark on the ground it
+   was designed for, which makes logo legibility independent of the field
+   entirely. A frosted (14% white) disc was tried and is visibly worse on dark
+   marks; it is not a cheaper version of this, it is a different, failing one. */
+.thumb-disc {
+  display: grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  flex: none;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.thumb-crest {
+  width: 55px;
+  height: 55px;
+  /* contain, never cover: these are marks with their own aspect ratios and
+     cropping one is defacing a trademark. */
+  object-fit: contain;
+  display: block;
+}
+
+.thumb-lockup__name {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  /* One line. A wrapped school name pushes the crests apart and breaks the
+     row's rhythm; the full name is on the game page. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.thumb-lockup__vs {
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  flex: none;
+}
+
+/* Narrow cards: the crests shrink before the names do, because a smaller mark
+   is still a mark while a truncated name stops being a name. */
+@media (max-width: 420px) {
+  .thumb-disc { width: 58px; height: 58px; }
+  .thumb-crest { width: 45px; height: 45px; }
+}
+
 .thumb-band {
   position: absolute;
   left: 0;

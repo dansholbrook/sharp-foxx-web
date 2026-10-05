@@ -18,6 +18,7 @@ import { CorrespondentBand } from '../feed-work';
 // and it is the same module that decides the team-colour treatment, because
 // both answer the one question "what does this thumbnail look like".
 import { eventTeamTreatment, thumbClass, treatmentStyle } from '../card-treatment';
+import { ThumbSubject } from '../thumb-subject';
 import {
   getPublishedContent,
   getEvents,
@@ -207,17 +208,7 @@ function GameCard({
               </span>
             )
           )}
-          <div className="thumb-matchup">
-            <span className="thumb-team">{home}</span>
-            {hasScore ? (
-              <span className="thumb-score">
-                {event.homeScore} – {event.awayScore}
-              </span>
-            ) : (
-              <span className="thumb-vs">vs</span>
-            )}
-            <span className="thumb-team">{away}</span>
-          </div>
+          <ThumbSubject event={event} home={home} away={away} />
         </div>
         <div className="tcard-body">
           <div className="tcard-meta">

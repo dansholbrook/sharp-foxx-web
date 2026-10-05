@@ -49,8 +49,9 @@ type Oklab = [number, number, number];
 // TWO DIFFERENT METRICS, ON PURPOSE, because one number cannot answer both
 // questions this module asks:
 //
-//   "is this colour too dark to see on our ground"  -> CONTRAST RATIO, a
-//   luminance measure, which is what it was designed for.
+//   "is this colour too dark to see on our ground"  -> a DIRECTIONAL LUMINANCE
+//   RATIO (see gate A). Note this is deliberately NOT a WCAG contrast ratio,
+//   which is symmetric and therefore cannot tell "too dark" from "too light".
 //
 //   "can a fan tell these two teams apart"          -> OKLab DELTA-E, a
 //   perceptual measure. Contrast ratio gets this WRONG: navy 002B5C and red
@@ -70,10 +71,6 @@ function toSrgb(c: number): number {
 function luminance(rgb: RGB): number {
   const [r, g, b] = rgb.map(toLinear);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-function contrastRatio(a: RGB, b: RGB): number {
-  const la = luminance(a), lb = luminance(b);
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 function toOklab(rgb: RGB): Oklab {
   const [r, g, b] = rgb.map(toLinear);
@@ -142,7 +139,12 @@ function toHex(rgb: RGB): string {
 // one-card problem. Prefer a clause in gate B, or a clamp on the specific
 // offender, decided against the live page.
 // ---------------------------------------------------------------------------
-export const TEAM_WEIGHT = 1;
+// 0.55 -- the field is a BACKDROP, not the subject. It was 1 (full team colour)
+// while the matchup TEXT was the subject and the field had to carry identity on
+// its own. The logo lockup carries it far better, and at full strength the field
+// competes with the mark sitting on top of it. Muting also reads as more
+// premium; see the rendered comparison that drove this.
+export const TEAM_WEIGHT = 0.55;
 
 function groundMix(rgb: RGB, amount: number): RGB {
   if (amount >= 1) return rgb;
@@ -155,13 +157,24 @@ function groundMix(rgb: RGB, amount: number): RGB {
 // POST-MIX values -- the colours the card actually paints.
 // ---------------------------------------------------------------------------
 
-// A -- visible against the card's own ground. Keeps a near-black primary from
-// rendering a card that looks broken rather than branded: Baltimore's 000000,
-// Chicago's 0B162A, Carolina's 000000. Deliberately loose at 1.20; a full-card
-// field is perceived far more readily than text (WCAG's thresholds are
-// calibrated for glyphs), and the card carries a 1px border that delineates it
-// regardless.
-const GROUND_MIN_CONTRAST = 1.20;
+// A -- the field must be LIGHTER THAN THE PAGE GROUND by a margin.
+//
+// THIS IS A LUMINANCE RATIO, NOT A WCAG CONTRAST RATIO, and the difference is
+// the whole point. Contrast ratio is SYMMETRIC: it scores "darker than the
+// ground" exactly as well as "lighter than". Under it, pure black mixed toward
+// the ground lands at #020201 and scores 1.10 -- a pass -- while Chicago's real
+// navy scores 1.02 and was rejected. Backwards: a field darker than the page
+// reads as a HOLE in the card, not as a colour.
+//
+// It also mattered much more once the mix dropped to 0.55. Muting pushes every
+// colour down, so a symmetric gate started rejecting teams' true primaries
+// wholesale and forcing them onto a brighter secondary -- "both primaries" fell
+// from 352 to 120 across our 1,122 pairs. Directional, it is 289, and pure
+// black is still correctly refused (it lands at 0.09x the ground).
+//
+// K is not sensitive between 1.3 and 1.6 (identical outcomes); 1.6 sits clear
+// of the edge rather than on it.
+const GROUND_MIN_LUMINANCE_RATIO = 1.6;
 
 // B -- not a washed-out card. BOTH TERMS ARE LOAD-BEARING; do not simplify this
 // to a lightness ceiling.
@@ -188,9 +201,11 @@ const LIGHT_MIN_CHROMA = 0.05;
 // C -- the two sides must be tellable apart. See the metric note above for why
 // this is delta-E and not contrast ratio.
 //
-// At full team weight this floor almost never REFUSES a card (11 pairs of
-// 1,122). What it mostly does is decide how early the search gives up on a
-// team's primary -- it is a selection-quality knob, not a rejection knob.
+// This floor rarely REFUSES a card (5 pairs of 1,122 at the shipped settings).
+// What it mostly does is decide how early the search gives up on a team's
+// primary -- a selection-quality knob, not a rejection knob. Since the logo sits
+// on its own light disc it no longer protects LEGIBILITY at all; its remaining
+// job is stopping the two halves reading as one field instead of two teams.
 // Measured at 0.15: Toronto/Miami stops being two dark reds (0.120) and becomes
 // the Raptors' red against the Heat's orange (0.288). 0.18 costs 32 more cards
 // their primary and was not observed to rescue anything.
@@ -200,9 +215,9 @@ function usableField(raw: string | null | undefined): RGB | null {
   const parsed = parseHex(raw);
   if (!parsed) return null;
   const mixed = groundMix(parsed, TEAM_WEIGHT);
-  if (contrastRatio(mixed, GROUND) < GROUND_MIN_CONTRAST) return null;   // A
+  if (luminance(mixed) < luminance(GROUND) * GROUND_MIN_LUMINANCE_RATIO) return null; // A
   const [L, a, b] = toOklab(mixed);
-  if (L > LIGHT_MAX && Math.hypot(a, b) < LIGHT_MIN_CHROMA) return null; // B
+  if (L > LIGHT_MAX && Math.hypot(a, b) < LIGHT_MIN_CHROMA) return null;              // B
   return mixed;
 }
 
@@ -254,6 +269,26 @@ export function teamTreatment(
     }
   }
   return null;
+}
+
+/**
+ * The logo pair for a card, or null to keep the text matchup.
+ *
+ * BOTH OR NEITHER, DELIBERATELY. A card with one crest and one empty space
+ * reads as broken rather than as partial data, and the two sides are peers --
+ * there is no sensible way to show one team as a mark and the other as words.
+ * So a single missing logo drops the whole lockup, and the card renders exactly
+ * as it did before logos existed.
+ *
+ * This fires often and on purpose: our 330 cwbb teams have no logo at all
+ * (SportsDataIO returns TeamLogoUrl null on all 1,073 of its cwbb rows), so
+ * every cwbb matchup takes this path, as does any college game against them.
+ */
+export function cardLockup(event: EventListItem): { home: string; away: string } | null {
+  const home = event.homeLogoUrl?.trim();
+  const away = event.awayLogoUrl?.trim();
+  if (!home || !away) return null;
+  return { home, away };
 }
 
 /** Convenience over an event row, so call sites never index the palette by hand. */
