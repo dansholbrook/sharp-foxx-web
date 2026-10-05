@@ -13,6 +13,11 @@ import {
   InPlayBand,
 } from '../feed-picks';
 import { CorrespondentBand } from '../feed-work';
+// thumbClass lived HERE, in app/search/page.tsx and in app/games/page.tsx as
+// three separate copies that had already begun to diverge. One home now --
+// and it is the same module that decides the team-colour treatment, because
+// both answer the one question "what does this thumbnail look like".
+import { eventTeamTreatment, thumbClass, treatmentStyle } from '../card-treatment';
 import {
   getPublishedContent,
   getEvents,
@@ -47,22 +52,6 @@ function LiveBadge({ className }: { className?: string }) {
       Live
     </span>
   );
-}
-
-// Sport -> thumbnail gradient class. The card itself is the artwork (there are
-// no real images), so each sport gets its own branded, gold-anchored gradient.
-// Unknown/missing sports fall back to the neutral 'other' treatment.
-const SPORTS = new Set([
-  'basketball',
-  'football',
-  'baseball',
-  'hockey',
-  'soccer',
-  'other',
-]);
-function thumbClass(sport: string | null): string {
-  const key = sport && SPORTS.has(sport) ? sport : 'other';
-  return `thumb thumb--${key}`;
 }
 
 // The special "all sports" sentinel for the sport filter chips (mirrors /search).
@@ -168,6 +157,11 @@ function GameCard({
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';
   const hasVideo = Boolean(event.videoUrl);
+  // The two-team colour pair, or null when this card keeps its sport gradient.
+  // NULL IS THE COMMON CASE and is not a failure -- no colours on file, nothing
+  // usable against our ground, or nothing tellable apart. The class and the
+  // style are both driven off it so the two can never disagree.
+  const treatment = eventTeamTreatment(event);
 
   return (
     <article className="tcard">
@@ -180,10 +174,18 @@ function GameCard({
           ? `View ${home} vs ${away} scores`
           : `View ${home} vs ${away}`}
       >
-        <div className={tracked
-          ? `${thumbClass(event.sport)} gamescope-feedthumb`
-          : thumbClass(event.sport)}
+        <div
+          className={[
+            thumbClass(event.sport),
+            tracked ? 'gamescope-feedthumb' : '',
+            treatment ? 'thumb--teams' : '',
+          ].filter(Boolean).join(' ')}
+          style={treatmentStyle(treatment)}
         >
+          {/* Local protection for the matchup only, and only when the field is
+              team colour -- a sport gradient is already dark enough to carry
+              white text, so adding the band there would dim a card for nothing. */}
+          {treatment && <span className="thumb-band" aria-hidden="true" />}
           <span className="thumb-tag">{event.sport ?? 'event'}</span>
           {isLive ? (
             <LiveBadge className="thumb-live" />

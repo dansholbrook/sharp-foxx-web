@@ -36,6 +36,7 @@ import { useAuth } from '../auth-context';
 import { GamePickStrip, GamePicks, useGamePicks } from '../game-pick-strip';
 import { AccessDenied } from '../nav';
 import { canAccess } from '../roles';
+import { eventTeamTreatment, thumbClass, treatmentStyle } from '../card-treatment';
 import {
   getGames,
   isFeedEvent,
@@ -73,21 +74,6 @@ function LiveBadge({ className }: { className?: string }) {
       Live
     </span>
   );
-}
-
-// Sport -> thumbnail gradient class (same treatment as the feed cards). The card
-// itself is the artwork; unknown/missing sports fall back to 'other'.
-const SPORT_SET = new Set([
-  'basketball',
-  'football',
-  'baseball',
-  'hockey',
-  'soccer',
-  'other',
-]);
-function thumbClass(sport: string | null): string {
-  const key = sport && SPORT_SET.has(sport) ? sport : 'other';
-  return `thumb thumb--${key}`;
 }
 
 // The sport pg enum, verbatim (same list /discover filters on).
@@ -162,6 +148,7 @@ function FeedGameCard({ event, picks }: { event: EventListItem; picks: GamePicks
   const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   const hasScore = event.homeScore !== null && event.awayScore !== null;
   const isLive = event.status === 'live';
+  const treatment = eventTeamTreatment(event);
 
   return (
     <article className="tcard playcard">
@@ -170,7 +157,15 @@ function FeedGameCard({ event, picks }: { event: EventListItem; picks: GamePicks
         href={`/games/${event.id}`}
         aria-label={`View ${home} vs ${away} scores`}
       >
-        <div className={`${thumbClass(event.sport)} gamescope-feedthumb`}>
+        <div
+          className={[
+            thumbClass(event.sport),
+            'gamescope-feedthumb',
+            treatment ? 'thumb--teams' : '',
+          ].filter(Boolean).join(' ')}
+          style={treatmentStyle(treatment)}
+        >
+          {treatment && <span className="thumb-band" aria-hidden="true" />}
           <span className="thumb-tag">{event.sport ?? 'event'}</span>
           {/* Subtle LIVE text pill only -- never the Watch affordance. */}
           {isLive && <LiveBadge className="thumb-live" />}
@@ -217,6 +212,7 @@ function GameCard({ event, picks }: { event: EventListItem; picks: GamePicks }) 
   const isFinal = event.status === 'final';
   const isLive = event.status === 'live';
   const hasVideo = Boolean(event.videoUrl);
+  const treatment = eventTeamTreatment(event);
 
   return (
     <article className="tcard">
@@ -225,7 +221,11 @@ function GameCard({ event, picks }: { event: EventListItem; picks: GamePicks }) 
         href={`/games/${event.id}`}
         aria-label={`View ${home} vs ${away}`}
       >
-        <div className={thumbClass(event.sport)}>
+        <div
+          className={`${thumbClass(event.sport)}${treatment ? ' thumb--teams' : ''}`}
+          style={treatmentStyle(treatment)}
+        >
+          {treatment && <span className="thumb-band" aria-hidden="true" />}
           <span className="thumb-tag">{event.sport ?? 'event'}</span>
           {isLive ? (
             <LiveBadge className="thumb-live" />

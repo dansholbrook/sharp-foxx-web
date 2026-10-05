@@ -324,6 +324,22 @@ export interface EventListItem {
   // rides along anyway.
   homeGender: string | null;
   awayGender: string | null;
+  // Brand colours, six hex digits with no leading '#', straight off teams.
+  // THE WHOLE PALETTE PER SIDE, not a resolved pair: which colour a card uses
+  // depends on the opponent (Baltimore's orange is right against Detroit's navy
+  // and wrong against Cincinnati's red), so the choice is made at render time
+  // by teamTreatment in app/card-treatment.ts. Do not paint with these
+  // directly -- that is how you ship black-on-near-black or two identical
+  // navies. NULL throughout is a supported state meaning "use the sport
+  // gradient"; all 15 WNBA teams are NULL because the provider has no colour
+  // fields for that league. May be absent (undefined) on an older deployment
+  // whose projection predates these fields, which reads as no treatment.
+  homePrimaryColor?: string | null;
+  homeSecondaryColor?: string | null;
+  homeTertiaryColor?: string | null;
+  awayPrimaryColor?: string | null;
+  awaySecondaryColor?: string | null;
+  awayTertiaryColor?: string | null;
   marketId: string | null;
   venue: string | null;
   status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';

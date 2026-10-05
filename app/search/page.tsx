@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../auth-context';
 import { getEvents, etDateTime, teamLabel, EventListItem } from '../api';
+import { eventTeamTreatment, thumbClass, treatmentStyle } from '../card-treatment';
 
 // Date-only ET formatting for compact thumbnail metadata (mirrors the feed page).
 function formatDate(iso: string): string {
@@ -20,21 +21,6 @@ function LiveBadge({ className }: { className?: string }) {
       Live
     </span>
   );
-}
-
-// Sport -> thumbnail gradient class (same treatment as the feed cards). The card
-// itself is the artwork; unknown/missing sports fall back to 'other'.
-const SPORTS = new Set([
-  'basketball',
-  'football',
-  'baseball',
-  'hockey',
-  'soccer',
-  'other',
-]);
-function thumbClass(sport: string | null): string {
-  const key = sport && SPORTS.has(sport) ? sport : 'other';
-  return `thumb thumb--${key}`;
 }
 
 // ---- Game thumbnail card: identical markup to the feed's GameCard so the
@@ -53,6 +39,8 @@ function GameCard({ event }: { event: EventListItem }) {
   const isLive = event.status === 'live';
   const hasVideo = Boolean(event.videoUrl);
 
+  const treatment = eventTeamTreatment(event);
+
   return (
     <article className="tcard">
       <Link
@@ -60,7 +48,11 @@ function GameCard({ event }: { event: EventListItem }) {
         href={`/games/${event.id}`}
         aria-label={`View ${home} vs ${away}`}
       >
-        <div className={thumbClass(event.sport)}>
+        <div
+          className={`${thumbClass(event.sport)}${treatment ? ' thumb--teams' : ''}`}
+          style={treatmentStyle(treatment)}
+        >
+          {treatment && <span className="thumb-band" aria-hidden="true" />}
           <span className="thumb-tag">{event.sport ?? 'event'}</span>
           {isLive ? (
             <LiveBadge className="thumb-live" />
