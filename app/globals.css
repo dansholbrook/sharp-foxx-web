@@ -10750,11 +10750,47 @@ a.follow-sugcard__name:hover {
 /* Feed game card on /games under "All games". The card shell is the shared
    .tcard; the scrim below knocks the sport gradient back so a feed row never
    competes visually with a covered broadcast. */
+/* ----------------------------------------------------------------------------
+   THIS SCRIM SHARES ::before WITH THE SPORT WATERMARK, and that collision is
+   why `opacity: 1` below is load-bearing rather than redundant.
+
+   `.thumb--football::before` (and the same rule for basketball, baseball,
+   hockey and soccer) draws the sport glyph on this very pseudo-element, at
+   `opacity: var(--card-watermark)` = 0.2. Both selectors are one class plus a
+   pseudo-element, so they have EQUAL SPECIFICITY and the cascade resolves
+   per property: this rule wins `content`, `inset` and `background` because it
+   is declared later -- but it never declared `opacity`, so the watermark's 0.2
+   applied to the scrim and MULTIPLIED its alpha.
+
+   Measured in Chrome against this stylesheet, before the fix:
+     .thumb--football.gamescope-feedthumb::before
+       content          ""                      <- glyph suppressed
+       background-color rgba(19, 17, 13, 0.5)
+       opacity          0.2                     <- inherited from the watermark
+     => effective veil 0.5 * 0.2 = 0.10, a FIFTH of what this rule asks for.
+
+   `.thumb--other` has no watermark rule, so it alone rendered the intended
+   0.5. The visible symptom was the one that matters: a tracked card barely
+   read as quieter than a covered broadcast on all five textured sports, which
+   is the entire job of this scrim.
+
+   The glyph stays suppressed, and that part is a CHOICE, not the bug. An
+   element has one ::before, so a scrim and a glyph cannot both live here; a
+   tracked card is meant to be the quieter treatment, and dropping the
+   decorative ball while the greyscale-legible texture band (which lives on the
+   element's own background-image, not here) survives is a coherent way to be
+   quieter. Restoring the glyph would mean moving one of the two layers to a
+   real DOM element in GameCard -- worth doing if the glyph is ever wanted
+   back, and deliberately not done here to keep this fix to one property.
+   ---------------------------------------------------------------------------- */
 .gamescope-feedthumb::before {
   content: '';
   position: absolute;
   inset: 0;
   background: rgba(19, 17, 13, 0.5);
+  /* Not redundant -- see above. Without it the watermark rule's 0.2 lands here
+     and the scrim renders at 10% alpha instead of 50%. */
+  opacity: 1;
   z-index: 0;
   pointer-events: none;
 }
