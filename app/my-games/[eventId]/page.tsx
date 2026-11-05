@@ -8,7 +8,7 @@ import { AccessDenied } from '../../nav';
 import { StatLinesPanel } from './stat-lines';
 import { canAccess } from '../../roles';
 import { useOwnRep, TrainingGate } from '../../training-gate';
-import { getMyAssignments, updateAssignment, generateArticle, getEventContent, getContentItem, updateContent, submitContent, publishContent, unpublishContent, getEvents, updateEventResult, getMyAdOrders, getAdvertisers, getEventSponsorship, createSponsorship, deleteSponsorship, getLiveEvents, createLiveEvent, deleteLiveEvent, presignGamePhoto, uploadToPresignedUrl, confirmMedia, getGamePhotos, deleteMedia, getEventPredictions, createPrediction, lockPrediction, resolvePrediction, voidPrediction, getCallEvents, callWeekLabel, callListPhase, callStaffRoute, points, etDateTime, etDateKey, eventStatusLabel, etTime, CallListItem, Prediction, PredictionKind, MyAssignment, ContentItem, EventContentItem, UpdateEventResultInput, EventResult, AdOrder, Sponsorship, LiveEvent, LiveEventType, GamePhoto, teamLabel } from '../../api';
+import { getMyAssignments, updateAssignment, generateArticle, getEventContent, getContentItem, updateContent, submitContent, publishContent, unpublishContent, getEventsByIds, updateEventResult, getMyAdOrders, getAdvertisers, getEventSponsorship, createSponsorship, deleteSponsorship, getLiveEvents, createLiveEvent, deleteLiveEvent, presignGamePhoto, uploadToPresignedUrl, confirmMedia, getGamePhotos, deleteMedia, getEventPredictions, createPrediction, lockPrediction, resolvePrediction, voidPrediction, getCallEvents, callWeekLabel, callListPhase, callStaffRoute, points, etDateTime, etDateKey, eventStatusLabel, etTime, CallListItem, Prediction, PredictionKind, MyAssignment, ContentItem, EventContentItem, UpdateEventResultInput, EventResult, AdOrder, Sponsorship, LiveEvent, LiveEventType, GamePhoto, teamLabel } from '../../api';
 
 const usd = (v: string) =>
   Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -2998,9 +2998,11 @@ export default function GameWorkspacePage() {
     setNotFound(false);
     (async () => {
       try {
+        // This game BY ID, not a search of the browse list -- which hides demo
+        // fixtures a rep may still be assigned to.
         const [assignments, events] = await Promise.all([
           getMyAssignments(token),
-          getEvents(token).catch(() => []),
+          getEventsByIds(token, [eventId]).catch(() => []),
         ]);
         if (cancelled) return;
         const mine = assignments.find((a) => a.event.id === eventId);

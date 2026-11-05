@@ -10,7 +10,7 @@ import { QueueTable, Column } from '../queue-table';
 import { useOwnRep, TrainingGate } from '../training-gate';
 import {
   getMyAssignments,
-  getEvents,
+  getEventsByIds,
   getContentByAuthor,
   getEventSponsorship,
   etDateTime,
@@ -365,10 +365,12 @@ export default function MyGamesPage() {
     try {
       // Assignments are the page; the events lookup only powers the status
       // column, so a failure there must not break the page -> swallow it.
-      const [data, events] = await Promise.all([
-        getMyAssignments(t),
-        getEvents(t).catch(() => [] as EventListItem[]),
-      ]);
+      // A LOOKUP by the assigned ids, not a search of the browse list: the
+      // browse list hides demo fixtures, and a rep assigned to one still needs
+      // its status. Sequential because the ids come from the assignments.
+      const data = await getMyAssignments(t);
+      const events = await getEventsByIds(t, data.map((a) => a.event.id))
+        .catch(() => [] as EventListItem[]);
       setGames(data);
       setStatusByEvent(Object.fromEntries(events.map((e) => [e.id, e.status])));
     } catch (err) {

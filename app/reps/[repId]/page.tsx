@@ -10,7 +10,7 @@ import {
   getManagerReps,
   getRepAssignments,
   getContentByAuthor,
-  getEvents,
+  getEventsByIds,
   getRepAdOrders,
   getAdvertisers,
   etDateTime,
@@ -141,11 +141,15 @@ export default function RepDrilldownPage() {
         // product call rather than a rendering one. The predicate is already
         // shared and exported (hasKickedOff in api.ts) if the answer is yes.
         // ------------------------------------------------------------------
-        const [reps, assignments, events] = await Promise.all([
+        // The result seeds are a LOOKUP by this rep's assigned ids, not a search
+        // of the browse list: the browse list hides demo fixtures, and a rep's
+        // assignment to one still needs its score.
+        const [reps, assignments] = await Promise.all([
           getFieldReps(token),
           getRepAssignments(token, repId),
-          getEvents(token).catch(() => [] as EventListItem[]),
         ]);
+        const events = await getEventsByIds(token, assignments.map((a) => a.event.id))
+          .catch(() => [] as EventListItem[]);
         if (cancelled) return;
         setGames(assignments);
         setResultsByEvent(

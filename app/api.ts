@@ -1431,7 +1431,7 @@ export const getMyAssignments = (token: string) =>
 // event-joined shape as /assignments/mine. Admin may query any rep; a
 // regional_manager only reps on their own roster -- a rep off their roster comes
 // back 403 -> "403 <message>". Like /mine, the event carries NO scores/video;
-// load those from GET /events (getEvents) and join by event id, as My Games does.
+// look those up BY ID (getEventsByIds) and join by event id, as My Games does.
 export const getRepAssignments = (token: string, repId: string) =>
   authGet<MyAssignment[]>(`/assignments?repId=${encodeURIComponent(repId)}`, token);
 
@@ -1660,6 +1660,38 @@ export const getEvents = async (
     token,
   );
   return page.items;
+};
+
+// ============================================================================
+// LOOK UP EVENTS BY ID -- the LOOKUP half of GET /events, never a browse.
+//
+// getEvents() above is a BROWSE: the server hides demo fixtures from it
+// (events.is_demo). A page that already knows which games it needs -- a
+// survivor contest's rounds, a rep's assignments -- must not search a browse
+// result for them, or a demo contest renders every game as "unavailable" with no
+// error anywhere. GET /events?ids= returns exactly the ids asked for, demo or
+// not, the same rule as GET /events/:id.
+//
+// Chunked at 100 ids per request (the server caps at 200): 100 uuids keeps the
+// URL near 3.7 KB, well under the request-line limits proxies enforce.
+// ============================================================================
+const EVENT_IDS_PER_REQUEST = 100;
+
+export const getEventsByIds = async (
+  token: string,
+  ids: string[],
+): Promise<EventListItem[]> => {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const out: EventListItem[] = [];
+  for (let i = 0; i < unique.length; i += EVENT_IDS_PER_REQUEST) {
+    const chunk = unique.slice(i, i + EVENT_IDS_PER_REQUEST);
+    const page = await authGet<Page<EventListItem>>(
+      `/events?ids=${chunk.map(encodeURIComponent).join(',')}`,
+      token,
+    );
+    out.push(...page.items);
+  }
+  return out;
 };
 
 // GET /events filters, as /games drives them. status is comma-separable
@@ -3819,7 +3851,7 @@ export interface ContestConfig {
   // ONE team from; a team may be used only once across the whole contest. The
   // survivor picks read (getSurvivorPicks) carries only the CURRENT pick per
   // round, not this slate, so the board resolves these eventIds to team names via
-  // the events API (getEvents) to render each round's available games.
+  // getEventsByIds (a lookup, so demo fixtures resolve) to render each round's games.
   rounds?: Array<{ round: number; eventIds: string[] }>;
   // Parlay board config (config bag on a type='parlay_board' contest — see
   // parlay.type.ts). Entering is FREE; the TICKET is the buy, staked somewhere in
@@ -4457,7 +4489,7 @@ export function squaresPeriodLabel(period: SquaresPeriod): string {
 // the EVENT's status; scores post as it plays. isCorrect is null until graded,
 // then true (survived) / false (eliminated). NOTE the read carries only this
 // current pick per round, NOT the round's full slate — the board resolves the
-// slate from config.rounds[].eventIds via getEvents.
+// slate from config.rounds[].eventIds via getEventsByIds.
 export interface SurvivorPick {
   eventId: string;
   teamId: string;

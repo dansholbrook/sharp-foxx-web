@@ -12,9 +12,11 @@
 // A WRINKLE the pick'em sheet doesn't have: the survivor picks read carries only
 // the CURRENT pick per round, not each round's available games. So to render the
 // slate of an unlocked round we resolve config.rounds[].eventIds to team names via
-// the events API (getEvents) — there's no per-id/batch event read, so this is the
-// same full-list-then-index pattern the game page uses, fetched LAZILY the first
-// time a round is opened to pick, so a fan who never opens one never pays for it.
+// getEventsByIds -- a LOOKUP by id, never the browse list. It used to fetch the
+// whole list (getEvents) and index it; once the browse list started hiding demo
+// fixtures, a demo survivor contest would have rendered every game "unavailable".
+// Still fetched LAZILY the first time a round is opened to pick, so a fan who
+// never opens one never pays for it.
 //
 // POINTS ONLY: entry costs points like any contest (the chassis EnterHero handles
 // that when not entered); nothing here is money. Mobile-first — the round timeline
@@ -29,7 +31,7 @@ import {
   entryRefusal,
   getSurvivorPicks,
   submitSurvivorPick,
-  getEvents,
+  getEventsByIds,
   getMyPicks,
   withdrawContest,
   contestCost,
@@ -392,9 +394,9 @@ export function SurvivorBoard({
   const [loading, setLoading] = useState(entered);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // The round slate resolves against the full events list — no per-id/batch read
-  // exists, so we fetch it once (getEvents) and index by id, LAZILY the first time
-  // a round is opened to pick.
+  // The round slate resolves BY ID (getEventsByIds) -- exactly this contest's
+  // games, demo or not -- and is indexed by id, LAZILY the first time a round is
+  // opened to pick.
   const [eventsById, setEventsById] = useState<Map<string, EventListItem> | null>(null);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
@@ -474,14 +476,15 @@ export function SurvivorBoard({
     setLoadingEvents(true);
     setEventsError(null);
     try {
-      const list = await getEvents(token);
+      const ids = [...slateByRound.values()].flat();
+      const list = await getEventsByIds(token, ids);
       setEventsById(new Map(list.map((e) => [e.id, e])));
     } catch (err) {
       setEventsError(err instanceof Error ? err.message : 'Failed to load games');
     } finally {
       setLoadingEvents(false);
     }
-  }, [token, eventsById, loadingEvents]);
+  }, [token, eventsById, loadingEvents, slateByRound]);
 
   const onToggleRound = useCallback(
     (round: number) => {
