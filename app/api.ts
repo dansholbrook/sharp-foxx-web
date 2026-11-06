@@ -1649,6 +1649,47 @@ export const fileStatLines = (token: string, eventId: string, lines: StatLineInp
 export const getEventContext = (token: string, id: string) =>
   authGet<EventContext>(`/events/${encodeURIComponent(id)}/context`, token);
 
+// ============================================================================
+// GET /events/:id/line-movement -- how the market moved, as facts.
+//
+// Probabilities are DE-VIGGED medians across independent books, by the same
+// method the Oracle's confidence uses (`method` names it). homeSpread is the
+// PROVIDER's signed form: negative = the HOME team gives points. `open` is the
+// market at the first instant 3+ independent operators were posted -- NOT the
+// earliest row -- and is null when a game never got there. `series` holds ONLY
+// instants with 3+ operators and a probability (open = first, current = last);
+// thinner instants are not market numbers and are omitted. `asOf` is when the
+// history was last captured: `current` is the market as of then, not "now".
+// ============================================================================
+export interface MovementPoint {
+  at: string;
+  homeWinProb: number | null;
+  awayWinProb: number | null;
+  homeSpread: number | null;
+  total: number | null;
+  homeMoneyline: number | null;
+  awayMoneyline: number | null;
+  bookCount: number;
+}
+
+export interface LineMovement {
+  eventId: string;
+  method: string;
+  asOf: string | null;
+  movementFloor: number;
+  openMinOperators: number;
+  series: MovementPoint[];
+  open: MovementPoint | null;
+  current: MovementPoint | null;
+  delta: { homeWinProb: number; homeSpread: number | null; total: number | null } | null;
+  moved: boolean;
+  largestMove: { from: string; to: string; homeWinProbDelta: number; shareOfTotal: number } | null;
+  note: string | null;
+}
+
+export const getEventLineMovement = (token: string, id: string) =>
+  authGet<LineMovement>(`/events/${encodeURIComponent(id)}/line-movement`, token);
+
 
 // surface that wants a page and a count uses getGames() below.
 export const getEvents = async (

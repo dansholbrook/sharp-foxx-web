@@ -10,6 +10,8 @@ import {
   getEvent,
   teamLabel,
   getEventContext,
+  getEventLineMovement,
+  LineMovement,
   getEvents,
   getEventContent,
   getPublishedContent,
@@ -31,6 +33,7 @@ import {
 } from '../../api';
 import { toYouTubeEmbed } from '../../video';
 import { PredictionsSection } from '../../predictions';
+import { LineMovementModule } from '../../line-movement';
 import { useWatchLiveGameEarn } from '../../earn-hooks';
 
 // The shared pulsing LIVE badge (dot + wordmark). Styling/animation live in the
@@ -952,6 +955,9 @@ export default function GamePage() {
   // Records and next fixtures. Garnish — a failure leaves it null and the strip
   // simply doesn't render.
   const [context, setContext] = useState<EventContext | null>(null);
+  // How the market moved. Garnish like the context strip: a failed read leaves it
+  // null, and the module renders nothing -- as it also does when nothing moved.
+  const [movement, setMovement] = useState<LineMovement | null>(null);
   // The list, kept ONLY for the "More games" rail. It no longer gates the page.
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [articles, setArticles] = useState<EventContentItem[] | null>(null);
@@ -992,7 +998,7 @@ export default function GamePage() {
         // so it is fetched here too — but swallowed to [] like the other
         // garnish. A slow or failed schedule read used to blank the game; now it
         // costs a rail.
-        const [ev, ctx, content, feed, sponsor, list] = await Promise.all([
+        const [ev, ctx, content, feed, sponsor, list, moves] = await Promise.all([
           getEvent(token, id),
           getEventContext(token, id).catch(() => null),
           getEventContent(token, id, 'published').catch(
@@ -1003,10 +1009,12 @@ export default function GamePage() {
           // degrades silently to null rather than blanking the game.
           getEventSponsorship(token, id).catch(() => null),
           getEvents(token).catch(() => [] as EventListItem[]),
+          getEventLineMovement(token, id).catch(() => null),
         ]);
         if (cancelled) return;
         setEvent(ev);
         setContext(ctx);
+        setMovement(moves);
         setArticles(content);
         setLatest(feed);
         setSponsorship(sponsor);
@@ -1209,6 +1217,14 @@ export default function GamePage() {
                   without team FKs. */}
               <PeriodTable event={event} />
               {context && <TeamContextStrip event={event} context={context} />}
+              {/* Self-hides: no history, no defensible open, or under the floor
+                  renders nothing at all. FEED layout only -- a covered game has
+                  no provider prices, so it never has history. */}
+              <LineMovementModule
+                movement={movement}
+                home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+              />
               {/* The reason this page exists for a feed game. Renders on every
                   game (an upcoming one can carry open questions pre-tip) but
                   only polls while live. */}

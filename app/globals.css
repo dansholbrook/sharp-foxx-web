@@ -23618,3 +23618,77 @@ a.scout-reveal__main:hover .scout-reveal__name {
   font-size: 0.86rem;
   color: var(--accent);
 }
+
+/* ---------------------------------------------------------------------------
+   LINE MOVEMENT (app/line-movement.tsx) -- the same panel language as the
+   "Up next" strip it sits under: a muted uppercase title over one bordered panel.
+   The number leads; the probability, the timing and the footnote are quieter.
+   --------------------------------------------------------------------------- */
+.linemove {
+  margin: 22px 0 0;
+}
+
+.linemove__title {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.linemove__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.linemove__lead {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.linemove__line,
+.linemove__prob {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.linemove__sparkwrap {
+  margin: 4px 0;
+}
+
+.linemove__spark {
+  display: block;
+  width: 100%;
+  height: 44px;
+  overflow: visible; /* the end dots sit on the edge of the viewBox */
+  color: var(--accent);
+}
+
+.linemove__sparkopen {
+  color: var(--muted);
+}
+
+.linemove__sparkends {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.linemove__foot {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
