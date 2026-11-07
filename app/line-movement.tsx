@@ -138,17 +138,33 @@ type Tense = ReturnType<typeof tense>;
 // and a median of -143 and -144 is -143.5, which no book ever posted (the same
 // reason game-line.tsx carries no moneyline). The team is the open's favourite,
 // fixed, so every number in the sentence is one team's chance.
-function probabilityStill(m: LineMovement, home: string, away: string, t: Tense): string {
+// `named` false when the sentence's subject is already named just before it --
+// see heldPrefix.
+function probabilityStill(m: LineMovement, home: string, away: string, t: Tense, named = true): string {
   const open = m.open!;
   const homeFav = (open.homeWinProb ?? 0.5) >= 0.5;
   const team = homeFav ? home : away;
   const p = (x: number) => pct(homeFav ? x : 1 - x);
   const r = m.range!.homeWinProb;
   const [lo, hi] = homeFav ? [r.min, r.max] : [1 - r.max, 1 - r.min];
-  const head = `${team} opened at ${p(open.homeWinProb!)} to win on ${day(open.at)}`;
+  const head = `${named ? `${team} opened` : 'opened'} at ${p(open.homeWinProb!)} to win on ${day(open.at)}`;
   return pct(lo) === pct(hi)
     ? `${head}, ${t.since}.`
     : `${head}, ${t.ranged} ${pct(lo)}–${pct(hi)}.`;
+}
+
+// "Washington Capitals −1.5 throughout" before a sentence about one team's win
+// probability. When the team giving the points IS that team, the two join and it
+// is named once ("Washington Capitals −1.5 throughout, opened at 53% to win");
+// when they differ (a puck-line favourite that is not the moneyline favourite)
+// both are named, because the second name is new information.
+function heldPrefix(open: MovementPoint, sr: { min: number; max: number } | null, team: string, home: string, away: string):
+  { text: string; named: boolean } {
+  if (!sr || open.homeSpread === null || sr.min !== sr.max) return { text: '', named: true };
+  const spreadTeam = open.homeSpread < 0 ? home : open.homeSpread > 0 ? away : null;
+  return spreadTeam === team
+    ? { text: `${spreadPhrase(open, home, away)} throughout, `, named: false }
+    : { text: `${spreadPhrase(open, home, away)} throughout. `, named: true };
 }
 
 // The sentences both short forms are made of: the familiar number's open and
@@ -166,8 +182,9 @@ function stillParts(m: LineMovement, home: string, away: string, t: Tense): { le
     // THE NUMBER HELD, so the PRICE is the familiar number -- the same rule as
     // the full module's lead. Hockey's puck line and baseball's run line sit at
     // 1.5 by construction; "-1.5, unchanged" would be true and say nothing.
-    lead = (sr && open.homeSpread !== null ? `${spreadPhrase(open, home, away)} throughout. ` : '')
-      + probabilityStill(m, home, away, t);
+    const team = (open.homeWinProb ?? 0.5) >= 0.5 ? home : away;   // probabilityStill's subject
+    const h = heldPrefix(open, sr, team, home, away);
+    lead = h.text + probabilityStill(m, home, away, t, h.named);
     leadIsProbability = true;
   }
   const tr = range.total;
@@ -226,12 +243,11 @@ export function describeLineMovement(
   // stated as win probability -- see THE FAMILIAR NUMBER LEADS.
   const spreadMoved = delta.homeSpread !== null && delta.homeSpread !== 0;
   const sr = m.range?.homeSpread ?? null;
-  const held = sr !== null && open.homeSpread !== null && sr.min === sr.max
-    ? `${spreadPhrase(open, home, away)} throughout. ` : '';
+  const held = heldPrefix(open, sr, side, home, away);
   const lead = still ? still.lead
     : spreadMoved
       ? `Opened ${spreadPhrase(open, home, away)} on ${day(open.at)}.`
-      : `${held}${side} opened at ${pct(pOpen)} to win.`;
+      : `${held.text}${held.named ? `${side} opened` : 'opened'} at ${pct(pOpen)} to win.`;
   const leadIsProbability = still ? still.leadIsProbability : !spreadMoved;
 
   const total = still
