@@ -1287,24 +1287,29 @@ export default function GamePage() {
                   self-hide: no periods before a game starts, no form strip
                   without team FKs. */}
               <PeriodTable event={event} />
-              {/* The line in every state, and on a final the result against the
-                  close. Same `current` as LineMovementModule below -- one line
-                  per page. See game-line.tsx. */}
+              {/* BLOCK 1: the line in every state (the close once started), its
+                  probability, the footnote, and on a final the result against
+                  it. Same `current` as LineMovementModule below -- one line per
+                  page. See game-line.tsx. */}
               <GameLine
                 event={event}
                 movement={movement}
                 home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
                 away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
               />
-              {context && <TeamContextStrip event={event} context={context} />}
-              {/* Self-hides: no history, no defensible open, or under the floor
-                  renders nothing at all. FEED layout only -- a covered game has
-                  no provider prices, so it never has history. */}
+              {/* BLOCK 2, directly under block 1 in EVERY state: the open and
+                  the path to the number GameLine shows. Nothing may sit between
+                  them -- "Up next" did on started games only, so the page
+                  rearranged itself at kickoff. Three forms: moved -> the full
+                  module; history under the floor -> one line; no history ->
+                  nothing. FEED layout only. */}
               <LineMovementModule
+                closed={event.status === 'live' || event.status === 'final'}
                 movement={movement}
                 home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
                 away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
               />
+              {context && <TeamContextStrip event={event} context={context} />}
               {/* PRE-GAME ONLY: "this season" and "recent form" read as of now, so on
                   a final from last month they would describe games played after
                   it. matchup.tsx; each section self-labels its coverage. */}

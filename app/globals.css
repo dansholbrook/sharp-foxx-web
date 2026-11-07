@@ -23687,10 +23687,12 @@ a.scout-reveal__main:hover .scout-reveal__name {
   font-variant-numeric: tabular-nums;
 }
 
-.linemove__foot {
-  margin: 4px 0 0;
-  font-size: 0.72rem;
-  color: var(--muted);
+/* History held, nothing over the floor: one line of fact, no panel, no chart. */
+.linemove__still {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Game page: season record under each team name (provider standings). ---- */
@@ -23727,7 +23729,6 @@ a.scout-reveal__main:hover .scout-reveal__name {
   gap: 10px;
 }
 
-.gameline__close,
 .gameline__line {
   padding: 14px 16px;
   border: 1px solid var(--border);
@@ -23735,17 +23736,11 @@ a.scout-reveal__main:hover .scout-reveal__name {
   background: var(--panel);
 }
 
-.gameline__lead {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
+/* The result against the number, directly under the number. */
 .gameline__fact {
   margin: 6px 0 0;
-  font-size: 0.82rem;
-  color: var(--muted);
+  font-size: 0.85rem;
+  color: var(--text);
 }
 
 .gameline__title {

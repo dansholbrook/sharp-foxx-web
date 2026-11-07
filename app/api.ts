@@ -1709,7 +1709,18 @@ export interface LineMovement {
   open: MovementPoint | null;
   current: MovementPoint | null;
   delta: { homeWinProb: number; homeSpread: number | null; total: number | null } | null;
-  moved: boolean;
+  moved: boolean;                       // any of movedBy
+  movedBy: { delta: boolean; excursion: boolean; total: boolean };
+  totalFloor: number;                   // share of the opening total
+  totalMove: { at: string; points: number; share: number } | null;
+  excursion: { at: string; homeWinProbDelta: number; homeSpread: number | null; total: number | null } | null;
+  range: {
+    homeSpread: { min: number; max: number } | null;
+    total: { min: number; max: number } | null;
+    homeWinProb: { min: number; max: number };
+  } | null;
+  historyRows: number;                  // pregame rows held; 0 = render nothing
+  maxBookCount: number;
   largestMove: { from: string; to: string; homeWinProbDelta: number; shareOfTotal: number } | null;
   note: string | null;
 }

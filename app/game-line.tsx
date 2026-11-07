@@ -20,10 +20,26 @@
 //   than kickoff. Nothing is graded against it.
 // ****************************************************************************
 //
-// FACTS, NOT VERDICTS. "Closed Ravens −2.5. Final: Jaguars by 14." Then one plain
-// sentence comparing the margin with the number. No "covered", no "the market
-// got it wrong", no colour that rewards one outcome. When the result and the
-// close agree, the sentence says so in exactly the same register.
+// ****************************************************************************
+// TWO BLOCKS, EACH FACT ONCE -- the same layout before, during and after a game.
+//
+//   THIS block (GameLine) owns THE NUMBER: the line (the close, once the game has
+//   started), its implied win probability, the one footnote saying where the
+//   prices came from and when, and on a final the result against it.
+//   The line-movement module below owns WHERE IT STARTED AND HOW IT GOT THERE:
+//   the open, the path, the sparkline. It carries no current or closing value
+//   and no footnote of its own -- both are here.
+// ****************************************************************************
+//
+// FACTS, NOT VERDICTS, EACH SAID ONCE. The number is the headline, so the result
+// lines compare against it without restating it:
+//   "Tampa Bay Buccaneers −2 · Total 43"            <- headline
+//   "Tampa Bay Buccaneers won by 16, 14 more than the spread."
+//   "Final total 16, 27 below the close."
+// Every fact is there -- the closing number, who won and by how much, the margin
+// against the number -- and nothing is repeated. No "covered", no "the market
+// got it wrong", no colour that rewards one outcome: a cover, a loss against
+// the number and a push read in exactly the same register.
 //
 // All wording is decided in the pure describe* functions, so every state is
 // testable without a browser.
@@ -59,9 +75,8 @@ function probabilityPhrase(c: MovementPoint, home: string, away: string): string
 }
 
 export interface CloseCopy {
-  lead: string;         // 'Closed Ravens −2.5. Final: Jaguars by 14.'
-  spread: string | null;
-  total: string | null;
+  spread: string;       // the result against the closing spread, or the result alone
+  total: string | null; // the final total against the closing total
 }
 
 const started = (e: EventDetail) => e.status === 'live' || e.status === 'final';
@@ -130,36 +145,34 @@ export function describeFinalVsClose(
   if (!c) return null;
 
   const margin = e.homeScore - e.awayScore;                 // home's view
-  const final = margin === 0
-    ? `Final: tied ${e.awayScore}–${e.homeScore}.`
-    : `Final: ${margin > 0 ? home : away} by ${Math.abs(margin)}.`;
+  const winner = margin > 0 ? home : away;
+  const score = `${Math.max(e.homeScore, e.awayScore)}–${Math.min(e.homeScore, e.awayScore)}`;
 
-  let lead: string;
-  let spread: string | null = null;
-  if (c.homeSpread !== null) {
-    lead = `Closed ${spreadPhrase(c, home, away)}. ${final}`;
-    if (c.homeSpread !== 0) {
-      const fav = c.homeSpread < 0 ? home : away;
-      const n = Math.abs(c.homeSpread);
-      const favMargin = c.homeSpread < 0 ? margin : -margin;
-      spread = favMargin > n ? `${fav} won by ${favMargin}, more than the ${num(n)} they closed favored by.`
-        : favMargin === n ? `${fav} won by ${favMargin}, exactly the closing number.`
-        : favMargin > 0 ? `${fav} won by ${favMargin}, less than the ${num(n)} they closed favored by.`
-        : favMargin === 0 ? `${fav} closed favored by ${num(n)}; the game ended tied.`
-        : `${fav} closed favored by ${num(n)} and lost by ${-favMargin}.`;
-    }
+  // One sentence. The favourite -- the team carrying the minus in the headline --
+  // is the subject; what they did is the verb; how that compares with the number
+  // is the closing clause. The same three parts whether they won by more, won by
+  // less, tied or lost.
+  let spread: string;
+  if (c.homeSpread === null || c.homeSpread === 0) {
+    spread = margin === 0 ? `The game ended tied ${score}.` : `${winner} won by ${Math.abs(margin)}.`;
   } else {
-    lead = final;
+    const fav = c.homeSpread < 0 ? home : away;
+    const n = Math.abs(c.homeSpread);
+    const favMargin = c.homeSpread < 0 ? margin : -margin;
+    const did = favMargin > 0 ? `won by ${favMargin}` : favMargin === 0 ? `tied ${score}` : `lost by ${-favMargin}`;
+    const vs = favMargin - n;                                // the margin against the number
+    const against = vs === 0 ? 'exactly the spread' : `${num(Math.abs(vs))} ${vs > 0 ? 'more' : 'less'} than the spread`;
+    spread = `${fav} ${did}, ${against}.`;
   }
 
   let total: string | null = null;
   if (c.total !== null) {
     const sum = e.homeScore + e.awayScore;
     const d = sum - c.total;
-    total = `Total closed ${num(c.total)}. Final total ${sum}, `
+    total = `Final total ${sum}, `
       + (d === 0 ? 'exactly the close.' : `${num(Math.abs(d))} ${d > 0 ? 'above' : 'below'} the close.`);
   }
-  return { lead, spread, total };
+  return { spread, total };
 }
 
 export function GameLine({
@@ -167,16 +180,11 @@ export function GameLine({
 }: { event: EventDetail; movement: LineMovement | null; home: string; away: string }) {
   const line = describeGameLine(event, movement, home, away);
   const close = describeFinalVsClose(event, movement, home, away);
-  if (!line && !close) return null;
+  // `close` needs the same qualified point `line` is built from, so it never
+  // appears without the headline it is compared against.
+  if (!line) return null;
   return (
     <section className="gameline">
-      {close && (
-        <div className="gameline__close">
-          <p className="gameline__lead">{close.lead}</p>
-          {close.spread && <p className="gameline__fact">{close.spread}</p>}
-          {close.total && <p className="gameline__fact">{close.total}</p>}
-        </div>
-      )}
       {line && (
         <div className="gameline__line">
           <h2 className="gameline__title">{line.title}</h2>
@@ -185,6 +193,9 @@ export function GameLine({
               <span key={p} className="gameline__part">{i > 0 && <span aria-hidden="true"> · </span>}{p}</span>
             ))}
           </p>
+          {/* On a final, the result against the number just above it. */}
+          {close && <p className="gameline__fact">{close.spread}</p>}
+          {close?.total && <p className="gameline__fact">{close.total}</p>}
           {line.probability && (
             <p className="gameline__prob">
               <span className="gameline__problabel">Implied win probability</span> {line.probability}
