@@ -110,7 +110,8 @@ function eventKey(
 function GameVideo({ event }: { event: EventListItem }) {
   const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
   const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
-  const title = `${home} vs ${away}`;
+  // Away first, as the scoreboard directly below it is (see Scoreboard).
+  const title = `${away} at ${home}`;
   const isLive = event.status === 'live';
   const embed = event.videoUrl ? toYouTubeEmbed(event.videoUrl) : null;
 
@@ -154,7 +155,7 @@ function GameVideo({ event }: { event: EventListItem }) {
         <span className="game-coverage__matchup">{title}</span>
         {hasScore && (
           <span className="game-coverage__score">
-            {event.homeScore} — {event.awayScore}
+            {event.awayScore} — {event.homeScore}
           </span>
         )}
         <span className="game-coverage__detail">
@@ -177,7 +178,7 @@ function GameVideo({ event }: { event: EventListItem }) {
         <span className="game-coverage__matchup">{title}</span>
         {hasScore && (
           <span className="game-coverage__score">
-            {event.homeScore} — {event.awayScore}
+            {event.awayScore} — {event.homeScore}
           </span>
         )}
         {event.venue && (
@@ -310,9 +311,13 @@ function Scoreboard({
   const isLive = event.status === 'live';
   const isOff = event.status === 'postponed' || event.status === 'canceled';
 
+  // AWAY FIRST, HOME SECOND -- the order of every other table on this page (the
+  // period table, the matchup sections) and of "Jaguars @ Ravens": the box-score
+  // and betting convention. The scoreboard was the one home-first element, so a
+  // reader saw Ravens on the left and the Ravens' row second, directly below.
   return (
     <div className="game-scoreboard">
-      <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" record={context?.home?.seasonRecord ?? null} />
+      <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" record={context?.away?.seasonRecord ?? null} />
       <span className="game-scoreboard__center">
         {hasScore ? (
           <span
@@ -321,10 +326,12 @@ function Scoreboard({
               isLive && scoreVersion > 0 ? ' pulse-flash' : ''
             }`}
           >
-            {homeScore} — {awayScore}
+            {awayScore} — {homeScore}
           </span>
         ) : (
-          <span className="game-scoreboard__vs">vs</span>
+          /* "at", not "vs": away-first reads "Bengals at Falcons"; "vs" is
+             the home-first convention. */
+          <span className="game-scoreboard__vs">at</span>
         )}
         {isLive && feed ? (
           <>
@@ -353,7 +360,7 @@ function Scoreboard({
         )}
         {isLive && period && <span className="pulse-period">{period}</span>}
       </span>
-      <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" record={context?.away?.seasonRecord ?? null} />
+      <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" record={context?.home?.seasonRecord ?? null} />
     </div>
   );
 }
@@ -512,7 +519,8 @@ function PeriodTable({ event }: { event: EventDetail }) {
           </thead>
           <tbody>
             {/* AWAY FIRST, which is how every box score in the sport is read —
-                the visiting side bats and is listed on top. */}
+                the visiting side bats and is listed on top. The scoreboard above
+                uses the same order, so the left team is the top row. */}
             <tr>
               <th scope="row">{teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}</th>
               {periods.map((p) => (

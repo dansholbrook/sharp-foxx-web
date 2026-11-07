@@ -55,6 +55,9 @@ export interface MovementCopy {
   lead: string;            // the familiar number at the open (and its range, when shown for the path)
   total: string | null;    // the total, only when it moved
   probability: string | null;  // the annotation; null when the lead already is one
+  // THE SIZE OF THE MOVE, open to current/close: its own fact, not a repeat of
+  // either end -- without it the swing exists only if the reader subtracts.
+  size: string | null;
   when: string | null;     // when the biggest stretch happened
   // The sparkline: the CURRENT favourite's win probability over the series, so
   // the line and the annotation describe the same side -- or, when the total's
@@ -125,8 +128,8 @@ const stampOf = (iso: string) => etDateTime(iso, { month: 'short', day: 'numeric
 // ****************************************************************************
 function tense(closed: boolean) {
   return closed
-    ? { traded: 'traded', ranged: 'ranged', since: 'unchanged through the close', close: 'Close' }
-    : { traded: 'has traded', ranged: 'has ranged', since: 'unchanged since', close: 'Current' };
+    ? { traded: 'traded', ranged: 'ranged', since: 'unchanged through the close', close: 'Close', moved: 'Moved' }
+    : { traded: 'has traded', ranged: 'has ranged', since: 'unchanged since', close: 'Current', moved: 'Has moved' };
 }
 type Tense = ReturnType<typeof tense>;
 
@@ -241,6 +244,33 @@ export function describeLineMovement(
   // Named for the side favoured now, so it reads against that block's figure.
   const probability = leadIsProbability ? null : `${side} win probability ${pct(pOpen)} at open.`;
 
+  // THE SIZE OF THE MOVE, in one plain sentence: "Moved 12 points toward
+  // Jacksonville Jaguars on the spread, 34 percentage points in win probability,
+  // and 8.5 points down on the total." Each part only when it moved. The
+  // probability part is the difference of the two DISPLAYED percentages (block 1's
+  // 78% less this block's 44%), so it is the number a reader would get by
+  // subtracting, not an unrounded 33.9 beside them; and only when the delta test
+  // fired -- below the floor a sub-2-point figure is the noise the floor removes.
+  const parts: string[] = [];
+  let spreadToward: string | null = null;
+  if (delta.homeSpread !== null && delta.homeSpread !== 0) {
+    const pts = Math.abs(delta.homeSpread);
+    spreadToward = delta.homeSpread < 0 ? home : away;   // home spread falling = home giving more
+    parts.push(`${num(pts)} point${pts === 1 ? '' : 's'} toward ${spreadToward} on the spread`);
+  }
+  const shown = Math.round(pNow * 100) - Math.round(pOpen * 100);   // side = current favourite
+  if (m.movedBy.delta && shown !== 0) {
+    const toward = shown > 0 ? side : side === home ? away : home;
+    parts.push(`${Math.abs(shown)} percentage point${Math.abs(shown) === 1 ? '' : 's'} in win probability`
+      + (toward === spreadToward ? '' : ` toward ${toward}`));
+  }
+  if (delta.total !== null && delta.total !== 0) {
+    const pts = Math.abs(delta.total);
+    parts.push(`${num(pts)} point${pts === 1 ? '' : 's'} ${delta.total > 0 ? 'up' : 'down'} on the total`);
+  }
+  const size = parts.length === 0 ? null
+    : `${t.moved} ${parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')}${parts.length > 2 ? ',' : ''} and ${parts[parts.length - 1]}`}.`;
+
   // WHEN, as a fact. "Most of it" only when that stretch really was most of it;
   // otherwise the biggest stretch is named as exactly that and nothing more.
   let when: string | null = null;
@@ -315,7 +345,7 @@ export function describeLineMovement(
     : etDay(iso));
 
   return {
-    kind: 'full', lead, total, probability, when, spark,
+    kind: 'full', lead, total, probability, size, when, spark,
     sparkSide: totalOnly ? 'Total' : side, sparkUnit: totalOnly ? 'total' : 'probability',
     sparkFrom: end(open.at), sparkTo: end(current.at), sparkToLabel: t.close,
   };
@@ -425,6 +455,7 @@ export function LineMovementModule({
             {copy.probability && <p className="linemove__prob">{copy.probability}</p>}
           </>
         )}
+        {copy.size && <p className="linemove__line">{copy.size}</p>}
         <Sparkline values={copy.spark} label={copy.sparkSide} unit={copy.sparkUnit} from={copy.sparkFrom} to={copy.sparkTo} toLabel={copy.sparkToLabel} />
         {copy.when && <p className="linemove__line">{copy.when}</p>}
       </div>

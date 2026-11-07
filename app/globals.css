@@ -2467,11 +2467,13 @@ tfoot td {
   color: var(--text);
 }
 
-.game-scoreboard__team--home {
+/* Away sits in the LEFT column and home in the right (away first, the page's
+   order -- see Scoreboard), so each name aligns toward the score between them. */
+.game-scoreboard__team--away {
   text-align: right;
 }
 
-.game-scoreboard__team--away {
+.game-scoreboard__team--home {
   text-align: left;
 }
 
