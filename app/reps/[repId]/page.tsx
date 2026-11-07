@@ -18,6 +18,7 @@ import {
   EventContentItem,
   EventListItem,
   AdOrder,
+  startLabel,
 } from '../../api';
 
 const usd = (v: string) =>
@@ -294,7 +295,7 @@ export default function RepDrilldownPage() {
                   <tr key={g.id}>
                     <td>{assignmentMatchup(g) ?? g.event.sport}</td>
                     <td>{g.event.venue ?? '—'}</td>
-                    <td>{formatWhen(g.event.scheduledAt)}</td>
+                    <td>{startLabel(g.event.scheduledAt, g.event.startTimeTba, formatWhen)}</td>
                     <td>
                       <span className="pill">{g.status}</span>
                     </td>

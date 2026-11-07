@@ -23723,6 +23723,15 @@ a.scout-reveal__main:hover .scout-reveal__name {
   font-variant-numeric: tabular-nums;
 }
 
+/* Neutral site: the venue line under the scoreboard's centre, at the same quiet
+   size as the "as of" line. It is what makes "vs" (not "at") legible. */
+.game-scoreboard__neutral {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- Game page: the line, and the final against the close (game-line.tsx). ---- */
 .gameline {
   margin: 18px 0 0;

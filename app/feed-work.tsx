@@ -51,6 +51,7 @@ import {
   etDateTime,
   CallListItem,
   MyAssignment,
+  startLabel,
 } from './api';
 // WHICH rows and in WHAT order lives next door, JSX-free, so it can be driven
 // by scripts/proof-work-band.ts instead of only by looking at the page.
@@ -160,7 +161,7 @@ function WorkCard({ row }: { row: WorkRow }) {
         <span className="fwork-card__tag">Result not filed</span>
         <span className="fwork-card__what">{matchupOf(row.assignment)}</span>
         <span className="fwork-card__note">
-          Kicked off {etDateTime(row.assignment.event.scheduledAt)} and still open.
+          Kicked off {startLabel(row.assignment.event.scheduledAt, row.assignment.event.startTimeTba, etDateTime)} and still open.
         </span>
       </Link>
     );
@@ -184,7 +185,7 @@ function WorkCard({ row }: { row: WorkRow }) {
       <span className="fwork-card__tag">Covering</span>
       <span className="fwork-card__what">{matchupOf(row.assignment)}</span>
       <span className="fwork-card__note">
-        {etDateTime(row.assignment.event.scheduledAt)}
+        {startLabel(row.assignment.event.scheduledAt, row.assignment.event.startTimeTba, etDateTime)}
         {row.assignment.event.venue ? ` · ${row.assignment.event.venue}` : ''}
       </span>
     </Link>

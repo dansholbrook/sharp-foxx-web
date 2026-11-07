@@ -8,7 +8,7 @@ import { AccessDenied } from '../../nav';
 import { StatLinesPanel } from './stat-lines';
 import { canAccess } from '../../roles';
 import { useOwnRep, TrainingGate } from '../../training-gate';
-import { getMyAssignments, updateAssignment, generateArticle, getEventContent, getContentItem, updateContent, submitContent, publishContent, unpublishContent, getEventsByIds, updateEventResult, getMyAdOrders, getAdvertisers, getEventSponsorship, createSponsorship, deleteSponsorship, getLiveEvents, createLiveEvent, deleteLiveEvent, presignGamePhoto, uploadToPresignedUrl, confirmMedia, getGamePhotos, deleteMedia, getEventPredictions, createPrediction, lockPrediction, resolvePrediction, voidPrediction, getCallEvents, callWeekLabel, callListPhase, callStaffRoute, points, etDateTime, etDateKey, eventStatusLabel, etTime, CallListItem, Prediction, PredictionKind, MyAssignment, ContentItem, EventContentItem, UpdateEventResultInput, EventResult, AdOrder, Sponsorship, LiveEvent, LiveEventType, GamePhoto, teamLabel } from '../../api';
+import { getMyAssignments, updateAssignment, generateArticle, getEventContent, getContentItem, updateContent, submitContent, publishContent, unpublishContent, getEventsByIds, updateEventResult, getMyAdOrders, getAdvertisers, getEventSponsorship, createSponsorship, deleteSponsorship, getLiveEvents, createLiveEvent, deleteLiveEvent, presignGamePhoto, uploadToPresignedUrl, confirmMedia, getGamePhotos, deleteMedia, getEventPredictions, createPrediction, lockPrediction, resolvePrediction, voidPrediction, getCallEvents, callWeekLabel, callListPhase, callStaffRoute, points, etDateTime, etDateKey, eventStatusLabel, etTime, CallListItem, Prediction, PredictionKind, MyAssignment, ContentItem, EventContentItem, UpdateEventResultInput, EventResult, AdOrder, Sponsorship, LiveEvent, LiveEventType, GamePhoto, teamLabel, startLabel } from '../../api';
 
 const usd = (v: string) =>
   Number(v).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -2607,7 +2607,7 @@ function GameWorkspace({
             <span className="game-meta__seg">{assignment.event.venue}</span>
           )}
           <span className="game-meta__seg">
-            {formatWhen(assignment.event.scheduledAt)}
+            {startLabel(assignment.event.scheduledAt, assignment.event.startTimeTba, formatWhen)}
           </span>
         </div>
         {sponsorship && (

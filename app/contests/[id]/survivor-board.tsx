@@ -41,6 +41,7 @@ import {
   SurvivorRound,
   SurvivorPick,
   EventListItem,
+  startLabel,
 } from '../../api';
 
 // Poll cadence while the contest is LIVE — a round's game moves courtside (score,
@@ -150,7 +151,7 @@ function MatchupRow({
   return (
     <li className={`survivor-matchup${started ? ' survivor-matchup--locked' : ''}`}>
       <div className="survivor-matchup__head">
-        <span className="survivor-matchup__when">{formatWhen(ev.scheduledAt)}</span>
+        <span className="survivor-matchup__when">{startLabel(ev.scheduledAt, ev.startTimeTba, formatWhen)}</span>
         {started && <span className="survivor-matchup__status">Started</span>}
       </div>
       <div className="survivor-matchup__sides">
@@ -191,7 +192,7 @@ function PickReadout({ pick }: { pick: SurvivorPick }) {
       ? 'Final'
       : pick.gameStatus === 'live'
       ? 'Live'
-      : formatWhen(pick.scheduledAt);
+      : startLabel(pick.scheduledAt, pick.startTimeTba, formatWhen);
   return (
     <div
       className={`survivor-pick${

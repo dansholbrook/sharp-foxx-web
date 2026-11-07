@@ -13,7 +13,9 @@ import {
   createAssignment,
   etDateTime,
   EventListItem,
-  CreateAssignmentInput, teamLabel } from './api';
+  CreateAssignmentInput, teamLabel,
+  startLabel,
+} from './api';
 
 // "Home vs Away — venue — date" for one game, falling back to the sport when
 // either team name is missing (no raw UUIDs), and dropping an absent venue.
@@ -24,7 +26,7 @@ function eventLabel(e: EventListItem): string {
     e.homeTeam && e.awayTeam
       ? `${teamLabel(e.homeInstitution, e.homeTeam)} vs ${teamLabel(e.awayInstitution, e.awayTeam)}`
       : e.sport;
-  const when = etDateTime(e.scheduledAt, { zone: true });
+  const when = startLabel(e.scheduledAt, e.startTimeTba, (i) => etDateTime(i, { zone: true }));
   return [matchup, e.venue, when].filter(Boolean).join(' — ');
 }
 

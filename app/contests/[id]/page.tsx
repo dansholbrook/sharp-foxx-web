@@ -50,6 +50,7 @@ import {
   PayoutRow,
   ContestLeaderboard,
   ContestLeaderboardRow,
+  startLabel,
 } from '../../api';
 
 // Poll cadence while a contest is LIVE — the scorecard's scores and the board's
@@ -292,7 +293,7 @@ function PickRow({
   return (
     <li className={`picksheet-row${locked ? ' picksheet-row--locked' : ''}`}>
       <div className="picksheet-row__head">
-        <span className="picksheet-row__when">{formatWhen(game.scheduledAt)}</span>
+        <span className="picksheet-row__when">{startLabel(game.scheduledAt, game.startTimeTba, formatWhen)}</span>
         {gameStarted(game) ? (
           <span className="picksheet-row__status">Started</span>
         ) : covered ? null : saving ? (
@@ -712,7 +713,7 @@ function ScoreRow({
         </div>
         <div className="scorecard-row__foot">
           <span className="scorecard-row__when">
-            {game.status === 'final' ? 'Final' : formatWhen(game.scheduledAt)}
+            {game.status === 'final' ? 'Final' : startLabel(game.scheduledAt, game.startTimeTba, formatWhen)}
             {game.line != null && ` · O/U ${formatLine(game.line)}`}
           </span>
           {game.pick ? (
@@ -756,7 +757,7 @@ function ScoreRow({
       </div>
       <div className="scorecard-row__foot">
         <span className="scorecard-row__when">
-          {game.status === 'final' ? 'Final' : formatWhen(game.scheduledAt)}
+          {game.status === 'final' ? 'Final' : startLabel(game.scheduledAt, game.startTimeTba, formatWhen)}
         </span>
         {game.pick ? (
           <span className="scorecard-row__mine">

@@ -239,6 +239,7 @@ export interface MyAssignment {
     venue: string | null;
     status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
     scheduledAt: string;
+    startTimeTba?: boolean | null;   // a date with no start time (startLabel)
     homeTeamId: string | null;
     awayTeamId: string | null;
     homeTeam: string | null;
@@ -351,6 +352,11 @@ export interface EventListItem {
   awayLogoUrl?: string | null;
   marketId: string | null;
   venue: string | null;
+  // drizzle/events_neutral_site_time_tba.sql. NULL = the provider did not say.
+  //   neutralSite   neither team is at home: the page says "vs", never "at"
+  //   startTimeTba  a date with no start time yet: show the date alone (startLabel)
+  neutralSite?: boolean | null;
+  startTimeTba?: boolean | null;
   status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
   scheduledAt: string;
   homeScore: number | null;
@@ -426,6 +432,7 @@ export function isCoveredEvent(source: string | null | undefined): boolean {
 export interface EventTiming {
   status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
 }
 
 // Has this game's kickoff passed? THE ONE TIME COMPARISON on the client.
@@ -656,6 +663,7 @@ export interface CreateTeamInput {
 export interface CreateEventInput {
   sport: string;
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   venue?: string;
   homeTeamId?: string;
   awayTeamId?: string;
@@ -670,6 +678,7 @@ export interface CreatedEvent {
   id: string;
   sport: EventListItem['sport'];
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   venue: string | null;
   homeTeamId: string | null;
   awayTeamId: string | null;
@@ -1554,6 +1563,8 @@ export interface TeamContext {
     // the same way the scoreboard does. No gender here: nothing renders it.
     homeInstitution: string | null;
     awayInstitution: string | null;
+    neutralSite?: boolean | null;
+    startTimeTba?: boolean | null;
   } | null;
 }
 
@@ -1778,6 +1789,7 @@ export interface TeamGame {
   closeTotal: number | null;
   vsSpread: 'covered' | 'not covered' | 'push' | null;
   vsTotal: 'over' | 'under' | 'push' | null;
+  neutralSite?: boolean | null;   // neutral site: "vs X (neutral site)", never "at"/"vs" alone
 }
 export interface TeamForm { games: TeamGame[]; finalsHeld: number; gamesPlayed: number | null }
 
@@ -2025,8 +2037,11 @@ export interface TeamDetail {
   name: string;
   sport: string;
   level: string;
+  gender?: string | null;            // 'mens' | 'womens' | 'coed'; NULL for most pro rows
   socialLinks: SocialLinks;
-  institution: { id: string; name: string } | null;
+  // shortName/mascot: the heading reads "UCLA Bruins" when both are held
+  // (drizzle/institutions_short_name.sql); `name` is the legal name.
+  institution: { id: string; name: string; shortName?: string | null; mascot?: string | null } | null;
   // Null for pro teams (no institution) and for imported college teams whose
   // EADA row carried no conference. The conference hangs off the TEAM, not the
   // school: a school sits in different conferences per sport.
@@ -2343,6 +2358,7 @@ export interface CoverageGame {
   sport: string;
   venue: string | null;
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   homeTeam: string | null;
   awayTeam: string | null;
 }
@@ -2941,6 +2957,7 @@ export interface AthleteProfile {
     homeScore: number | null;
     awayScore: number | null;
     scheduledAt: string;
+    startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   }>;
 }
 
@@ -3092,6 +3109,7 @@ export type FollowFeedEntry =
       awayScore: number | null;
       status: 'scheduled' | 'live' | 'final' | 'postponed' | 'canceled';
       scheduledAt: string;
+      startTimeTba?: boolean | null;   // a date with no start time (startLabel)
       source: { type: FollowTargetType; name: string };
     }
   | {
@@ -3326,6 +3344,7 @@ export interface OpenPickGame {
   // that make up most of the schedule -- teamLabel falls back to the raw name.
   homeInstitutionName: string | null;
   awayInstitutionName: string | null;
+  startTimeTba?: boolean | null;   // a date with no start time: startLabel shows the date alone
   // Only ever a game that hasn't finished — there's nothing to pick on a game
   // that's over, so the backend filters to these two.
   status: 'scheduled' | 'live';
@@ -3825,6 +3844,16 @@ export function etDateTime(
   return zone ? `${text} ${ET_LABEL}` : text;
 }
 
+// A START, honest about an unannounced time. A game whose provider has a date but
+// no start time is stored at that date's midnight ET (events.start_time_tba);
+// printing that as "12:00 AM" states a time nobody announced. So: the date and
+// "time TBA" when tba, otherwise whatever the caller's own formatter says.
+export function startLabel(
+  iso: string, tba: boolean | null | undefined, withTime: (iso: string) => string,
+): string {
+  return tba ? `${etDateTime(iso, { weekday: 'short', month: 'short', day: 'numeric' })} · time TBA` : withTime(iso);
+}
+
 // Time of day only, in ET — "7:10 PM". The kickoff/lock clock on the Arena
 // cards, where the day is already named by the card around it.
 export function etTime(
@@ -4135,6 +4164,7 @@ export interface PickSheetGame {
   homeTeam: string | null;
   awayTeam: string | null;
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   status: EventListItem['status'];
   homeScore: number | null;
   awayScore: number | null;
@@ -4448,6 +4478,7 @@ export interface SquaresEvent {
   homeScore: number | null;
   awayScore: number | null;
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
 }
 
 // One occupied square: its grid index (row/col), the owner's display name (null
@@ -4652,6 +4683,7 @@ export interface SurvivorPick {
   teamName: string;
   opponent: string;
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   gameStatus: EventListItem['status'];
   homeScore: number | null;
   awayScore: number | null;
@@ -4779,6 +4811,7 @@ export interface BracketSlotView {
   // The primary (first) game's kickoff, status and score — a series shows its
   // opener, which is all a one-game slot ever has anyway.
   scheduledAt: string | null;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   gameStatus: EventListItem['status'] | null;
   homeScore: number | null;
   awayScore: number | null;
@@ -4924,6 +4957,7 @@ export type ParlayPick = 'over' | 'under' | 'favorite' | 'underdog';
 export interface ParlaySlateGame {
   eventId: string;
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   status: EventListItem['status'];
   homeTeamId: string | null;
   homeTeam: string | null;
@@ -4966,6 +5000,7 @@ export interface ParlayLeg {
   underdogTeam: string | null;
   matchup: string | null;
   scheduledAt: string | null;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   eventStatus: EventListItem['status'] | null;
   homeScore: number | null;
   awayScore: number | null;
@@ -6375,6 +6410,7 @@ export interface CallEventInfo {
   status: string;
   venue: string | null;
   scheduledAt: string;
+  startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   // "Away at Home", already assembled, and ASSEMBLED FROM THE SCHOOL where the
   // teams have one -- so it reads "Albany State University at Georgia State
   // University" rather than repeating "Baseball" twice beside a card about one
@@ -7159,6 +7195,7 @@ export interface CallListItem {
     sport: string;
     status: string;
     scheduledAt: string;
+    startTimeTba?: boolean | null;   // a date with no start time (startLabel)
   };
   // 0..5 — the drafting progress bar, straight off a count.
   questionCount: number;

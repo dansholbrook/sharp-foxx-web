@@ -61,6 +61,7 @@ import {
   BracketTeamRef,
   BracketStandingsRow,
   BracketConfigSlot,
+  startLabel,
 } from '../../api';
 
 // Poll cadence while the contest is LIVE — games resolve, the tree advances, and
@@ -143,7 +144,7 @@ function DraftSlot({
     <li className="bracket-slot">
       <div className="bracket-slot__head">
         <span className="bracket-slot__when">
-          {slot.scheduledAt ? formatWhen(slot.scheduledAt) : 'Date TBD'}
+          {slot.scheduledAt ? startLabel(slot.scheduledAt, slot.startTimeTba, formatWhen) : 'Date TBD'}
         </span>
         <span className="bracket-slot__worth">{points(slot.points)} pts</span>
       </div>
@@ -193,7 +194,7 @@ function ResultSlot({ slot }: { slot: BracketSlotView }) {
       : slot.gameStatus === 'live'
       ? 'Live'
       : slot.scheduledAt
-      ? formatWhen(slot.scheduledAt)
+      ? startLabel(slot.scheduledAt, slot.startTimeTba, formatWhen)
       : 'Date TBD';
 
   return (

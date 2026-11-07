@@ -46,6 +46,7 @@ import {
   MyPick,
   NationalPrediction,
   OpenPickGame,
+  startLabel,
 } from './api';
 
 // A settled pick stays in the band for two days — long enough that a fan who
@@ -146,7 +147,7 @@ function PendingPickCard({
           <LiveBadge />
         ) : event ? (
           <span className="feedpicks-card__when">
-            {event.status === 'final' ? 'Final' : formatKickoff(event.scheduledAt)}
+            {event.status === 'final' ? 'Final' : startLabel(event.scheduledAt, event.startTimeTba, formatKickoff)}
           </span>
         ) : (
           // The game isn't in the feed's event list — say nothing about it
@@ -404,7 +405,7 @@ function OpenGameCard({ game, isFeed }: { game: OpenPickGame; isFeed: boolean })
           <LiveBadge />
         ) : (
           <span className="feedpicks-game__when">
-            {formatKickoff(game.scheduledAt)}
+            {startLabel(game.scheduledAt, game.startTimeTba, formatKickoff)}
           </span>
         )}
         {isFeed && <span className="playcard-scorestag">Scores</span>}

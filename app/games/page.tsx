@@ -46,6 +46,7 @@ import {
   etWallClockToIso,
   teamLabel,
   EventListItem,
+  startLabel,
 } from '../api';
 
 const PAGE_SIZE = 20;
@@ -176,7 +177,7 @@ function FeedGameCard({ event, picks }: { event: EventListItem; picks: GamePicks
         <div className="tcard-body">
           <div className="tcard-meta">
             {event.venue && <span className="tcard-meta__seg">{event.venue}</span>}
-            <span className="tcard-meta__seg">{formatWhen(event.scheduledAt)}</span>
+            <span className="tcard-meta__seg">{startLabel(event.scheduledAt, event.startTimeTba, formatWhen)}</span>
           </div>
         </div>
       </Link>
@@ -236,7 +237,7 @@ function GameCard({ event, picks }: { event: EventListItem; picks: GamePicks }) 
         <div className="tcard-body">
           <div className="tcard-meta">
             {event.venue && <span className="tcard-meta__seg">{event.venue}</span>}
-            <span className="tcard-meta__seg">{formatWhen(event.scheduledAt)}</span>
+            <span className="tcard-meta__seg">{startLabel(event.scheduledAt, event.startTimeTba, formatWhen)}</span>
           </div>
         </div>
       </Link>

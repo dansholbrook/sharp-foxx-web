@@ -32,6 +32,7 @@ import {
   Sponsorship,
   LiveEvent,
   GamePhoto,
+  startLabel,
 } from '../../api';
 import { toYouTubeEmbed } from '../../video';
 import { PredictionsSection } from '../../predictions';
@@ -111,7 +112,7 @@ function GameVideo({ event }: { event: EventListItem }) {
   const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
   const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
   // Away first, as the scoreboard directly below it is (see Scoreboard).
-  const title = `${away} at ${home}`;
+  const title = `${away} ${event.neutralSite ? 'vs' : 'at'} ${home}`;
   const isLive = event.status === 'live';
   const embed = event.videoUrl ? toYouTubeEmbed(event.videoUrl) : null;
 
@@ -229,7 +230,7 @@ function GameVideo({ event }: { event: EventListItem }) {
       <span className="game-coverage__kicker">Upcoming</span>
       <span className="game-coverage__matchup">{title}</span>
       <span className="game-coverage__detail">
-        Coverage begins {formatWhen(event.scheduledAt)}
+        Coverage begins {startLabel(event.scheduledAt, event.startTimeTba, formatWhen)}
       </span>
       {event.venue && (
         <span className="game-coverage__detail game-coverage__detail--venue">
@@ -338,7 +339,7 @@ function Scoreboard({
         ) : (
           /* "at", not "vs": away-first reads "Bengals at Falcons"; "vs" is
              the home-first convention. */
-          <span className="game-scoreboard__vs">at</span>
+          <span className="game-scoreboard__vs">{event.neutralSite ? 'vs' : 'at'}</span>
         )}
         {isLive && feed ? (
           <>
@@ -362,10 +363,18 @@ function Scoreboard({
           </span>
         ) : (
           <span className="game-scoreboard__when">
-            {formatWhen(event.scheduledAt)}
+            {startLabel(event.scheduledAt, event.startTimeTba, formatWhen)}
           </span>
         )}
         {isLive && period && <span className="pulse-period">{period}</span>}
+        {/* NEUTRAL SITE: neither team is at home, so the page never says "at"
+            (drizzle/events_neutral_site_time_tba.sql). The venue, when held, is
+            the fact that makes it legible: Bengals vs Falcons in Madrid. */}
+        {event.neutralSite && (
+          <span className="game-scoreboard__neutral">
+            Neutral site{event.venue ? ` · ${event.venue}` : ''}
+          </span>
+        )}
       </span>
       <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" record={context?.home?.seasonRecord ?? null} datedRecord={isFinal} />
     </div>
@@ -438,11 +447,11 @@ function TeamContextStrip({
               <span className="teamctx__name">{name}</span>
               <span className="teamctx__next">
                 <Link href={`/games/${side.next.id}`}>
-                  {teamLabel(side.next.awayInstitution, side.next.awayTeam) || 'TBD'} at{' '}
+                  {teamLabel(side.next.awayInstitution, side.next.awayTeam) || 'TBD'} {side.next.neutralSite ? 'vs' : 'at'}{' '}
                   {teamLabel(side.next.homeInstitution, side.next.homeTeam) || 'TBD'}
                 </Link>{' '}
                 <span className="teamctx__when">
-                  {formatWhen(side.next.scheduledAt)}
+                  {startLabel(side.next.scheduledAt, side.next.startTimeTba, formatWhen)}
                 </span>
               </span>
             </li>

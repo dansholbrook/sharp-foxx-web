@@ -64,6 +64,7 @@ import {
   ParlaySlateGame,
   ParlayTicket,
   ParlayLeg,
+  startLabel,
 } from '../../api';
 
 // A leg in the draft: the game, the market, the side. Deliberately NOT the line —
@@ -246,7 +247,7 @@ function SlateRow({
             ? 'Final'
             : game.status === 'live'
             ? 'Live'
-            : formatWhen(game.scheduledAt)}
+            : startLabel(game.scheduledAt, game.startTimeTba, formatWhen)}
           {hasScore && (
             <span className="parlay-game__score">
               {' '}
@@ -451,7 +452,7 @@ function TicketCard({
                     ? `${leg.awayScore}–${leg.homeScore}`
                     : 'Live'
                   : leg.scheduledAt
-                  ? formatWhen(leg.scheduledAt)
+                  ? startLabel(leg.scheduledAt, leg.startTimeTba, formatWhen)
                   : '—'}
               </span>
             </li>

@@ -46,6 +46,7 @@ import {
   SquaresBoard as SquaresBoardData,
   SquaresPrizeRow,
   SquaresClaim,
+  startLabel,
 } from '../../api';
 
 // Poll the grid on the same cadence the pick'em scorecard uses while the game is
@@ -498,7 +499,7 @@ export function SquaresBoard({ contest }: { contest: ContestDetail }) {
   const sfBoard = (board.status === 'locked' || board.status === 'settled') && board.sfOwnedCount > 0;
 
   const whenLine =
-    ev?.status === 'final' ? 'Final' : ev?.status === 'live' ? 'Live' : formatWhen(ev?.scheduledAt ?? '');
+    ev?.status === 'final' ? 'Final' : ev?.status === 'live' ? 'Live' : startLabel(ev?.scheduledAt ?? '', ev?.startTimeTba, formatWhen);
 
   return (
     <div className="contest-detail__body sqboard">

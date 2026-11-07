@@ -92,6 +92,7 @@ import {
   CallResult,
   CallSettlement,
   EntryRefusal,
+  startLabel,
 } from '../../api';
 import { EntryAdvisoryNotice } from '../../entry-advisory';
 
@@ -1300,7 +1301,7 @@ export function CallSheet({
             <span className="call-head__venue"> · {call.event.venue}</span>
           )}
         </p>
-        <p className="call-head__when">{kickoffLabel(call.event.scheduledAt)}</p>
+        <p className="call-head__when">{startLabel(call.event.scheduledAt, call.event.startTimeTba, kickoffLabel)}</p>
       </header>
 
       {/* THE POT, UP HERE, ON THE TWO LIVE-ISH STATES ONLY.

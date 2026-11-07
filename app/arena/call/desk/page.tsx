@@ -46,7 +46,9 @@ import {
   CallList,
   CallListItem,
   EventListItem,
-  FieldRep, teamLabel } from '../../../api';
+  FieldRep, teamLabel,
+  startLabel,
+} from '../../../api';
 
 // ---------------------------------------------------------------------------
 // NEW CALL — the create modal.
@@ -183,7 +185,7 @@ function NewCallForm({
                   {e.homeTeam && e.awayTeam
                     ? `${teamLabel(e.awayInstitution, e.awayTeam)} at ${teamLabel(e.homeInstitution, e.homeTeam)}`
                     : e.sport}{' '}
-                  — {formatKickoff(e.scheduledAt)}
+                  — {startLabel(e.scheduledAt, e.startTimeTba, formatKickoff)}
                 </option>
               ))}
             </select>
@@ -290,7 +292,7 @@ export default function CallDeskPage() {
     {
       key: 'kick',
       header: 'Kickoff',
-      cell: (c) => formatKickoff(c.event.scheduledAt),
+      cell: (c) => startLabel(c.event.scheduledAt, c.event.startTimeTba, formatKickoff),
     },
     {
       key: 'who',

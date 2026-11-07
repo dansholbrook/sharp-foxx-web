@@ -15,6 +15,7 @@ import {
   createUser,
   createFieldRep,
   FieldRep,
+  startLabel,
 } from '../api';
 
 const KIND_LABELS: Record<FieldRep['kind'], string> = {
@@ -471,7 +472,7 @@ function CoverageBand({ token, reps }: { token: string; reps: FieldRep[] }) {
                   {g.awayTeam ?? 'TBD'} at {g.homeTeam ?? 'TBD'}
                 </Link>
                 <span className="coverage__meta">
-                  {etDateTime(g.scheduledAt)}
+                  {startLabel(g.scheduledAt, g.startTimeTba, etDateTime)}
                   {g.venue ? ` · ${g.venue}` : ''}
                 </span>
               </span>

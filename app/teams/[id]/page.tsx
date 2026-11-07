@@ -33,7 +33,7 @@ import {
   EventListItem,
   FeedItem,
   GamePhoto,
-  FollowMineEntry, teamLabel } from '../../api';
+  FollowMineEntry, startLabel, teamLabel } from '../../api';
 
 // ---- formatting helpers (mirror the game / athlete-profile pages) ----
 // Both render in ET. formatWhen carries the zone label because it's the tip-off
@@ -53,6 +53,18 @@ function titleCase(s: string): string {
 }
 
 // Up to two initials from a composed "First Last" roster name.
+// THE HEADING. A college team row is named for its legal institution plus the
+// sport -- "University of California-Los Angeles Basketball (M)" -- which is right
+// for a directory and wrong for a page title. With the school's short name held,
+// the heading is what a fan calls the team: "UCLA Bruins" (or "UCLA" with no
+// mascot). Men's/women's moves to the affiliation line's sport segment, so the
+// two programmes stay told apart. No short name -> the stored name, as before.
+function teamHeading(team: TeamDetail): string {
+  const i = team.institution;
+  if (!i?.shortName) return team.name;
+  return i.mascot ? `${i.shortName} ${i.mascot}` : i.shortName;
+}
+
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/);
   const first = parts[0]?.charAt(0) ?? '';
@@ -119,7 +131,7 @@ function NextUpCard({ event }: { event: EventListItem }) {
           </>
         ) : (
           <span className="team-nextup__detail">
-            {formatWhen(event.scheduledAt)}
+            {startLabel(event.scheduledAt, event.startTimeTba, formatWhen)}
             {event.venue ? ` · ${event.venue}` : ''}
           </span>
         )}
@@ -465,7 +477,13 @@ export default function TeamPage() {
   const affiliation = useMemo(() => {
     if (!team) return [] as Array<{ label: string; href?: string }>;
     const parts: Array<{ label: string; href?: string }> = [];
-    parts.push({ label: titleCase(team.sport) });
+    // "Men's basketball" / "Women's basketball" once the heading no longer
+    // carries the (M)/(W) the stored name did.
+    const sport = titleCase(team.sport);
+    parts.push({
+      label: team.gender === 'mens' ? `Men's ${sport.toLowerCase()}`
+        : team.gender === 'womens' ? `Women's ${sport.toLowerCase()}` : sport,
+    });
     if (team.level) parts.push({ label: titleCase(team.level.replace(/_/g, ' ')) });
     if (team.institution) {
       parts.push({
@@ -528,11 +546,11 @@ export default function TeamPage() {
           <section className="team-hero">
             <div className="team-banner team-banner--fallback">
               <span className="team-banner__monogram" aria-hidden="true">
-                {initialsOf(team.name)}
+                {initialsOf(teamHeading(team))}
               </span>
             </div>
             <div className="team-identity">
-              <h1 className="team-name">{team.name}</h1>
+              <h1 className="team-name">{teamHeading(team)}</h1>
               {affiliation.length > 0 && (
                 <p className="team-affil">
                   {affiliation.map((seg, i) =>

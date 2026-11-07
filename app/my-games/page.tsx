@@ -18,6 +18,7 @@ import {
   hasKickedOff,
   MyAssignment,
   EventListItem,
+  startLabel,
 } from '../api';
 
 // The current status/scores of a game, keyed by event id. /assignments/mine
@@ -239,7 +240,7 @@ function GameCard({
         {matchup(game) ?? game.event.sport}
       </span>
       <span className="mygames-card__meta">
-        {formatWhen(game.event.scheduledAt)}
+        {startLabel(game.event.scheduledAt, game.event.startTimeTba, formatWhen)}
         {game.event.venue ? ` · ${game.event.venue}` : ''}
       </span>
       {/* Null for a canceled game -- it did not happen, so there is nothing to
@@ -507,7 +508,7 @@ export default function MyGamesPage() {
   // Shared columns for both schedule tables (same eight the flat table carried).
   // Cells close over the freshest status + the best-effort sponsor/article maps.
   const columns: Column<MyAssignment>[] = [
-    { key: 'when', header: 'Date / time', cell: (g) => formatWhen(g.event.scheduledAt) },
+    { key: 'when', header: 'Date / time', cell: (g) => startLabel(g.event.scheduledAt, g.event.startTimeTba, formatWhen) },
     { key: 'matchup', header: 'Matchup', cell: (g) => matchup(g) ?? g.event.sport },
     { key: 'venue', header: 'Venue', cell: (g) => g.event.venue ?? '—' },
     { key: 'sport', header: 'Sport', cell: (g) => g.event.sport },

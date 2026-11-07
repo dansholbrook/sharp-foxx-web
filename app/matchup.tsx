@@ -243,7 +243,8 @@ const signedLine = (n: number) => (n === 0 ? 'pick’em' : n > 0 ? `+${n}` : `�
 
 export function formLine(g: TeamGame): string {
   const score = `${g.result} ${g.teamScore}–${g.opponentScore}`;
-  const where = `${g.isHome ? 'vs' : 'at'} ${g.opponent}`;
+  // A neutral site has no home team: "vs X (neutral site)", never "at X".
+  const where = g.neutralSite ? `vs ${g.opponent} (neutral site)` : `${g.isHome ? 'vs' : 'at'} ${g.opponent}`;
   const close = g.vsSpread
     ? `closed ${signedLine(g.closeSpread!)}, ${g.vsSpread}`
     : 'no closing spread held';
@@ -310,7 +311,7 @@ export function describeHeadToHead(m: Matchup | null, home: string, away: string
     // g is from THIS game's home team's side.
     const [hs, as] = [g.teamScore, g.opponentScore];
     const winner = hs > as ? `${home} ${hs}, ${away} ${as}` : as > hs ? `${away} ${as}, ${home} ${hs}` : `${home} ${hs}, ${away} ${as} (tied)`;
-    const venue = g.isHome ? `at ${home}` : `at ${away}`;
+    const venue = g.neutralSite ? 'neutral site' : g.isHome ? `at ${home}` : `at ${away}`;
     const close = g.vsSpread ? ` · ${home} closed ${signedLine(g.closeSpread!)}, ${g.vsSpread}` : '';
     return `${shortDate(g.date)} · ${winner} · ${venue}${close}`;
   });
