@@ -1,5 +1,7 @@
 // ============================================================================
-// THE MATCHUP -- the pre-game inputs, side by side. Facts, never verdicts.
+// THE MATCHUP -- the inputs to the game, side by side. Facts, never verdicts.
+// All six before and DURING a game (each is true while it is played); three on
+// a final -- see below.
 //
 // Nothing here says who is hot, where an edge is, or what to pick. Every line is
 // a count, a score or a date, and every block says where its numbers came from
@@ -8,6 +10,22 @@
 //
 // All wording is decided in pure describe* functions so each case is testable
 // without a browser.
+//
+// ****************************************************************************
+// ON A FINAL, THREE OF THE SIX, EACH SAYING WHEN IT IS FROM.
+//
+//   Shown: against the closing line, season stats, head to head. Each is the
+//   season TO DATE, so on a game from three weeks ago it describes the season as
+//   of today, not as of that game -- true only if it says so. So on a final each
+//   panel OPENS with its "as of" ("…, as of Nov 7, 2026, not as of this game"),
+//   where it is read, instead of leaving it in the small footer.
+//   Not shown: injuries (who is hurt today says nothing about a game three weeks
+//   ago, and no label fixes that) and recent form (it would list games played
+//   after this one).
+//   And only when the game is IN the season these describe (seasonCoversGame):
+//   "this season" is the provider's current one, and last April's final must not
+//   be shown this November's numbers.
+// ****************************************************************************
 // ============================================================================
 
 import { etDateTime, InjuredPlayer, Matchup, TeamForm, TeamGame, TeamInjuries, TeamStats, TeamVsClose } from './api';
@@ -24,7 +42,21 @@ export const seasonLabel = (league: string, season: number) =>
 // 1. AGAINST THE CLOSING LINE
 // ---------------------------------------------------------------------------
 export interface VsCloseRow { label: string; away: string; home: string }
-export interface VsCloseCopy { rows: VsCloseRow[]; foot: string[] }
+export interface VsCloseCopy { rows: VsCloseRow[]; foot: string[]; lead: string | null }
+
+// The "as of" line a final's panel opens with.
+const asOfLead = (what: string, iso: string) =>
+  `${what}, as of ${etDateTime(iso, { zone: true })}, not as of this game.`;
+
+const etYmd = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(iso));
+
+// The game falls in the season these sections describe: on or after the
+// provider's current regular-season start (after its end is that season's
+// postseason). Unknown window -> false: not confirmed is not shown.
+export function seasonCoversGame(m: Matchup | null, scheduledAt: string): boolean {
+  const w = m?.vsClose.home?.window ?? m?.vsClose.away?.window;
+  return !!w && etYmd(scheduledAt) >= w.start;
+}
 
 function cells(v: TeamVsClose | null, note: string | null) {
   if (!v) {
@@ -47,7 +79,7 @@ function cells(v: TeamVsClose | null, note: string | null) {
   };
 }
 
-export function describeVsClose(m: Matchup | null, home: string, away: string): VsCloseCopy | null {
+export function describeVsClose(m: Matchup | null, home: string, away: string, onFinal = false): VsCloseCopy | null {
   if (!m) return null;
   const { home: h, away: a, homeNote, awayNote } = m.vsClose;
   if (!h && !a) return null;
@@ -67,20 +99,24 @@ export function describeVsClose(m: Matchup | null, home: string, away: string): 
   }
   const fetched = h?.recordsFetchedAt ?? a?.recordsFetchedAt;
   const season = h ?? a;
+  let lead: string | null = null;
   if (season) {
-    foot.push(`Games played: the provider's ${seasonLabel(season.league, season.season)} regular season`
-      + `${fetched ? `, as of ${etDateTime(fetched, { zone: true })}` : ''}.`);
+    const label = `${seasonLabel(season.league, season.season)} regular season`;
+    if (onFinal && fetched) lead = asOfLead(`The ${label} to date`, fetched);
+    foot.push(`Games played: the provider's ${label}`
+      + `${fetched && !lead ? `, as of ${etDateTime(fetched, { zone: true })}` : ''}.`);
   }
-  return { rows, foot };
+  return { rows, foot, lead };
 }
 
-function SideBySide({ title, away, home, rows, foot }: {
-  title: string; away: string; home: string; rows: VsCloseRow[]; foot: string[];
+function SideBySide({ title, away, home, rows, foot, lead = null }: {
+  title: string; away: string; home: string; rows: VsCloseRow[]; foot: string[]; lead?: string | null;
 }) {
   return (
     <section className="matchup">
       <h2 className="matchup__title">{title}</h2>
       <div className="matchup__panel">
+        {lead && <p className="matchup__asof">{lead}</p>}
         <table className="matchup__table">
           <thead>
             <tr>
@@ -105,10 +141,10 @@ function SideBySide({ title, away, home, rows, foot }: {
   );
 }
 
-export function VsCloseSection({ matchup, home, away }: { matchup: Matchup | null; home: string; away: string }) {
-  const copy = describeVsClose(matchup, home, away);
+export function VsCloseSection({ matchup, home, away, onFinal = false }: { matchup: Matchup | null; home: string; away: string; onFinal?: boolean }) {
+  const copy = describeVsClose(matchup, home, away, onFinal);
   if (!copy) return null;
-  return <SideBySide title="This season against the closing line" away={away} home={home} rows={copy.rows} foot={copy.foot} />;
+  return <SideBySide title="This season against the closing line" away={away} home={home} rows={copy.rows} foot={copy.foot} lead={copy.lead} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +202,7 @@ export function InjuriesSection({ matchup, home, away }: { matchup: Matchup | nu
 // 4. SEASON STATS, side by side. The same handful per sport for both teams; a
 // value the provider does not publish says so in its cell.
 // ---------------------------------------------------------------------------
-export function describeTeamStats(m: Matchup | null, home: string, away: string): VsCloseCopy | null {
+export function describeTeamStats(m: Matchup | null, home: string, away: string, onFinal = false): VsCloseCopy | null {
   const h = m?.teamStats?.home; const a = m?.teamStats?.away;
   if (!h || !a) return null;
   const ok = (t: TeamStats) => (t.status === 'ok' ? t : null);
@@ -186,14 +222,15 @@ export function describeTeamStats(m: Matchup | null, home: string, away: string)
   if (base.stats.some((s) => s.value === null) || (A && A.stats.some((s) => s.value === null))) {
     foot.push('"Not published" means SportsDataIO does not report that figure for this league.');
   }
-  foot.push(`From SportsDataIO team season stats, as of ${etDateTime(base.fetchedAt, { zone: true })}.`);
-  return { rows, foot };
+  const lead = onFinal ? asOfLead(`The ${seasonLabel(base.league, base.season)} regular season to date`, base.fetchedAt) : null;
+  foot.push(lead ? 'From SportsDataIO team season stats.' : `From SportsDataIO team season stats, as of ${etDateTime(base.fetchedAt, { zone: true })}.`);
+  return { rows, foot, lead };
 }
 
-export function TeamStatsSection({ matchup, home, away }: { matchup: Matchup | null; home: string; away: string }) {
-  const copy = describeTeamStats(matchup, home, away);
+export function TeamStatsSection({ matchup, home, away, onFinal = false }: { matchup: Matchup | null; home: string; away: string; onFinal?: boolean }) {
+  const copy = describeTeamStats(matchup, home, away, onFinal);
   if (!copy) return null;
-  return <SideBySide title="Season stats" away={away} home={home} rows={copy.rows} foot={copy.foot} />;
+  return <SideBySide title="Season stats" away={away} home={home} rows={copy.rows} foot={copy.foot} lead={copy.lead} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,11 +296,14 @@ export function FormSection({ matchup, home, away }: { matchup: Matchup | null; 
 }
 
 // ---------------------------------------------------------------------------
-// 6. HEAD TO HEAD -- earlier meetings this season, with scores. ABSENT when there
-// are none: an empty block on most games would say nothing. When a side's
-// archive is incomplete, the foot says a meeting could be missing.
+// 6. HEAD TO HEAD -- this season's other meetings, with scores; never the game
+// being viewed (the API leaves it out). ABSENT when there are none: an empty
+// block on most games would say nothing. When a side's archive is incomplete,
+// the foot says a meeting could be missing. Before a game every held meeting is
+// an earlier one; on an old final a later rematch can be listed too, so a final
+// says "other meetings" and when they were read, not "earlier".
 // ---------------------------------------------------------------------------
-export function describeHeadToHead(m: Matchup | null, home: string, away: string): { lines: string[]; foot: string[] } | null {
+export function describeHeadToHead(m: Matchup | null, home: string, away: string, onFinal = false): { lines: string[]; foot: string[]; lead: string | null } | null {
   const h = m?.headToHead;
   if (!h || !h.meetings.length) return null;
   const lines = h.meetings.map((g) => {
@@ -274,21 +314,25 @@ export function describeHeadToHead(m: Matchup | null, home: string, away: string
     const close = g.vsSpread ? ` · ${home} closed ${signedLine(g.closeSpread!)}, ${g.vsSpread}` : '';
     return `${shortDate(g.date)} · ${winner} · ${venue}${close}`;
   });
-  const foot = ['Our final scores for earlier meetings this regular season.'];
+  const foot = [onFinal
+    ? 'Our final scores for the other meetings between these teams this regular season.'
+    : 'Our final scores for earlier meetings this regular season.'];
   const gaps = (['away', 'home'] as const).filter((k) => {
     const c = h.coverage[k]; return c && c.gamesPlayed !== null && c.finalsHeld < c.gamesPlayed;
   });
-  if (gaps.length) foot.push('We do not hold every game these teams have played, so an earlier meeting could be missing.');
-  return { lines, foot };
+  if (gaps.length) foot.push(`We do not hold every game these teams have played, so ${onFinal ? 'a' : 'an earlier'} meeting could be missing.`);
+  const lead = onFinal ? asOfLead('This regular season', h.asOf) : null;
+  return { lines, foot, lead };
 }
 
-export function HeadToHeadSection({ matchup, home, away }: { matchup: Matchup | null; home: string; away: string }) {
-  const copy = describeHeadToHead(matchup, home, away);
+export function HeadToHeadSection({ matchup, home, away, onFinal = false }: { matchup: Matchup | null; home: string; away: string; onFinal?: boolean }) {
+  const copy = describeHeadToHead(matchup, home, away, onFinal);
   if (!copy) return null;
   return (
     <section className="matchup">
       <h2 className="matchup__title">Head to head this season</h2>
       <div className="matchup__panel">
+        {copy.lead && <p className="matchup__asof">{copy.lead}</p>}
         <ul className="matchup__list">{copy.lines.map((l) => <li key={l}>{l}</li>)}</ul>
         {copy.foot.map((f) => <p key={f} className="matchup__foot">{f}</p>)}
       </div>

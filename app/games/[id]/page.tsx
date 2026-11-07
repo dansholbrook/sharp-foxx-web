@@ -37,7 +37,7 @@ import { toYouTubeEmbed } from '../../video';
 import { PredictionsSection } from '../../predictions';
 import { LineMovementModule } from '../../line-movement';
 import { GameLine } from '../../game-line';
-import { FormSection, HeadToHeadSection, InjuriesSection, TeamStatsSection, VsCloseSection } from '../../matchup';
+import { FormSection, HeadToHeadSection, InjuriesSection, seasonCoversGame, TeamStatsSection, VsCloseSection } from '../../matchup';
 import { useWatchLiveGameEarn } from '../../earn-hooks';
 
 // ---------------------------------------------------------------------------
@@ -248,6 +248,7 @@ function ScoreboardTeam({
   teamId,
   side,
   record = null,
+  datedRecord = false,
 }: {
   name: string;
   teamId: string | null;
@@ -255,7 +256,13 @@ function ScoreboardTeam({
   // The provider's season record (standings / TeamSeasonStats), never a count of
   // our rows -- see context() on the API for why the old one was pulled.
   record?: TeamContext['seasonRecord'];
+  // ON A FINAL the record is TODAY'S, not the one the teams carried into this
+  // game -- an August preseason final showed November's 6-2 as if it were then.
+  // So it says when it is from, as the matchup panels do on a final. Before and
+  // during a game today's record IS the one going in, and stays unlabelled.
+  datedRecord?: boolean;
 }) {
+  const asOf = record && datedRecord ? etDateTime(record.fetchedAt, { month: 'short', day: 'numeric' }) : null;
   const cls = `game-scoreboard__team game-scoreboard__team--${side}`;
   const label = (
     <>
@@ -263,10 +270,10 @@ function ScoreboardTeam({
       {record && (
         <span
           className="game-scoreboard__record"
-          aria-label={`${record.display} this season`}
+          aria-label={asOf ? `${record.display} this season, as of ${asOf}` : `${record.display} this season`}
           title={`${record.season} season record, from the provider's ${record.source === 'standings' ? 'standings' : 'team season stats'}`}
         >
-          {record.display}
+          {record.display}{asOf && ` · as of ${asOf}`}
         </span>
       )}
     </>
@@ -317,7 +324,7 @@ function Scoreboard({
   // reader saw Ravens on the left and the Ravens' row second, directly below.
   return (
     <div className="game-scoreboard">
-      <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" record={context?.away?.seasonRecord ?? null} />
+      <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" record={context?.away?.seasonRecord ?? null} datedRecord={isFinal} />
       <span className="game-scoreboard__center">
         {hasScore ? (
           <span
@@ -360,7 +367,7 @@ function Scoreboard({
         )}
         {isLive && period && <span className="pulse-period">{period}</span>}
       </span>
-      <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" record={context?.home?.seasonRecord ?? null} />
+      <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" record={context?.home?.seasonRecord ?? null} datedRecord={isFinal} />
     </div>
   );
 }
@@ -1318,10 +1325,12 @@ export default function GamePage() {
                 away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
               />
               {context && <TeamContextStrip event={event} context={context} />}
-              {/* PRE-GAME ONLY: "this season" and "recent form" read as of now, so on
-                  a final from last month they would describe games played after
-                  it. matchup.tsx; each section self-labels its coverage. */}
-              {event.status === 'scheduled' && (
+              {/* BEFORE AND DURING THE GAME: all six, each true while it is
+                  played -- the closing-line records and recent form hold only
+                  finals, which this game is not yet; injuries are current, and
+                  most useful now. matchup.tsx; each section self-labels its
+                  coverage. */}
+              {(event.status === 'scheduled' || event.status === 'live') && (
                 <>
                   <InjuriesSection
                     matchup={matchup}
@@ -1344,6 +1353,34 @@ export default function GamePage() {
                     away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
                   />
                   <HeadToHeadSection
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                </>
+              )}
+              {/* ON A FINAL, three of the six, each opening with its "as of"
+                  (season to date, not as of this game). NOT injuries (today's,
+                  not kickoff's) and NOT recent form (it would list games played
+                  after this one). Only when the game is in the season they
+                  describe -- see matchup.tsx, seasonCoversGame. Same order as
+                  before the game. */}
+              {event.status === 'final' && seasonCoversGame(matchup, event.scheduledAt) && (
+                <>
+                  <VsCloseSection
+                    onFinal
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                  <TeamStatsSection
+                    onFinal
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                  <HeadToHeadSection
+                    onFinal
                     matchup={matchup}
                     home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
                     away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}

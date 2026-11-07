@@ -1787,9 +1787,11 @@ export interface Matchup {
   injuries: { home: TeamInjuries; away: TeamInjuries };
   teamStats: { home: TeamStats; away: TeamStats };
   form: { home: TeamForm | null; away: TeamForm | null; homeNote: string | null; awayNote: string | null };
-  // Earlier meetings this season, newest first, from THIS game's home side.
+  // This season's OTHER meetings (never this game), newest first, from THIS
+  // game's home side. asOf: when our finals were read.
   headToHead: {
     meetings: TeamGame[];
+    asOf: string;
     coverage: {
       home: { finalsHeld: number; gamesPlayed: number | null } | null;
       away: { finalsHeld: number; gamesPlayed: number | null } | null;

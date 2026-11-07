@@ -23797,6 +23797,9 @@ a.scout-reveal__main:hover .scout-reveal__name {
 .matchup__table td { color: var(--text); }
 .matchup__table tr:last-child th, .matchup__table tr:last-child td { border-bottom: 0; }
 .matchup__foot { margin: 8px 0 0; font-size: 0.72rem; color: var(--muted); }
+/* A final's "as of": the first line of the panel, at reading size, because on a
+   game from weeks ago it is what makes the numbers below true. */
+.matchup__asof { margin: 0 0 10px; font-size: 0.82rem; color: var(--text); }
 .matchup__empty { margin: 0; font-size: 0.85rem; color: var(--text); }
 .matchup__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 520px) { .matchup__cols { grid-template-columns: 1fr; } }
