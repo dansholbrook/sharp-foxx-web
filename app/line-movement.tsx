@@ -50,12 +50,12 @@ export interface MovementCopy {
 const pct = (p: number) => `${Math.round(p * 100)}%`;
 // A CHANGE in probability. Spelled out on purpose -- see ONE UNIT PER BARE NUMBER.
 const pctPoints = (p: number) => `${Math.abs(p * 100).toFixed(1)} percentage points`;
-const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+export const num = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : 'EVEN');
 
 // "Baltimore Ravens -2.5" from the PROVIDER's signed home spread: negative means
 // the home team gives the points; positive means the away team does.
-function spreadPhrase(p: MovementPoint, home: string, away: string): string | null {
+export function spreadPhrase(p: MovementPoint, home: string, away: string): string | null {
   if (p.homeSpread === null) return null;
   if (p.homeSpread === 0) return 'pick’em';
   return p.homeSpread < 0
@@ -64,7 +64,7 @@ function spreadPhrase(p: MovementPoint, home: string, away: string): string | nu
 }
 
 // The favourite's moneyline: "Jacksonville Jaguars -550".
-function moneylinePhrase(p: MovementPoint, home: string, away: string): string | null {
+export function moneylinePhrase(p: MovementPoint, home: string, away: string): string | null {
   if (p.homeMoneyline === null || p.awayMoneyline === null || p.homeWinProb === null) return null;
   return p.homeWinProb >= 0.5
     ? `${home} ${signed(p.homeMoneyline)}`

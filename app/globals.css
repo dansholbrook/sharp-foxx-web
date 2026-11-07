@@ -23692,3 +23692,123 @@ a.scout-reveal__main:hover .scout-reveal__name {
   font-size: 0.72rem;
   color: var(--muted);
 }
+
+/* ---- Game page: season record under each team name (provider standings). ---- */
+.game-scoreboard__record {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-sans, inherit);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- A feed game in progress: not "Live" -- the score is as of a fetch. ---- */
+.pill--progress {
+  color: var(--text);
+  background: transparent;
+  border-color: var(--border-strong);
+}
+
+.game-scoreboard__asof {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Game page: the line, and the final against the close (game-line.tsx). ---- */
+.gameline {
+  margin: 18px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gameline__close,
+.gameline__line {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.gameline__lead {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.gameline__fact {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.gameline__title {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.gameline__parts {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.gameline__foot {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* ---- Game page: matchup sections, side by side (matchup.tsx). ---- */
+.matchup { margin: 22px 0 0; }
+.matchup__title {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.matchup__panel {
+  padding: 12px 16px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.matchup__table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.matchup__table th, .matchup__table td {
+  padding: 7px 6px;
+  text-align: left;
+  vertical-align: top;
+  font-size: 0.82rem;
+  border-bottom: 1px solid var(--border);
+}
+.matchup__table thead th { font-size: 0.72rem; font-weight: 700; color: var(--text); }
+.matchup__table tbody th { font-weight: 500; color: var(--muted); width: 34%; }
+.matchup__table td { color: var(--text); }
+.matchup__table tr:last-child th, .matchup__table tr:last-child td { border-bottom: 0; }
+.matchup__foot { margin: 8px 0 0; font-size: 0.72rem; color: var(--muted); }
+.matchup__empty { margin: 0; font-size: 0.85rem; color: var(--text); }
+.matchup__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 520px) { .matchup__cols { grid-template-columns: 1fr; } }
+.matchup__colhead { margin: 0 0 6px; font-size: 0.78rem; font-weight: 700; color: var(--text); }
+.matchup__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.matchup__list li { font-size: 0.8rem; color: var(--text); line-height: 1.35; }
+.gameline__prob { margin: 6px 0 0; font-size: 0.88rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.gameline__problabel { color: var(--muted); font-size: 0.78rem; margin-right: 4px; }
+.matchup__list li.matchup__listfoot { color: var(--muted); font-size: 0.72rem; margin-top: 2px; }
+/* A global th rule uppercases and letter-spaces table headers; these tables read
+   as sentences ("With a closing spread"), so they opt out. */
+.matchup__table th { text-transform: none; letter-spacing: normal; }

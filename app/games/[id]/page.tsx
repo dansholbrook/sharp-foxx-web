@@ -11,6 +11,8 @@ import {
   teamLabel,
   getEventContext,
   getEventLineMovement,
+  getEventMatchup,
+  Matchup,
   LineMovement,
   getEvents,
   getEventContent,
@@ -34,7 +36,31 @@ import {
 import { toYouTubeEmbed } from '../../video';
 import { PredictionsSection } from '../../predictions';
 import { LineMovementModule } from '../../line-movement';
+import { GameLine } from '../../game-line';
+import { FormSection, HeadToHeadSection, InjuriesSection, TeamStatsSection, VsCloseSection } from '../../matchup';
 import { useWatchLiveGameEarn } from '../../earn-hooks';
+
+// ---------------------------------------------------------------------------
+// WHAT A FEED GAME CAN HONESTLY SAY ABOUT ITS SCORE. A feed game's score is
+// whatever the resolver fetched last -- every ten minutes, from a provider that
+// itself freezes for minutes at a time (an NBA game sat at Q4 4:48 for seven on
+// 2026-11-06). So a feed game is never called "Live": it is "In progress", and
+// the score carries the time we last fetched it (events.score_checked_at --
+// ESPN publishes no per-game timestamp, so our fetch time is the most we can
+// truthfully claim). A COVERED game keeps the LIVE badge: a rep at the console
+// moves its score in real time through the courtside pulse.
+// ---------------------------------------------------------------------------
+function scoreAsOf(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const day = (d: string | Date) => etDateTime(typeof d === 'string' ? d : d.toISOString(), { month: 'short', day: 'numeric' });
+  return day(iso) === day(new Date())
+    ? etTime(iso, { zone: true })
+    : etDateTime(iso, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', zone: true });
+}
+
+function InProgressPill() {
+  return <span className="pill pill--progress">In progress</span>;
+}
 
 // The shared pulsing LIVE badge (dot + wordmark). Styling/animation live in the
 // scoped .live-badge classes in globals.css so it reads identically here, on the
@@ -220,18 +246,36 @@ function ScoreboardTeam({
   name,
   teamId,
   side,
+  record = null,
 }: {
   name: string;
   teamId: string | null;
   side: 'home' | 'away';
+  // The provider's season record (standings / TeamSeasonStats), never a count of
+  // our rows -- see context() on the API for why the old one was pulled.
+  record?: TeamContext['seasonRecord'];
 }) {
   const cls = `game-scoreboard__team game-scoreboard__team--${side}`;
+  const label = (
+    <>
+      {name}
+      {record && (
+        <span
+          className="game-scoreboard__record"
+          aria-label={`${record.display} this season`}
+          title={`${record.season} season record, from the provider's ${record.source === 'standings' ? 'standings' : 'team season stats'}`}
+        >
+          {record.display}
+        </span>
+      )}
+    </>
+  );
   return teamId ? (
     <Link href={`/teams/${teamId}`} className={`${cls} game-scoreboard__team--link`}>
-      {name}
+      {label}
     </Link>
   ) : (
-    <span className={cls}>{name}</span>
+    <span className={cls}>{label}</span>
   );
 }
 
@@ -245,12 +289,17 @@ function Scoreboard({
   liveAway = null,
   scoreVersion = 0,
   period = null,
+  context = null,
+  feed = false,
 }: {
-  event: EventListItem;
+  event: EventDetail;
   liveHome?: number | null;
   liveAway?: number | null;
   scoreVersion?: number;
   period?: string | null;
+  context?: EventContext | null;
+  // A feed game: score from the resolver, so "In progress" + "as of", never Live.
+  feed?: boolean;
 }) {
   const home = teamLabel(event.homeInstitution, event.homeTeam) || 'TBD';
   const away = teamLabel(event.awayInstitution, event.awayTeam) || 'TBD';
@@ -263,7 +312,7 @@ function Scoreboard({
 
   return (
     <div className="game-scoreboard">
-      <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" />
+      <ScoreboardTeam name={home} teamId={event.homeTeamId} side="home" record={context?.home?.seasonRecord ?? null} />
       <span className="game-scoreboard__center">
         {hasScore ? (
           <span
@@ -277,7 +326,16 @@ function Scoreboard({
         ) : (
           <span className="game-scoreboard__vs">vs</span>
         )}
-        {isLive ? (
+        {isLive && feed ? (
+          <>
+            <InProgressPill />
+            <span className="game-scoreboard__asof">
+              {scoreAsOf(event.scoreCheckedAt)
+                ? `Score as of ${scoreAsOf(event.scoreCheckedAt)}`
+                : 'Score not fetched yet'}
+            </span>
+          </>
+        ) : isLive ? (
           <LiveBadge />
         ) : isFinal ? (
           <span className="pill">Final</span>
@@ -295,7 +353,7 @@ function Scoreboard({
         )}
         {isLive && period && <span className="pulse-period">{period}</span>}
       </span>
-      <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" />
+      <ScoreboardTeam name={away} teamId={event.awayTeamId} side="away" record={context?.away?.seasonRecord ?? null} />
     </div>
   );
 }
@@ -597,7 +655,7 @@ function RailGameCard({ event }: { event: EventListItem }) {
         ) : (
           <span>{formatDate(event.scheduledAt)}</span>
         )}
-        {isLive && <LiveBadge />}
+        {isLive && (isFeedEvent(event.source) ? <InProgressPill /> : <LiveBadge />)}
         {isFinal && <span className="pill">Final</span>}
         {event.venue && <span className="game-railcard__venue">{event.venue}</span>}
       </span>
@@ -958,6 +1016,8 @@ export default function GamePage() {
   // How the market moved. Garnish like the context strip: a failed read leaves it
   // null, and the module renders nothing -- as it also does when nothing moved.
   const [movement, setMovement] = useState<LineMovement | null>(null);
+  // The pre-game inputs (matchup.tsx). Garnish: its own call, null on failure.
+  const [matchup, setMatchup] = useState<Matchup | null>(null);
   // The list, kept ONLY for the "More games" rail. It no longer gates the page.
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [articles, setArticles] = useState<EventContentItem[] | null>(null);
@@ -998,7 +1058,7 @@ export default function GamePage() {
         // so it is fetched here too — but swallowed to [] like the other
         // garnish. A slow or failed schedule read used to blank the game; now it
         // costs a rail.
-        const [ev, ctx, content, feed, sponsor, list, moves] = await Promise.all([
+        const [ev, ctx, content, feed, sponsor, list, moves, mu] = await Promise.all([
           getEvent(token, id),
           getEventContext(token, id).catch(() => null),
           getEventContent(token, id, 'published').catch(
@@ -1010,11 +1070,13 @@ export default function GamePage() {
           getEventSponsorship(token, id).catch(() => null),
           getEvents(token).catch(() => [] as EventListItem[]),
           getEventLineMovement(token, id).catch(() => null),
+          getEventMatchup(token, id).catch(() => null),
         ]);
         if (cancelled) return;
         setEvent(ev);
         setContext(ctx);
         setMovement(moves);
+        setMatchup(mu);
         setArticles(content);
         setLatest(feed);
         setSponsorship(sponsor);
@@ -1205,17 +1267,35 @@ export default function GamePage() {
             // it's scoreboard -> predictions, nothing else. No video, photos,
             // courtside feed, sponsor strip, or watch language. ----
             <div className="game-main">
+              {/* Says only what the page can back: no "Live", and no promise of
+                  a pick below -- the predictions board self-hides when a game
+                  has none, which left this line pointing at nothing. */}
               <div className="gamescope-playhead">
                 <span className="gamescope-playhead__tag">Scores</span>
                 <span className="gamescope-playhead__note">
-                  Live scoreboard · make your pick below
+                  {event.status === 'live'
+                    ? 'In progress · the score refreshes about every 10 minutes'
+                    : event.status === 'final'
+                      ? 'Final'
+                      : event.status === 'scheduled'
+                        ? 'Before the game'
+                        : event.status === 'postponed' ? 'Postponed' : 'Called off'}
                 </span>
               </div>
-              <Scoreboard event={event} />
+              <Scoreboard event={event} context={context} feed />
               {/* The box score, directly under the score it breaks down. Both
                   self-hide: no periods before a game starts, no form strip
                   without team FKs. */}
               <PeriodTable event={event} />
+              {/* The line in every state, and on a final the result against the
+                  close. Same `current` as LineMovementModule below -- one line
+                  per page. See game-line.tsx. */}
+              <GameLine
+                event={event}
+                movement={movement}
+                home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+              />
               {context && <TeamContextStrip event={event} context={context} />}
               {/* Self-hides: no history, no defensible open, or under the floor
                   renders nothing at all. FEED layout only -- a covered game has
@@ -1225,6 +1305,38 @@ export default function GamePage() {
                 home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
                 away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
               />
+              {/* PRE-GAME ONLY: "this season" and "recent form" read as of now, so on
+                  a final from last month they would describe games played after
+                  it. matchup.tsx; each section self-labels its coverage. */}
+              {event.status === 'scheduled' && (
+                <>
+                  <InjuriesSection
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                  <VsCloseSection
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                  <TeamStatsSection
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                  <FormSection
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                  <HeadToHeadSection
+                    matchup={matchup}
+                    home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                    away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  />
+                </>
+              )}
               {/* The reason this page exists for a feed game. Renders on every
                   game (an upcoming one can carry open questions pre-tip) but
                   only polls while live. */}
@@ -1255,6 +1367,7 @@ export default function GamePage() {
                 liveAway={live ? pulse.away : null}
                 scoreVersion={pulse.scoreVersion}
                 period={live ? pulse.period : null}
+                context={context}
               />
               {sponsorship && <PresentingSponsorStrip sponsorship={sponsorship} />}
               {/* On a covered game this states WHY there is no period table

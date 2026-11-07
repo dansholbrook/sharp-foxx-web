@@ -1507,6 +1507,17 @@ export interface EventDetail extends EventListItem {
   periodScores: PeriodScore[] | null;
   totalLine: string | null;
   spreadLine: string | null;
+  // The STORED line, written by fetch-lines (refreshed ~every 12h). The game page
+  // shows it only when line movement has no qualified point -- see game-line.tsx.
+  spreadFavoriteTeamId: string | null;
+  spreadSource: string | null;
+  spreadUpdatedAt: string | null;
+  lineSource: string | null;
+  lineUpdatedAt: string | null;
+  // When the resolver last FETCHED this game's score, changed or not. ESPN
+  // publishes no per-game timestamp, so this is the honest "as of": the score is
+  // at least this fresh. NULL = never fetched (covered games; not yet reached).
+  scoreCheckedAt: string | null;
   marketId: string | null;
 }
 
@@ -1516,8 +1527,24 @@ export const getEvent = (token: string, id: string) =>
 // Each side's record and next fixture, DERIVED on the server from finished and
 // scheduled events. Garnish: its own call so it can fail without taking the
 // game page with it.
+export interface SeasonRecord {
+  league: string;
+  season: number;
+  wins: number;
+  losses: number;
+  ties: number | null;
+  overtimeLosses: number | null;
+  display: string;
+  source: 'standings' | 'team-season-stats';
+  fetchedAt: string;
+}
+
 export interface TeamContext {
+  // Counted from OUR finals; deliberately NOT rendered (see context() on the API).
   record: { won: number; lost: number };
+  // The provider's season record -- the one the page renders. NULL with a reason.
+  seasonRecord: SeasonRecord | null;
+  seasonRecordNote: string | null;
   next: {
     id: string;
     scheduledAt: string;
@@ -1686,6 +1713,81 @@ export interface LineMovement {
   largestMove: { from: string; to: string; homeWinProbDelta: number; shareOfTotal: number } | null;
   note: string | null;
 }
+
+// ============================================================================
+// GET /events/:id/matchup -- the pre-game inputs, as facts. Each section is
+// independent and carries a note when it cannot answer. See matchup.tsx.
+// ============================================================================
+export interface TeamVsClose {
+  league: string;
+  season: number;
+  window: { start: string; end: string | null };
+  gamesPlayed: number | null;
+  finalsHeld: number;
+  withSpread: number;
+  withTotal: number;
+  straightUpInSpreadGames: { wins: number; losses: number; ties: number };
+  vsSpread: { covered: number; notCovered: number; pushes: number };
+  vsTotal: { over: number; under: number; pushes: number };
+  recordsFetchedAt: string;
+  note: string | null;
+}
+
+export interface InjuredPlayer {
+  name: string;
+  position: string | null;
+  status: string;
+  bodyPart: string | null;
+  since: string | null;
+  practice: string | null;
+}
+
+// 'ok' with an empty list is REAL ("no injuries reported"); 'no-feed' is not a
+// clean bill of health and must never read like one.
+export type TeamInjuries =
+  | { status: 'ok'; players: InjuredPlayer[]; fetchedAt: string }
+  | { status: 'no-feed'; note: string }
+  | { status: 'unavailable'; note: string };
+
+export interface StatLine { key: string; label: string; value: number | null; display: string }
+export type TeamStats =
+  | { status: 'ok'; league: string; season: number; games: number; stats: StatLine[]; fetchedAt: string }
+  | { status: 'unavailable'; note: string };
+
+export interface TeamGame {
+  eventId: string;
+  date: string;
+  isHome: boolean;
+  opponentTeamId: string;
+  opponent: string;
+  teamScore: number;
+  opponentScore: number;
+  result: 'W' | 'L' | 'T';
+  closeSpread: number | null;
+  closeTotal: number | null;
+  vsSpread: 'covered' | 'not covered' | 'push' | null;
+  vsTotal: 'over' | 'under' | 'push' | null;
+}
+export interface TeamForm { games: TeamGame[]; finalsHeld: number; gamesPlayed: number | null }
+
+export interface Matchup {
+  eventId: string;
+  vsClose: { home: TeamVsClose | null; away: TeamVsClose | null; homeNote: string | null; awayNote: string | null };
+  injuries: { home: TeamInjuries; away: TeamInjuries };
+  teamStats: { home: TeamStats; away: TeamStats };
+  form: { home: TeamForm | null; away: TeamForm | null; homeNote: string | null; awayNote: string | null };
+  // Earlier meetings this season, newest first, from THIS game's home side.
+  headToHead: {
+    meetings: TeamGame[];
+    coverage: {
+      home: { finalsHeld: number; gamesPlayed: number | null } | null;
+      away: { finalsHeld: number; gamesPlayed: number | null } | null;
+    };
+  };
+}
+
+export const getEventMatchup = (token: string, id: string) =>
+  authGet<Matchup>(`/events/${encodeURIComponent(id)}/matchup`, token);
 
 export const getEventLineMovement = (token: string, id: string) =>
   authGet<LineMovement>(`/events/${encodeURIComponent(id)}/line-movement`, token);
