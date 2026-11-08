@@ -8,10 +8,14 @@
 // fan adding the column up would otherwise find a "bug". Percentages are the
 // team row's made / attempted.
 //
-// THREE STATES THAT MUST NOT LOOK LIKE BUGS:
+// FOUR STATES THAT MUST NOT LOOK LIKE BUGS:
 //   * playersPublished false: the provider publishes a non-D1 opponent's team
 //     totals and no players. One sentence says so; the totals row still shows,
 //     because it is real. Never an empty player table.
+//   * totalsPublished false: for some non-D1 opponents the team row is the score
+//     and nothing else (Grace, twice). A row with no shots is not a team that
+//     took no shots, so NO TABLE -- one sentence, no "0-0" under it. The score
+//     is already on the scoreboard above.
 //   * did not play: stats are NULL, not zero. Those players are named in a line
 //     under the table, apart from players who played and scored nothing (0 in
 //     the PTS column).
@@ -48,6 +52,14 @@ function SideTable({ side, team }: { side: ProviderBoxSide; team: string }) {
   const played = side.players.filter((p) => p.played && p.stats);
   const dnp = side.players.filter((p) => !p.played);
   const t = side.totals;
+  if (!side.totalsPublished) {
+    return (
+      <div className="boxscore__side">
+        <h3 className="boxscore__team">{team}</h3>
+        <p className="boxscore__unpublished">Player stats and team totals not published for {team}.</p>
+      </div>
+    );
+  }
   return (
     <div className="boxscore__side">
       <h3 className="boxscore__team">{team}</h3>

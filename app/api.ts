@@ -1831,8 +1831,13 @@ export interface ProviderBoxSide {
   side: 'home' | 'away';
   teamId: string;
   playersPublished: boolean;
+  // false: the team row is the score and nothing else (some non-D1 opponents).
+  // Show no totals -- a row with no shots is not a team that took no shots.
+  totalsPublished: boolean;
   minutesDelta: number | null;
-  totals: ProviderBoxStats & { possessions: string | null };
+  // The team row. No possessions: the API computes those (Oliver), never the
+  // provider's figure beside ours.
+  totals: ProviderBoxStats;
   players: ProviderBoxPlayer[];
 }
 export interface ProviderBoxScore {
