@@ -83,6 +83,13 @@ export function describeVsClose(m: Matchup | null, home: string, away: string, o
   if (!m) return null;
   const { home: h, away: a, homeNote, awayNote } = m.vsClose;
   if (!h && !a) return null;
+  // ABSENT WHEN THERE IS NOTHING TO SAY, the line-movement rule. When neither
+  // team has a single game with a closing line -- every cbb game today, since
+  // cbb carries no line history -- the table is all dashes and "0 of N": an
+  // empty grid that reads as broken rather than as "no closes held". With any
+  // coverage at all, the section renders exactly as before.
+  const covered = (v: TeamVsClose | null) => !!v && (v.withSpread > 0 || v.withTotal > 0);
+  if (!covered(h) && !covered(a)) return null;
   const A = cells(a, awayNote); const H = cells(h, homeNote);
   const rows: VsCloseRow[] = [
     { label: 'This season', away: A.season, home: H.season },
@@ -252,14 +259,22 @@ export function formLine(g: TeamGame): string {
   return `${score} ${where} · ${shortDate(g.date)} · ${close}${total}`;
 }
 
+// "The only final we hold" / "Both finals we hold" / "All 4 finals we hold" /
+// "Most recent 5 of the 9 finals we hold" -- read aloud, never "1 of the 1 finals".
+function heldPhrase(shown: number, held: number): string {
+  if (held === 1) return 'The only final we hold';
+  if (shown === held) return held === 2 ? 'Both finals we hold' : `All ${held} finals we hold`;
+  return `Most recent ${shown} of the ${held} finals we hold`;
+}
+
 export function describeFormColumn(team: string, f: TeamForm | null, note: string | null): InjuryColumn {
   if (!f) return { team, headline: 'Not available', lines: note ? [note] : [] };
   if (!f.games.length) return { team, headline: 'No finals held for this season yet', lines: [] };
   const lines = f.games.map(formLine);
   const n = f.games.length;
   const held = f.gamesPlayed !== null
-    ? `Most recent ${n} of the ${f.finalsHeld} finals we hold; ${count(f.gamesPlayed, 'game')} played this season.`
-    : `Most recent ${n} of the ${f.finalsHeld} finals we hold.`;
+    ? `${heldPhrase(n, f.finalsHeld)}; ${count(f.gamesPlayed, 'game')} played this season.`
+    : `${heldPhrase(n, f.finalsHeld)}.`;
   const gap = f.gamesPlayed !== null && f.finalsHeld < f.gamesPlayed
     ? ' Because we do not hold every game, these may not be the last games actually played.'
     : '';
@@ -273,6 +288,10 @@ export function FormSection({ matchup, home, away }: { matchup: Matchup | null; 
     describeFormColumn(away, matchup.form.away, matchup.form.awayNote),
     describeFormColumn(home, matchup.form.home, matchup.form.homeNote),
   ];
+  // The footer names a close only when one is shown: with no closing line on any
+  // listed game (all of cbb today), "each against its closing line ... the same
+  // close as above" would point at a section that is not there.
+  const anyClose = [matchup.form.home, matchup.form.away].some((f) => f?.games.some((g) => g.vsSpread !== null || g.vsTotal !== null));
   return (
     <section className="matchup">
       <h2 className="matchup__title">Recent form</h2>
@@ -290,7 +309,11 @@ export function FormSection({ matchup, home, away }: { matchup: Matchup | null; 
             </div>
           ))}
         </div>
-        <p className="matchup__foot">Our final scores, each against its closing line (median of 3+ independent sportsbooks, the same close as above).</p>
+        <p className="matchup__foot">
+          {anyClose
+            ? 'Our final scores, each against its closing line (median of 3+ independent sportsbooks, the same close as above).'
+            : 'Our final scores. No closing line is held for these games.'}
+        </p>
       </div>
     </section>
   );
