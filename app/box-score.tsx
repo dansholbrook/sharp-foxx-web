@@ -29,6 +29,10 @@
 //     the PTS column).
 //   * no starter flag in college basketball, so no starters/bench split. The API
 //     orders players by minutes, most first.
+//   * minutesReconciled false: the provider's player minutes for this side do not
+//     add up, so the API sends them null, MIN shows a dash, and the API orders that
+//     side by points. One sentence says whose number it is, what it is, and what is
+//     not shown. minutesSum 0 is the provider publishing none.
 //
 // NO BOX SCORE, NO SECTION: a refused game, one not fetched yet, and every
 // other sport render nothing -- not a heading over an empty shell.
@@ -56,6 +60,13 @@ const COLS: { key: string; label: string; title: string; cell: (s: ProviderBoxSt
   { key: 'pf', label: 'PF', title: 'Personal fouls', cell: (s) => s.pf },
 ];
 
+function minutesNote(side: ProviderBoxSide, provider: string): string | null {
+  if (side.minutesReconciled !== false) return null;
+  return side.minutesSum === 0
+    ? `${provider} published no minutes for ${side.teamName} in this game.`
+    : `${provider}'s player minutes for ${side.teamName} add up to ${side.minutesSum}, not ${side.minutesExpected}, so minutes are not shown and players are ordered by points.`;
+}
+
 // note: the sentence above this side's table, or null. The section decides it,
 // because in 'team-totals-only' one sentence covers both teams.
 function SideTable({ side, provider, note }: { side: ProviderBoxSide; provider: string; note: string | null }) {
@@ -63,6 +74,7 @@ function SideTable({ side, provider, note }: { side: ProviderBoxSide; provider: 
   const played = side.players.filter((p) => p.played && p.stats);
   const dnp = side.players.filter((p) => !p.played);
   const t = side.teamTotals;
+  const minutes = minutesNote(side, provider);
   if (!side.totalsPublished) {
     return (
       <div className="boxscore__side">
@@ -75,6 +87,7 @@ function SideTable({ side, provider, note }: { side: ProviderBoxSide; provider: 
     <div className="boxscore__side">
       <h3 className="boxscore__team">{team}</h3>
       {note && <p className="boxscore__unpublished">{note}</p>}
+      {minutes && <p className="boxscore__unpublished">{minutes}</p>}
       <div className="boxscore__scroll">
         <table className="boxscore__table">
           <thead>

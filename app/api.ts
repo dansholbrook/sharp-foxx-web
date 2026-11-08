@@ -1838,6 +1838,11 @@ export interface ProviderBoxSide {
   // Show no totals -- a row with no shots is not a team that took no shots.
   totalsPublished: boolean;
   minutesDelta: number | null;
+  // false: this side's player minutes do not add up, so the API sends them null.
+  // minutesSum 0 means the provider published none. null when players are unpublished.
+  minutesReconciled: boolean | null;
+  minutesSum: number | null;
+  minutesExpected: number | null;
   // The team row. No possessions: the API computes those (Oliver), never the
   // provider's figure beside ours.
   teamTotals: ProviderBoxStats;
