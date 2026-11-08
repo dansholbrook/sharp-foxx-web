@@ -1814,6 +1814,34 @@ export interface Matchup {
 export const getEventMatchup = (token: string, id: string) =>
   authGet<Matchup>(`/events/${encodeURIComponent(id)}/matchup`, token);
 
+// ---- BOX SCORE (GET /events/:id/box-score) -- mirrors the API's
+// BoxScoreReadService. Basketball family only; { boxScore: null } when there is
+// none (refused by the writer's checks, not fetched yet, or a sport not stored).
+// TOTALS ARE THE TEAM ROW, never a sum of players: team rebounds belong to no
+// player. A did-not-play player has stats null (not zeros); a side with
+// playersPublished false has totals and players []. No starter flag in cbb:
+// players arrive ordered by minutes, did-not-play last.
+export interface ProviderBoxStats {
+  minutes: number | null; points: number;
+  fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number;
+  orb: number; drb: number; reb: number; ast: number; stl: number; blk: number; tov: number; pf: number;
+}
+export interface ProviderBoxPlayer { name: string; position: string | null; played: boolean; stats: ProviderBoxStats | null }
+export interface ProviderBoxSide {
+  side: 'home' | 'away';
+  teamId: string;
+  playersPublished: boolean;
+  minutesDelta: number | null;
+  totals: ProviderBoxStats & { possessions: string | null };
+  players: ProviderBoxPlayer[];
+}
+export interface ProviderBoxScore {
+  source: string; league: string; fetchedAt: string; providerUpdatedAt: string | null; revision: number;
+  away: ProviderBoxSide; home: ProviderBoxSide;
+}
+export const getEventBoxScore = (token: string, id: string) =>
+  authGet<{ boxScore: ProviderBoxScore | null }>(`/events/${encodeURIComponent(id)}/box-score`, token);
+
 export const getEventLineMovement = (token: string, id: string) =>
   authGet<LineMovement>(`/events/${encodeURIComponent(id)}/line-movement`, token);
 

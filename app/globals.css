@@ -23821,3 +23821,60 @@ a.scout-reveal__main:hover .scout-reveal__name {
 /* A global th rule uppercases and letter-spaces table headers; these tables read
    as sentences ("With a closing spread"), so they opt out. */
 .matchup__table th { text-transform: none; letter-spacing: normal; }
+
+/* ============================================================================
+   THE BASKETBALL BOX SCORE (box-score.tsx) -- one table per team under the
+   period table. MOBILE IS THE BASE: 14 columns never fit 390px, so each table
+   scrolls inside its own box (the page never scrolls sideways) with the player
+   column sticky, the .periods__scroll rule.
+   ============================================================================ */
+.boxscore { margin: 22px 0 0; }
+.boxscore__side + .boxscore__side { margin-top: 16px; }
+.boxscore__team { margin: 0 0 6px; font-size: 0.88rem; font-weight: 700; color: var(--text); }
+.boxscore__unpublished { margin: 0 0 8px; font-size: 0.84rem; color: var(--muted); }
+.boxscore__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.boxscore__table { width: 100%; border-collapse: collapse; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.boxscore__table th, .boxscore__table td { padding: 7px 8px; text-align: right; white-space: nowrap; }
+.boxscore__table th { text-transform: none; letter-spacing: normal; }
+.boxscore__table thead th { font-size: 0.68rem; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--border); }
+.boxscore__table abbr { text-decoration: none; cursor: help; }
+.boxscore__table tbody td { color: var(--text); }
+.boxscore__table tbody tr + tr th, .boxscore__table tbody tr + tr td { border-top: 1px solid var(--border); }
+/* The player column: left, sticky, and the only one allowed to be wide. Capped
+   on a phone so a long name does not push every number off screen. */
+.boxscore__table .boxscore__name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+  background: var(--panel);
+  font-weight: 600;
+  color: var(--text);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 640px) { .boxscore__table .boxscore__name { max-width: 220px; } }
+.boxscore__table thead .boxscore__name { color: var(--muted); font-weight: 700; }
+.boxscore__pos { margin-left: 6px; font-size: 0.68rem; font-weight: 500; color: var(--muted); }
+.boxscore__totals th, .boxscore__totals td { border-top: 1px solid var(--border); font-weight: 700; color: var(--text); }
+.boxscore__pcts td { padding-top: 0; font-size: 0.72rem; color: var(--muted); }
+.boxscore__dnp { margin: 6px 0 0; font-size: 0.78rem; color: var(--text); line-height: 1.45; }
+.boxscore__dnplabel { color: var(--muted); }
+.boxscore__foot { margin: 10px 0 0; font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
+.boxscore__table tfoot th, .boxscore__table tfoot td { border-bottom: 0; }
+.boxscore__pcts th, .boxscore__pcts td { border-top: 0; }
+/* The staff-table phone rule (`main table { display: block; overflow-x: auto }`)
+   would make each box-score table its own scroller inside .boxscore__scroll.
+   The wrapper owns the scroll here, so the table stays a table and full width. */
+main .boxscore__table { display: table; overflow: visible; max-width: none; }
+/* Same opt-out for the period table: .periods__scroll owns the scroll, so the
+   staff-table phone rule must not turn the table into a block that stops short
+   of its box (it left the rows ending mid-panel at 390px). */
+main .periods__table { display: table; overflow: visible; max-width: none; }

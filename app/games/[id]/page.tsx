@@ -12,6 +12,8 @@ import {
   getEventContext,
   getEventLineMovement,
   getEventMatchup,
+  getEventBoxScore,
+  ProviderBoxScore,
   Matchup,
   LineMovement,
   getEvents,
@@ -38,6 +40,7 @@ import { toYouTubeEmbed } from '../../video';
 import { PredictionsSection } from '../../predictions';
 import { LineMovementModule } from '../../line-movement';
 import { GameLine } from '../../game-line';
+import { BoxScoreSection } from '../../box-score';
 import { FormSection, HeadToHeadSection, InjuriesSection, seasonCoversGame, TeamStatsSection, VsCloseSection } from '../../matchup';
 import { useWatchLiveGameEarn } from '../../earn-hooks';
 
@@ -1042,6 +1045,9 @@ export default function GamePage() {
   const [movement, setMovement] = useState<LineMovement | null>(null);
   // The pre-game inputs (matchup.tsx). Garnish: its own call, null on failure.
   const [matchup, setMatchup] = useState<Matchup | null>(null);
+  // The stored provider box score (box-score.tsx). Garnish like the matchup:
+  // null on failure, and null when the game has none -- both render nothing.
+  const [boxScore, setBoxScore] = useState<ProviderBoxScore | null>(null);
   // The list, kept ONLY for the "More games" rail. It no longer gates the page.
   const [events, setEvents] = useState<EventListItem[] | null>(null);
   const [articles, setArticles] = useState<EventContentItem[] | null>(null);
@@ -1082,7 +1088,7 @@ export default function GamePage() {
         // so it is fetched here too — but swallowed to [] like the other
         // garnish. A slow or failed schedule read used to blank the game; now it
         // costs a rail.
-        const [ev, ctx, content, feed, sponsor, list, moves, mu] = await Promise.all([
+        const [ev, ctx, content, feed, sponsor, list, moves, mu, box] = await Promise.all([
           getEvent(token, id),
           getEventContext(token, id).catch(() => null),
           getEventContent(token, id, 'published').catch(
@@ -1095,12 +1101,14 @@ export default function GamePage() {
           getEvents(token).catch(() => [] as EventListItem[]),
           getEventLineMovement(token, id).catch(() => null),
           getEventMatchup(token, id).catch(() => null),
+          getEventBoxScore(token, id).then((r) => r.boxScore).catch(() => null),
         ]);
         if (cancelled) return;
         setEvent(ev);
         setContext(ctx);
         setMovement(moves);
         setMatchup(mu);
+        setBoxScore(box);
         setArticles(content);
         setLatest(feed);
         setSponsorship(sponsor);
@@ -1311,6 +1319,16 @@ export default function GamePage() {
                   self-hide: no periods before a game starts, no form strip
                   without team FKs. */}
               <PeriodTable event={event} />
+              {/* The players, on a final only: a box score is the settled game
+                  (the writer refuses one that is not closed). Self-hides when
+                  there is none -- refused, not fetched yet, or not basketball. */}
+              {event.status === 'final' && (
+                <BoxScoreSection
+                  box={boxScore}
+                  away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
+                  home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
+                />
+              )}
               {/* BLOCK 1: the line in every state (the close once started), its
                   probability, the footnote, and on a final the result against
                   it. Same `current` as LineMovementModule below -- one line per
