@@ -1847,6 +1847,59 @@ export interface ProviderBoxScore {
 export const getEventBoxScore = (token: string, id: string) =>
   authGet<{ boxScore: ProviderBoxScore | null }>(`/events/${encodeURIComponent(id)}/box-score`, token);
 
+// ---- TEAM SEASON (GET /teams/:id/season) -- mirrors the API's TeamSeasonService.
+// College basketball only; { available: false, why } for anything else. Every
+// figure travels with what it is computed from (coverage); the stats are the
+// API's stats library over TEAM rows -- nothing is computed on the page.
+export interface SeasonWL { wins: number; losses: number }
+export interface SeasonFourFactors {
+  effectiveFgPct: number | null; turnoverPct: number | null; offensiveReboundPct: number | null; freeThrowRate: number | null;
+}
+export interface TeamSeasonStats {
+  games: number; smallSample: boolean;
+  possessions: number; possessionsPerGame: number | null; pace: number | null;
+  offensiveRating: number | null; defensiveRating: number | null; netRating: number | null;
+  offense: SeasonFourFactors; defense: SeasonFourFactors;
+  threePointRate: number | null; trueShootingPct: number | null;
+  pointsPerGame: number | null; opponentPointsPerGame: number | null;
+  fieldGoalPct: number | null; threePointPct: number | null; freeThrowPct: number | null;
+}
+export interface TeamScheduleGame {
+  eventId: string; date: string; scheduledAt: string; startTimeTba: boolean; status: string;
+  site: 'home' | 'away' | 'neutral';
+  opponentTeamId: string | null; opponent: string;
+  teamScore: number | null; opponentScore: number | null; result: 'W' | 'L' | null;
+  boxScore: 'stored' | 'refused' | 'not fetched' | 'team totals not published' | 'opponent totals not published' | null;
+}
+export interface TeamLeader { name: string; games: number; value: number; detail: string }
+export interface TeamLeaderBoard {
+  key: 'points' | 'rebounds' | 'assists' | 'steals' | 'blocks' | 'trueShooting';
+  label: string; unit: 'per game' | '%'; minimum: string; leaders: TeamLeader[];
+}
+export type TeamSeasonView =
+  | { available: false; why: string }
+  | {
+    available: true;
+    league: string; season: number | null;
+    window: { start: string; end: string | null } | null; windowNote: string | null;
+    coverage: {
+      gamesPlayed: number | null; providerRecord: string | null; recordNote: string | null; recordsFetchedAt: string | null;
+      finalsHeld: number; statsGames: number;
+      excluded: { refused: number; notFetched: number; opponentTotalsMissing: number; ownTotalsMissing: number };
+    };
+    record: {
+      overall: SeasonWL; home: SeasonWL; away: SeasonWL; neutral: SeasonWL;
+      lastN: SeasonWL & { games: number };
+      streak: { kind: 'W' | 'L'; length: number } | null;
+    };
+    schedule: TeamScheduleGame[];
+    stats: TeamSeasonStats | null;
+    playersPublished: boolean;
+    leaders: TeamLeaderBoard[];
+  };
+export const getTeamSeason = (token: string, id: string) =>
+  authGet<TeamSeasonView>(`/teams/${encodeURIComponent(id)}/season`, token);
+
 export const getEventLineMovement = (token: string, id: string) =>
   authGet<LineMovement>(`/events/${encodeURIComponent(id)}/line-movement`, token);
 

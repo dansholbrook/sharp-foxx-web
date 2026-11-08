@@ -23878,3 +23878,57 @@ main .boxscore__table { display: table; overflow: visible; max-width: none; }
    staff-table phone rule must not turn the table into a block that stops short
    of its box (it left the rows ending mid-panel at 390px). */
 main .periods__table { display: table; overflow: visible; max-width: none; }
+
+/* ============================================================================
+   THE TEAM PAGE'S SEASON (team-season.tsx): record, stats and four factors,
+   leaders, schedule. MOBILE IS THE BASE; existing tokens only. Results are NOT
+   coloured green/red -- a colour is a verdict; the W or L says it.
+   ============================================================================ */
+.tseason__lead { margin: 0 0 12px; font-size: 0.86rem; line-height: 1.5; color: var(--text); }
+.tseason__note { margin: 0; font-size: 0.86rem; line-height: 1.5; color: var(--muted); }
+.tseason__foot { margin: 10px 0 0; font-size: 0.74rem; line-height: 1.5; color: var(--muted); }
+.tseason__sub { margin: 20px 0 8px; font-size: 0.8rem; font-weight: 700; color: var(--text); }
+
+.tseason__record { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 640px) { .tseason__record { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .tseason__record { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.tseason__recitem { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.tseason__recitem dt { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.tseason__recitem dd { margin: 4px 0 0; font-size: 1.05rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.tseason__table { width: 100%; border-collapse: collapse; font-size: 0.84rem; font-variant-numeric: tabular-nums; }
+main .tseason__table { display: table; overflow: visible; max-width: none; white-space: normal; }
+.tseason__table th, .tseason__table td { padding: 8px 6px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); text-transform: none; letter-spacing: normal; }
+.tseason__table tbody th { font-size: 0.82rem; font-weight: 500; color: var(--text); }
+.tseason__table thead th { font-size: 0.72rem; font-weight: 700; color: var(--muted); }
+.tseason__table tr:last-child th, .tseason__table tr:last-child td { border-bottom: 0; }
+.tseason__num { text-align: right !important; white-space: nowrap; font-weight: 700; color: var(--text); }
+.tseason__ctx { font-size: 0.74rem; color: var(--muted); }
+.tseason__plain { display: block; margin-top: 2px; font-size: 0.72rem; font-weight: 400; color: var(--muted); }
+.tseason__table--factors th[scope='row'] { width: 60%; }
+
+.tseason__leaders { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 560px) { .tseason__leaders { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .tseason__leaders { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tseason__board { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.tseason__boardtitle { margin: 0 0 8px; font-size: 0.8rem; font-weight: 700; color: var(--text); }
+.tseason__unit { font-weight: 400; color: var(--muted); }
+.tseason__boardlist { margin: 0; padding: 0 0 0 18px; font-size: 0.82rem; }
+.tseason__boardlist li { margin: 0 0 4px; color: var(--text); }
+.tseason__boardlist li > * { vertical-align: baseline; }
+.tseason__pname { display: inline-block; max-width: calc(100% - 56px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tseason__pval { float: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tseason__none { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.tseason__min { margin: 8px 0 0; font-size: 0.7rem; line-height: 1.4; color: var(--muted); }
+
+.tseason__sched { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
+.tseason__sched li + li { border-top: 1px solid var(--border); }
+.tseason__game { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 10px 12px; color: var(--text); text-decoration: none; }
+.tseason__game:hover { background: var(--border); }
+.tseason__when { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tseason__vs { font-size: 0.86rem; min-width: 0; }
+.tseason__gnote { display: block; margin-top: 2px; font-size: 0.72rem; color: var(--muted); }
+.tseason__res { font-size: 0.84rem; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+.tseason__res--w, .tseason__res--l { font-weight: 700; color: var(--text); }
+/* The summary table keeps a reading measure on desktop so each number sits by its label. */
+.tseason__table:not(.tseason__table--factors) { max-width: 640px; }

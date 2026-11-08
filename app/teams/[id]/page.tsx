@@ -20,7 +20,10 @@ import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { FollowButton } from '../../follow-button';
 import { SocialLinksRow } from '../../social-links';
+import { TeamSeason } from '../../team-season';
 import {
+  getTeamSeason,
+  TeamSeasonView,
   getTeam,
   getTeamRoster,
   getEvents,
@@ -341,6 +344,11 @@ export default function TeamPage() {
   const [events, setEvents] = useState<EventListItem[]>([]);
   const [published, setPublished] = useState<FeedItem[]>([]);
   const [photos, setPhotos] = useState<GamePhoto[]>([]);
+  // The season (team-season.tsx): record, stats, leaders, schedule. Its own read
+  // so a failure costs these sections, not the page -- and SAYS so (seasonError)
+  // rather than leaving the page looking like a team with no season.
+  const [season, setSeason] = useState<TeamSeasonView | null>(null);
+  const [seasonError, setSeasonError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -358,13 +366,19 @@ export default function TeamPage() {
       try {
         // The team read is the page; the rest are garnish — a failed roster /
         // events / feed load degrades to empty rather than blanking the hub.
-        const [teamDetail, rosterList, allEvents, feed] = await Promise.all([
+        setSeasonError(null);
+        const [teamDetail, rosterList, allEvents, feed, seasonView] = await Promise.all([
           getTeam(t, id),
           getTeamRoster(t, id).catch(() => [] as TeamRosterAthlete[]),
           getEvents(t).catch(() => [] as EventListItem[]),
           getPublishedContent(t).catch(() => [] as FeedItem[]),
+          getTeamSeason(t, id).catch((e: unknown) => {
+            setSeasonError(e instanceof Error ? e.message : 'failed to load');
+            return null;
+          }),
         ]);
         setTeam(teamDetail);
+        setSeason(seasonView);
         setRoster(rosterList);
         setEvents(allEvents);
         setPublished(feed);
@@ -578,7 +592,19 @@ export default function TeamPage() {
             </div>
           </section>
 
+          {/* ---- THE SEASON: record, stats, leaders, schedule (team-season.tsx).
+              Where it is available it replaces the stat strip and the results
+              list below, which counted from a paged schedule read and showed
+              zeros for feed teams. ---- */}
+          {seasonError && (
+            <section className="card team-section">
+              <p className="tseason__note">The season could not be loaded ({seasonError}).</p>
+            </section>
+          )}
+          <TeamSeason view={season} team={teamHeading(team)} />
+
           {/* ---- STAT STRIP ---- */}
+          {!season?.available && (
           <section className="team-stats">
             <div className="team-stat">
               <span className="team-stat__value">{finals.length}</span>
@@ -593,6 +619,7 @@ export default function TeamPage() {
               <span className="team-stat__label">On roster</span>
             </div>
           </section>
+          )}
 
           {/* ---- NEXT UP / LIVE ---- */}
           {nextUp && (
@@ -602,7 +629,7 @@ export default function TeamPage() {
           )}
 
           {/* ---- RECENT RESULTS ---- */}
-          {finals.length > 0 && <RecentResults finals={finals} />}
+          {finals.length > 0 && !season?.available && <RecentResults finals={finals} />}
 
           {/* ---- ROSTER ---- */}
           {roster.length > 0 && (
@@ -625,6 +652,7 @@ export default function TeamPage() {
 
           {/* Nothing to show beyond identity — a gentle empty state. */}
           {finals.length === 0 &&
+            !season?.available &&
             !nextUp &&
             roster.length === 0 &&
             coverage.length === 0 &&
