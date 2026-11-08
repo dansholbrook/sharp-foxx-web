@@ -1323,11 +1323,7 @@ export default function GamePage() {
                   (the writer refuses one that is not closed). Self-hides when
                   there is none -- refused, not fetched yet, or not basketball. */}
               {event.status === 'final' && (
-                <BoxScoreSection
-                  box={boxScore}
-                  away={teamLabel(event.awayInstitution, event.awayTeam) || 'Away'}
-                  home={teamLabel(event.homeInstitution, event.homeTeam) || 'Home'}
-                />
+                <BoxScoreSection box={boxScore} />
               )}
               {/* BLOCK 1: the line in every state (the close once started), its
                   probability, the footnote, and on a final the result against

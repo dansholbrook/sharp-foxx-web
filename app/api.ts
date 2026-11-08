@@ -1819,8 +1819,10 @@ export const getEventMatchup = (token: string, id: string) =>
 // none (refused by the writer's checks, not fetched yet, or a sport not stored).
 // TOTALS ARE THE TEAM ROW, never a sum of players: team rebounds belong to no
 // player. A did-not-play player has stats null (not zeros); a side with
-// playersPublished false has totals and players []. No starter flag in cbb:
-// players arrive ordered by minutes, did-not-play last.
+// playersPublished false has teamTotals and players [] -- the flag is on the
+// wire so the page never infers it from an empty array. coverage: 'full' both
+// sides published, 'partial' one, 'team-totals-only' neither. Sides come away
+// first. No starter flag in cbb: players arrive ordered by minutes, did-not-play last.
 export interface ProviderBoxStats {
   minutes: number | null; points: number;
   fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number;
@@ -1828,8 +1830,9 @@ export interface ProviderBoxStats {
 }
 export interface ProviderBoxPlayer { name: string; position: string | null; played: boolean; stats: ProviderBoxStats | null }
 export interface ProviderBoxSide {
-  side: 'home' | 'away';
   teamId: string;
+  teamName: string;
+  isHome: boolean;
   playersPublished: boolean;
   // false: the team row is the score and nothing else (some non-D1 opponents).
   // Show no totals -- a row with no shots is not a team that took no shots.
@@ -1837,12 +1840,14 @@ export interface ProviderBoxSide {
   minutesDelta: number | null;
   // The team row. No possessions: the API computes those (Oliver), never the
   // provider's figure beside ours.
-  totals: ProviderBoxStats;
+  teamTotals: ProviderBoxStats;
   players: ProviderBoxPlayer[];
 }
+export type ProviderBoxCoverage = 'full' | 'partial' | 'team-totals-only';
 export interface ProviderBoxScore {
-  source: string; league: string; fetchedAt: string; providerUpdatedAt: string | null; revision: number;
-  away: ProviderBoxSide; home: ProviderBoxSide;
+  source: string; provider: string; league: string; fetchedAt: string; providerUpdatedAt: string | null; revision: number;
+  coverage: ProviderBoxCoverage;
+  sides: [ProviderBoxSide, ProviderBoxSide];   // away first
 }
 export const getEventBoxScore = (token: string, id: string) =>
   authGet<{ boxScore: ProviderBoxScore | null }>(`/events/${encodeURIComponent(id)}/box-score`, token);
@@ -1894,7 +1899,12 @@ export type TeamSeasonView =
     };
     schedule: TeamScheduleGame[];
     stats: TeamSeasonStats | null;
-    playersPublished: boolean;
+    // Leaders rest on the finals with THIS team's player lines published, which
+    // can be fewer than the record (no players published for many small-school
+    // visitors). leadersMissing itemises seasonGames - leadersFromGames.
+    leadersFromGames: number;
+    seasonGames: number;
+    leadersMissing: { playersNotPublished: number; refused: number; notFetched: number };
     leaders: TeamLeaderBoard[];
   };
 export const getTeamSeason = (token: string, id: string) =>

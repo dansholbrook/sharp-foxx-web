@@ -132,6 +132,23 @@ export function leaderValue(b: TeamLeaderBoard, v: number) {
   return b.unit === '%' ? `${v.toFixed(1)}%` : v.toFixed(1);
 }
 
+// What the leaders rest on, in the section's own words. Null when they rest on
+// every final held. The gap is itemised by the API (leadersMissing), so each
+// clause names a real reason: a provider that published no players, a box score
+// that did not add up, or one not fetched yet. Team stats read the team row and
+// carry no such sentence.
+export function describeLeadersBasis(v: Extract<TeamSeasonView, { available: true }>): string | null {
+  const { leadersFromGames: n, seasonGames: of, leadersMissing: m } = v;
+  if (n === of) return null;
+  const parts: string[] = [];
+  const only = m.playersNotPublished === of - n;
+  if (m.playersNotPublished) parts.push(`no player lines published for ${only ? `the other ${m.playersNotPublished}` : m.playersNotPublished}`);
+  if (m.refused) parts.push(`${m.refused} box score${m.refused === 1 ? '' : 's'} refused because ${m.refused === 1 ? 'it' : 'they'} did not add up`);
+  if (m.notFetched) parts.push(`${m.notFetched} not fetched yet`);
+  const why = parts.join(', ');
+  return `Leaders from ${n} of ${games(of)}: ${why}.`;
+}
+
 // ============================================================================
 export function TeamSeason({ view, team }: { view: TeamSeasonView | null; team: string }) {
   if (!view) return null;
@@ -210,13 +227,13 @@ export function TeamSeason({ view, team }: { view: TeamSeasonView | null; team: 
       <section className="card team-section">
         <span className="game-kicker">Season</span>
         <h2 className="team-section__title">Leaders</h2>
-        {!view.playersPublished ? (
-          <p className="tseason__note">Player stats not published for {team}.</p>
-        ) : view.leaders.length === 0 ? (
-          <p className="tseason__note">No leaders yet: there are no box scores to compute them from.</p>
+        {view.seasonGames === 0 ? (
+          <p className="tseason__note">No finals held for this season yet.</p>
+        ) : view.leadersFromGames === 0 ? (
+          <p className="tseason__note">No player lines published for this team yet.</p>
         ) : (
           <>
-            <p className="tseason__lead">From the same {games(view.coverage.statsGames)} as the team stats.</p>
+            <p className="tseason__lead">{describeLeadersBasis(view) ?? (view.seasonGames === 1 ? 'From its 1 game.' : view.seasonGames === 2 ? 'From both games.' : `From all ${view.seasonGames} games.`)}</p>
             <div className="tseason__leaders">
               {view.leaders.map((b) => (
                 <div key={b.key} className="tseason__board">
