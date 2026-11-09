@@ -2,11 +2,17 @@
 // THE BASKETBALL BOX SCORE -- one table per team, from the stored provider lines
 // (GET /events/:id/box-score). Basketball only; other sports have other shapes.
 //
-// TEAM TOTALS ARE THE TEAM ROW, NEVER A SUM OF THE PLAYERS ABOVE THEM. Team
-// rebounds are credited to no player, so the printed rebound total is larger
-// than the column above it -- by design, and the footnote says so, because a
-// fan adding the column up would otherwise find a "bug". Percentages are the
-// team row's made / attempted.
+// TEAM TOTALS ARE THE TEAM ROW, NEVER A SUM OF THE PLAYERS ABOVE THEM. Where the
+// team row has team rebounds, credited to no player, its total is larger than the
+// column above it, and a fan adding the column would otherwise find a "bug". So that
+// side gets a sentence giving the number -- gated on the FACT for that side, not the
+// league: college rows usually carry team rebounds, NBA rows measured carry none.
+// Percentages are the team row's made / attempted.
+//
+// MINUTES ARE SHOWN THE LEAGUE'S WAY, as the API says (minutesDisplay): whole minutes
+// in college, MM:SS in the NBA, where truncated minutes would not add up to 240. With
+// MM:SS the team row's 240:00 is exact, so it is shown; whole-minute team rows stay
+// blank (a 201 says nothing a reader can use).
 //
 // COVERAGE COMES FROM THE API, never inferred from an empty array:
 //   'full'             -- both teams' player lines; one table each, away first.
@@ -27,8 +33,9 @@
 //   * did not play: stats are NULL, not zero. Those players are named in a line
 //     under the table, apart from players who played and scored nothing (0 in
 //     the PTS column).
-//   * no starter flag in college basketball, so no starters/bench split. The API
-//     orders players by minutes, most first.
+//   * no starter flag in college basketball (started is null), so no starters/bench
+//     split there; the NBA has one, so its table splits. The API orders players by
+//     minutes, most first.
 //   * minutesReconciled false: the provider's player minutes for this side do not
 //     add up, so the API sends them null, MIN shows a dash, and the API orders that
 //     side by points. One sentence says whose number it is, what it is, and what is
@@ -44,8 +51,14 @@ const pct = (made: number, att: number) => (att > 0 ? `${((made / att) * 100).to
 const ma = (made: number, att: number) => `${made}-${att}`;
 
 // The columns, in reading order. Player and the totals row share them.
-const COLS: { key: string; label: string; title: string; cell: (s: ProviderBoxStats) => string | number }[] = [
-  { key: 'min', label: 'MIN', title: 'Minutes', cell: (s) => s.minutes ?? '—' },
+type MinutesDisplay = ProviderBoxScore['minutesDisplay'];
+const minutesCell = (s: ProviderBoxStats, display: MinutesDisplay): string | number =>
+  s.minutes === null ? '—'
+    : display === 'clock' && s.seconds !== null ? `${s.minutes}:${String(s.seconds).padStart(2, '0')}`
+    : s.minutes;
+
+const COLS: { key: string; label: string; title: string; cell: (s: ProviderBoxStats, display: MinutesDisplay) => string | number }[] = [
+  { key: 'min', label: 'MIN', title: 'Minutes', cell: minutesCell },
   { key: 'pts', label: 'PTS', title: 'Points', cell: (s) => s.points },
   { key: 'fg', label: 'FG', title: 'Field goals made-attempted', cell: (s) => ma(s.fgm, s.fga) },
   { key: '3pt', label: '3PT', title: 'Three-pointers made-attempted', cell: (s) => ma(s.tpm, s.tpa) },
@@ -69,12 +82,19 @@ function minutesNote(side: ProviderBoxSide, provider: string): string | null {
 
 // note: the sentence above this side's table, or null. The section decides it,
 // because in 'team-totals-only' one sentence covers both teams.
-function SideTable({ side, provider, note }: { side: ProviderBoxSide; provider: string; note: string | null }) {
+function SideTable({ side, provider, note, display }: { side: ProviderBoxSide; provider: string; note: string | null; display: MinutesDisplay }) {
   const team = side.teamName;
   const played = side.players.filter((p) => p.played && p.stats);
   const dnp = side.players.filter((p) => !p.played);
   const t = side.teamTotals;
   const minutes = minutesNote(side, provider);
+  // Team rebounds: the team row's total minus what its players are credited with.
+  const teamRebounds = side.playersPublished ? t.reb - played.reduce((a, p) => a + p.stats!.reb, 0) : 0;
+  // The split comes from the data: a league with no flag has no group rows at all.
+  const split = played.some((p) => p.started !== null);
+  const groups: { label: string | null; rows: typeof played }[] = split
+    ? [{ label: 'Starters', rows: played.filter((p) => p.started) }, { label: 'Bench', rows: played.filter((p) => !p.started) }]
+    : [{ label: null, rows: played }];
   if (!side.totalsPublished) {
     return (
       <div className="boxscore__side">
@@ -100,28 +120,34 @@ function SideTable({ side, provider, note }: { side: ProviderBoxSide; provider: 
               ))}
             </tr>
           </thead>
-          <tbody>
-            {played.map((p, i) => (
-              <tr key={`${p.name}-${i}`}>
-                <th scope="row" className="boxscore__name">
-                  {p.name}
-                  {p.position && <span className="boxscore__pos">{p.position}</span>}
-                </th>
-                {COLS.map((c) => (
-                  <td key={c.key}>{c.cell(p.stats!)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
+          {groups.filter((g) => g.rows.length > 0).map((g) => (
+            <tbody key={g.label ?? 'players'}>
+              {g.label && (
+                <tr className="boxscore__group">
+                  <th scope="rowgroup" colSpan={COLS.length + 1} className="boxscore__name">{g.label}</th>
+                </tr>
+              )}
+              {g.rows.map((p, i) => (
+                <tr key={`${p.name}-${i}`}>
+                  <th scope="row" className="boxscore__name">
+                    {p.name}
+                    {p.position && <span className="boxscore__pos">{p.position}</span>}
+                  </th>
+                  {COLS.map((c) => (
+                    <td key={c.key}>{c.cell(p.stats!, display)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          ))}
           <tfoot>
             <tr className="boxscore__totals">
               <th scope="row" className="boxscore__name">Team totals</th>
-              {/* MIN is blank on the team row: the API sends null on an unpublished
-                  side (the provider's 0 is a placeholder) and the player sum (201
-                  when rounding is off by one) elsewhere, which reads as an error and
-                  says nothing. Drift is recorded as minutes_delta, not shown here. */}
+              {/* Whole-minute MIN is blank on the team row: the API sends null on an
+                  unpublished side and the player sum (201 when rounding is off by one)
+                  elsewhere, which says nothing. MM:SS adds up exactly, so it shows. */}
               {COLS.map((c) => (
-                <td key={c.key}>{c.key === 'min' ? '' : c.cell(t)}</td>
+                <td key={c.key}>{c.key === 'min' && display !== 'clock' ? '' : c.cell(t, display)}</td>
               ))}
             </tr>
             <tr className="boxscore__pcts">
@@ -137,6 +163,12 @@ function SideTable({ side, provider, note }: { side: ProviderBoxSide; provider: 
           </tfoot>
         </table>
       </div>
+      {teamRebounds > 0 && (
+        <p className="boxscore__foot">
+          {team}&apos;s rebound total includes {teamRebounds} team rebound{teamRebounds === 1 ? '' : 's'}, credited to no
+          player, so it is larger than the column above it.
+        </p>
+      )}
       {dnp.length > 0 && (
         <p className="boxscore__dnp">
           <span className="boxscore__dnplabel">Did not play:</span> {dnp.map((p) => p.name).join(', ')}
@@ -166,12 +198,11 @@ export function BoxScoreSection({ box }: { box: ProviderBoxScore | null }) {
       <h2 id="boxscore-title" className="periods__title">Box score</h2>
       {bothNote && <p className="boxscore__unpublished">{bothNote}</p>}
       {/* Away first, the order of the scoreboard and the period table above. */}
-      <SideTable side={away} provider={p} note={noteFor(away)} />
-      <SideTable side={home} provider={p} note={noteFor(home)} />
+      <SideTable side={away} provider={p} note={noteFor(away)} display={box.minutesDisplay} />
+      <SideTable side={home} provider={p} note={noteFor(home)} display={box.minutesDisplay} />
       {box.coverage !== 'team-totals-only' && (
         <p className="boxscore__foot">
-          Team totals are the team&apos;s own line from the provider, not the players added up. Rebounds
-          include team rebounds, which no player is credited with, so the total can exceed the column above it.
+          Team totals are the team&apos;s own line from the provider, not the players added up.
         </p>
       )}
     </section>

@@ -1825,10 +1825,11 @@ export const getEventMatchup = (token: string, id: string) =>
 // first. No starter flag in cbb: players arrive ordered by minutes, did-not-play last.
 export interface ProviderBoxStats {
   minutes: number | null; points: number;
+  seconds: number | null;   // nba: the remainder after whole minutes
   fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number;
   orb: number; drb: number; reb: number; ast: number; stl: number; blk: number; tov: number; pf: number;
 }
-export interface ProviderBoxPlayer { name: string; position: string | null; played: boolean; stats: ProviderBoxStats | null }
+export interface ProviderBoxPlayer { name: string; position: string | null; played: boolean; started: boolean | null; stats: ProviderBoxStats | null }
 export interface ProviderBoxSide {
   teamId: string;
   teamName: string;
@@ -1852,6 +1853,8 @@ export type ProviderBoxCoverage = 'full' | 'partial' | 'team-totals-only';
 export interface ProviderBoxScore {
   source: string; provider: string; league: string; fetchedAt: string; providerUpdatedAt: string | null; revision: number;
   coverage: ProviderBoxCoverage;
+  // How this league shows minutes: 'whole' (college) or 'clock', MM:SS (NBA). From the API, never decided here.
+  minutesDisplay: 'whole' | 'clock';
   sides: [ProviderBoxSide, ProviderBoxSide];   // away first
 }
 export const getEventBoxScore = (token: string, id: string) =>
@@ -1867,7 +1870,7 @@ export interface SeasonFourFactors {
 }
 export interface TeamSeasonStats {
   games: number; smallSample: boolean;
-  possessions: number; possessionsPerGame: number | null; pace: number | null;
+  possessions: number; possessionsPerGame: number | null; pace: number | null; paceBasisMinutes: number;
   offensiveRating: number | null; defensiveRating: number | null; netRating: number | null;
   offense: SeasonFourFactors; defense: SeasonFourFactors;
   threePointRate: number | null; trueShootingPct: number | null;

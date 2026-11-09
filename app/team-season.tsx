@@ -90,7 +90,7 @@ export function describeStatsBasis(v: Available, team: string): { lead: string |
 export function statRows(s: TeamSeasonStats): [string, string, string?][] {
   return [
     ['Points per game', n1(s.pointsPerGame), `allowed ${n1(s.opponentPointsPerGame)}`],
-    ['Pace', n1(s.pace), 'possessions per 40 minutes'],
+    ['Pace', n1(s.pace), `possessions per ${s.paceBasisMinutes} minutes`],
     ['Offensive rating', n1(s.offensiveRating), 'points per 100 possessions'],
     ['Defensive rating', n1(s.defensiveRating), 'points allowed per 100 possessions'],
     ['Net rating', signed(s.netRating), 'per 100 possessions'],
