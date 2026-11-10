@@ -362,6 +362,14 @@ const PAGE_ACCESS: Array<{ match: (path: string) => boolean; roles: Role[] }> = 
     match: (p) => p.startsWith('/teams/'),
     roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
   },
+  // The provider player page (/players/:id) -- a SportsDataIO player's season and
+  // game log, reached from box score names. Same all-roles gate as the game and team
+  // pages it links between, matching the backend GET /players/:id. NOT /athletes:
+  // a provider player is not an athlete (no consent, no NIL). NO nav item.
+  {
+    match: (p) => p.startsWith('/players/'),
+    roles: ['admin', 'regional_manager', 'field_rep', 'athlete', 'viewer'],
+  },
   // The school and conference hubs — the front doors onto the imported college
   // dataset. Same all-roles gate as the team/athlete pages they link between,
   // matching the backend GET /institutions/:id and GET /conferences/:id. NO nav

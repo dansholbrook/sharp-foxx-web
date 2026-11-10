@@ -241,7 +241,7 @@ export function TeamSeason({ view, team }: { view: TeamSeasonView | null; team: 
                   {b.leaders.length ? (
                     <ol className="tseason__boardlist">
                       {b.leaders.map((l) => (
-                        <li key={l.name}><span className="tseason__pname">{l.name}</span><span className="tseason__pval" title={l.detail}>{leaderValue(b, l.value)}</span></li>
+                        <li key={l.playerId}><span className="tseason__pname"><Link href={`/players/${l.playerId}`}>{l.name}</Link></span><span className="tseason__pval" title={l.detail}>{leaderValue(b, l.value)}</span></li>
                       ))}
                     </ol>
                   ) : <p className="tseason__none">Nobody qualifies yet.</p>}

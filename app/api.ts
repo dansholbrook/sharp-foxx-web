@@ -1829,7 +1829,8 @@ export interface ProviderBoxStats {
   fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number;
   orb: number; drb: number; reb: number; ast: number; stl: number; blk: number; tov: number; pf: number;
 }
-export interface ProviderBoxPlayer { name: string; position: string | null; played: boolean; started: boolean | null; stats: ProviderBoxStats | null }
+// playerId is provider_players.id: the player page's key (/players/:id). NOT an athlete id.
+export interface ProviderBoxPlayer { playerId: string; name: string; position: string | null; played: boolean; started: boolean | null; stats: ProviderBoxStats | null }
 export interface ProviderBoxSide {
   teamId: string;
   teamName: string;
@@ -1860,6 +1861,65 @@ export interface ProviderBoxScore {
 export const getEventBoxScore = (token: string, id: string) =>
   authGet<{ boxScore: ProviderBoxScore | null }>(`/events/${encodeURIComponent(id)}/box-score`, token);
 
+// ---- PLAYER PAGE (GET /players/:id) -- mirrors the API's PlayersService. A PROVIDER
+// player (provider_players.id), never an athlete: athletes are the consent and NIL
+// entity, and a provider player agreed to nothing. Every figure is the API's stats
+// library over stored lines; the page formats, it does not compute.
+//   * games: every line the player has, newest first. A game where the player's side
+//     had no published player lines has NO row -- it is absent, and season.coverage
+//     counts it. A did-not-play row has line null.
+//   * minutesWithheld: the side's player minutes do not add up (sideMinutesSum of
+//     sideMinutesExpected); minutes arrive null and the row says so.
+//   * countsAsGame false: did not play, or a stat-less row on an unreconciled side --
+//     not a game played (the team-season rule).
+//   * season: regular season + postseason of one season label; per-game over
+//     season.games; minute-based figures over advanced.minutesGames.
+export interface PlayerGameRow {
+  eventId: string; date: string; scheduledAt: string;
+  season: string; seasonType: string | null; inSeasonLine: boolean;
+  teamId: string; teamName: string;
+  site: 'home' | 'away' | 'neutral';
+  opponentTeamId: string | null; opponent: string;
+  teamScore: number | null; opponentScore: number | null; result: 'W' | 'L' | null;
+  played: boolean; started: boolean | null; position: string | null;
+  countsAsGame: boolean;
+  minutesWithheld: boolean; sideMinutesSum: number | null; sideMinutesExpected: number | null;
+  line: ProviderBoxStats | null;
+  doubleDouble: boolean | null;
+}
+export interface PlayerSeason {
+  season: string;
+  seasonTypes: string[];
+  games: number;
+  perGame: { points: number | null; rebounds: number | null; assists: number | null };
+  totals: { points: number; reb: number; ast: number; stl: number; blk: number; tov: number; pf: number };
+  shooting: Record<'fg' | 'threes' | 'ft', { made: number; attempted: number; pct: number | null }>;
+  advanced: {
+    trueShootingPct: number | null; effectiveFgPct: number | null; doubleDoubles: number;
+    minutesGames: number; minutesWithheldGames: number; minutesPerGame: number | null;
+    perRate: { basisMinutes: number; points: number | null; rebounds: number | null; assists: number | null };
+    usagePct: number | null; usageGames: number;
+  };
+  coverage: {
+    team: { id: string; name: string } | null;
+    teamFinals: number;
+    gamesForTeam: number;
+    missing: { sideUnpublished: number; refused: number; notFetched: number; notOnBoxScore: number; didNotPlay: number; statLessRow: number };
+    otherTeams: { teamId: string; name: string; games: number }[];
+  };
+  excludedFromSeason: { preseason: number; noSeasonType: number; otherSeasons: number };
+}
+export interface PlayerView {
+  player: { id: string; name: string; position: string | null; league: string; provider: string };
+  team: { id: string; name: string } | null;
+  minutesDisplay: 'whole' | 'clock';
+  season: PlayerSeason | null;
+  seasonNote: string | null;
+  games: PlayerGameRow[];
+}
+export const getPlayer = (token: string, id: string) =>
+  authGet<PlayerView>(`/players/${encodeURIComponent(id)}`, token);
+
 // ---- TEAM SEASON (GET /teams/:id/season) -- mirrors the API's TeamSeasonService.
 // College basketball only; { available: false, why } for anything else. Every
 // figure travels with what it is computed from (coverage); the stats are the
@@ -1884,7 +1944,8 @@ export interface TeamScheduleGame {
   teamScore: number | null; opponentScore: number | null; result: 'W' | 'L' | null;
   boxScore: 'stored' | 'refused' | 'not fetched' | 'team totals not published' | 'opponent totals not published' | null;
 }
-export interface TeamLeader { name: string; games: number; value: number; detail: string }
+// playerId is provider_players.id: the player page's key (/players/:id), not an athlete id.
+export interface TeamLeader { playerId: string; name: string; games: number; value: number; detail: string }
 export interface TeamLeaderBoard {
   key: 'points' | 'rebounds' | 'assists' | 'steals' | 'blocks' | 'trueShooting';
   label: string; unit: 'per game' | '%'; minimum: string; leaders: TeamLeader[];

@@ -30,6 +30,9 @@
 //     and nothing else (Grace, twice). A row with no shots is not a team that
 //     took no shots, so NO TABLE -- one sentence, no "0-0" under it. The score
 //     is already on the scoreboard above.
+//   * every player name links to that player's page (/players/:playerId, the
+//     provider player -- never an athlete), in both leagues and in the did-not-play
+//     line too.
 //   * did not play: stats are NULL, not zero. Those players are named in a line
 //     under the table, apart from players who played and scored nothing (0 in
 //     the PTS column).
@@ -45,6 +48,7 @@
 // other sport render nothing -- not a heading over an empty shell.
 // ============================================================================
 
+import Link from 'next/link';
 import { ProviderBoxScore, ProviderBoxSide, ProviderBoxStats } from './api';
 
 const pct = (made: number, att: number) => (att > 0 ? `${((made / att) * 100).toFixed(1)}%` : '—');
@@ -130,7 +134,7 @@ function SideTable({ side, provider, note, display }: { side: ProviderBoxSide; p
               {g.rows.map((p, i) => (
                 <tr key={`${p.name}-${i}`}>
                   <th scope="row" className="boxscore__name">
-                    {p.name}
+                    <Link href={`/players/${p.playerId}`}>{p.name}</Link>
                     {p.position && <span className="boxscore__pos">{p.position}</span>}
                   </th>
                   {COLS.map((c) => (
@@ -171,7 +175,10 @@ function SideTable({ side, provider, note, display }: { side: ProviderBoxSide; p
       )}
       {dnp.length > 0 && (
         <p className="boxscore__dnp">
-          <span className="boxscore__dnplabel">Did not play:</span> {dnp.map((p) => p.name).join(', ')}
+          <span className="boxscore__dnplabel">Did not play:</span>{' '}
+          {dnp.map((p, i) => (
+            <span key={p.playerId}>{i > 0 && ', '}<Link href={`/players/${p.playerId}`}>{p.name}</Link></span>
+          ))}
         </p>
       )}
     </div>
