@@ -7,6 +7,7 @@ import { PointsProvider } from './points-context';
 import { EarnProvider } from './earn-context';
 import { NotificationsProvider } from './notifications-context';
 import { SiteHeader } from './site-header';
+import { NavHistory } from './back-link';
 
 export const metadata: Metadata = {
   title: 'SharpFoxx — Admin',
@@ -25,6 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        {/* The tab's in-app navigation trail, for BackLink (back-link.tsx). Outside the
+            providers: AuthProvider swaps its subtree while restoring a session, and
+            the trail must not reset with it. Renders nothing. */}
+        <NavHistory />
         {/* PROVIDER ORDER IS LOAD-BEARING. Points must wrap Earn (an earn pushes
             its new balance at the ⚡ chip), and Earn must wrap Follows (a
             successful follow is itself an earn — see follows-context.tsx).

@@ -19,6 +19,7 @@ import { useAuth } from '../../auth-context';
 import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
 import { FollowButton } from '../../follow-button';
+import { BackLink } from '../../back-link';
 import { SocialLinksRow } from '../../social-links';
 import { TeamSeason } from '../../team-season';
 import {
@@ -535,9 +536,9 @@ export default function TeamPage() {
 
   return (
     <main className="feed-home team-page">
-      <Link href="/feed" className="game-back">
-        ← Back to feed
-      </Link>
+      {/* Back the way the person came (a player page, a game, a box score); the feed
+          when they arrived from outside the app. See back-link.tsx. */}
+      <BackLink fallbackHref="/feed" fallbackLabel="feed" />
 
       {loading && <div className="card muted">Loading team…</div>}
       {error && <div className="error">{error}</div>}

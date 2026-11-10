@@ -31,6 +31,7 @@ import Link from 'next/link';
 import { useAuth } from '../../auth-context';
 import { AccessDenied } from '../../nav';
 import { canAccess } from '../../roles';
+import { BackLink } from '../../back-link';
 import { etDateTime, getPlayer, PlayerGameRow, PlayerSeason, PlayerView, ProviderBoxStats } from '../../api';
 
 const LEAGUE_LABEL: Record<string, string> = { cbb: 'College basketball', nba: 'NBA' };
@@ -257,13 +258,19 @@ export default function PlayerPage() {
 
   if (!token) return null;
   if (!allowed) return <AccessDenied />;
-  if (loading) return <main className="feed-home team-page"><p className="tseason__note">Loading…</p></main>;
-  if (notFound) return <main className="feed-home team-page"><p className="tseason__note">No such player.</p></main>;
-  if (error || !view) return <main className="feed-home team-page"><p className="tseason__note">Could not load this player: {error}</p></main>;
+  // Back the way the person came; with no in-app history, the player's team page
+  // (the feed until the team is known, or for a player with no team). back-link.tsx.
+  const back = view?.team
+    ? <BackLink fallbackHref={`/teams/${view.team.id}`} fallbackLabel={view.team.name} />
+    : <BackLink fallbackHref="/feed" fallbackLabel="feed" />;
+  if (loading) return <main className="feed-home team-page">{back}<p className="tseason__note">Loading…</p></main>;
+  if (notFound) return <main className="feed-home team-page">{back}<p className="tseason__note">No such player.</p></main>;
+  if (error || !view) return <main className="feed-home team-page">{back}<p className="tseason__note">Could not load this player: {error}</p></main>;
 
   const p = view.player;
   return (
     <main className="feed-home team-page">
+      {back}
       <section className="card team-section">
         <span className="game-kicker">{LEAGUE_LABEL[p.league] ?? p.league}</span>
         <h1 className="team-section__title">{p.name}</h1>
